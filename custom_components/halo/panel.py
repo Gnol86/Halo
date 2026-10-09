@@ -26,7 +26,7 @@ async def async_register_panel(hass: HomeAssistant) -> None:
         frontend_url_path=DOMAIN,
         webcomponent_name="halo-panel",
         sidebar_title=NAME,
-        sidebar_icon="mdi:flower-lotus",
+        sidebar_icon="mdi:spa",
         module_url="/halo_frontend/halo-panel.js",
         require_admin=False,
         config_panel_domain=DOMAIN,

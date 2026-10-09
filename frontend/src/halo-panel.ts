@@ -1,8 +1,9 @@
 import { LitElement, html, nothing, svg, type PropertyValues, type TemplateResult } from "lit";
 import { live } from "lit/directives/live.js";
-import { categories, colorMode, dimmable, interpolate, moveItem, newCondition, newProfile, newRoom, optionalNumber } from "./model";
+import { categories, createId, colorMode, dimmable, interpolate, moveItem, newCondition, newProfile, newRoom, optionalNumber } from "./model";
 import { en, language, translate, type TranslationKey } from "./translations";
 import { styles } from "./styles";
+import { HaloEntityPicker, matchesEntity } from "./entity-picker";
 import type { Condition, Config, Curve, Hass, LampState, Light, Profile, Room, Scene, Snapshot, Transition, Transitions } from "./types";
 
 type Editor = { roomId: string; token: string; scene: Scene; revision: number };
@@ -24,6 +25,7 @@ export class HaloPanel extends LitElement {
   private error = "";
   private notice = "";
   private search = "";
+  private lightSearches = new Map<string, string>();
   private editor?: Editor;
   private unsubscribe?: () => void;
   private connection?: Hass["connection"];
@@ -117,6 +119,9 @@ export class HaloPanel extends LitElement {
     for (const field of fields) {
       if (!field.disabled && !field.reportValidity()) { this.error = this.t("validation"); return false; }
     }
+    for (const picker of this.renderRoot.querySelectorAll<HaloEntityPicker>("halo-entity-picker")) {
+      if (!picker.reportValidity()) { this.error = this.t("validation"); return false; }
+    }
     return true;
   }
 
@@ -152,7 +157,7 @@ export class HaloPanel extends LitElement {
     finally { this.busy = false; }
   }
 
-  private navigate(page: string) { this.page = page; this.search = ""; this.removeConfirmation = undefined; }
+  private navigate(page: string) { this.page = page; this.search = ""; this.lightSearches.clear(); this.removeConfirmation = undefined; }
   private areaName(id: string) { return this.snapshot?.areas.find((area) => area.id === id)?.name ?? id; }
   private light(id: string): Light {
     return this.snapshot?.lights.find((light) => light.entity_id === id) ?? {
@@ -178,17 +183,30 @@ export class HaloPanel extends LitElement {
 
   private entityField(label: TranslationKey, value: string | null, change: (value: string | null) => void, domain?: string, required = false) {
     const entities = (this.snapshot?.entities ?? []).filter((entity) => !domain || entity.entity_id.startsWith(`${domain}.`));
-    return html`<label>${this.t(label)}<select data-selected=${value ?? ""} .value=${live(value ?? "")} ?required=${required}
-      @change=${(event: Event) => change((event.target as HTMLSelectElement).value || null)}>
-      <option value="" ?selected=${!value}>${this.t("noEntity")}</option>
-      ${value && !entities.some((entity) => entity.entity_id === value) ? html`<option value=${value} selected>${value} — ${this.t("unavailable")}</option>` : nothing}
-      ${entities.map((entity) => html`<option value=${entity.entity_id} ?selected=${entity.entity_id === value}>${entity.name} (${entity.entity_id})</option>`)}
-    </select></label>`;
+    return html`<halo-entity-picker .label=${this.t(label)} .locale=${this.locale} .entities=${entities} .value=${value} .required=${required}
+      @entity-changed=${(event: CustomEvent<{ value: string | null }>) => change(event.detail.value)}></halo-entity-picker>`;
+  }
+
+  private lightSearch(key: string) {
+    return html`<label>${this.t("search")}<input type="search" .value=${this.lightSearches.get(key) ?? ""} @input=${(event: Event) => {
+      this.lightSearches.set(key, (event.target as HTMLInputElement).value); this.requestUpdate();
+    }}></label>`;
+  }
+
+  private filteredLights(ids: string[], key: string) {
+    return ids.filter((id) => matchesEntity(this.light(id), this.lightSearches.get(key) ?? ""));
+  }
+
+  private groupDetails(light: Light) {
+    const names = (ids: string[]) => ids.map((id) => this.snapshot?.entities.find((entity) => entity.entity_id === id)?.name ?? this.light(id).name).join(", ");
+    return html`<small class="group-info">${this.t(light.is_group == null ? "groupUnknown" : light.is_group ? "lightGroup" : "individualLight")}
+      ${light.is_group && light.group_members?.length ? html` · ${this.t("groupMembers")}: ${names(light.group_members)}` : nothing}
+      ${light.member_of?.length ? html` · ${this.t("memberOf")}: ${names(light.member_of)}` : light.is_group === false ? html` · ${this.t("noKnownGroup")}` : nothing}</small>`;
   }
 
   protected render() {
-    return html`<header><button class="menu" aria-label=${this.t("menu")} @click=${() => this.dispatchEvent(new CustomEvent("hass-toggle-menu", { bubbles: true, composed: true }))}>☰</button>
-      <ha-icon icon="mdi:flower-lotus"></ha-icon><h1>Halo</h1><small>${this.t("title")}</small></header>
+    return html`<header>
+      <ha-icon icon="mdi:spa"></ha-icon><h1>Halo</h1><small>${this.t("title")}</small></header>
       <main lang=${language(this.locale)}>
         ${this.error ? html`<div class="notice error" role="alert">${this.error} <button ?disabled=${this.editing} @click=${() => this.connect()}>${this.t("retry")}</button></div>` : nothing}
         ${this.notice ? html`<div class="notice" role="status">${this.notice}</div>` : nothing}
@@ -251,7 +269,8 @@ export class HaloPanel extends LitElement {
       <section>${this.status(room.id)}${this.controls(room)}</section>
       ${this.admin ? html`${this.renderLightSelection(room)}${this.renderAutomation(room)}${this.renderAssociations(room)}
         <details><summary>${this.t("base")}</summary><p class="help">${this.t("baseHelp")}</p>
-          ${room.lights.map((id) => this.lampEditor(id, room.base[id], (value) => this.modifyRoom((current) => { if (value) current.base[id] = value; else delete current.base[id]; }), true))}
+          ${this.lightSearch("base")}
+          ${this.filteredLights(room.lights, "base").map((id) => this.lampEditor(id, room.base[id], (value) => this.modifyRoom((current) => { if (value) current.base[id] = value; else delete current.base[id]; }), true))}
         </details>` : nothing}
       ${this.renderScenes(room)}
       ${this.admin ? html`<details><summary>${this.t("transitions")}</summary>${this.renderTransitions(room.transitions, (category, value) => this.modifyRoom((current) => { current.transitions[category] = value; }), room.id)}</details>
@@ -264,7 +283,7 @@ export class HaloPanel extends LitElement {
     const assigned = new Set(Object.values(this.draft!.rooms).filter((other) => other.id !== room.id).flatMap((other) => other.lights));
     const lights = [...this.snapshot!.lights];
     for (const id of room.lights) if (!lights.some((light) => light.entity_id === id)) lights.push(this.light(id));
-    const filtered = lights.filter((light) => `${light.name} ${light.entity_id}`.toLocaleLowerCase().includes(this.search.toLocaleLowerCase()));
+    const filtered = lights.filter((light) => matchesEntity(light, this.search));
     return html`<details open><summary>${this.t("lights")} · ${room.lights.length}</summary><p class="help">${this.t("lightsHelp")}</p>
       <label>${this.t("search")}<input type="search" .value=${this.search} @input=${(event: Event) => { this.search = (event.target as HTMLInputElement).value; }}></label>
       <div class="light-list">${[true, false].map((own) => html`<h3>${this.t(own ? "ownArea" : "otherAreas")}</h3>
@@ -274,22 +293,26 @@ export class HaloPanel extends LitElement {
             else { current.lights = current.lights.filter((id) => id !== light.entity_id); delete current.base[light.entity_id];
               for (const scene of current.scenes) delete scene.lights[light.entity_id];
               for (const association of current.associations) association.lights = association.lights.filter((id) => id !== light.entity_id); }
-          })}><span>${light.name}<small>${light.entity_id}${assigned.has(light.entity_id) ? ` · ${this.t("assigned")}` : ""}${!light.available ? ` · ${this.t("unavailable")}` : ""}</small></span></label></div>`)}`)}</div></details>`;
+          })}><span>${light.name}<small>${light.entity_id}${assigned.has(light.entity_id) ? ` · ${this.t("assigned")}` : ""}${!light.available ? ` · ${this.t("unavailable")}` : ""}</small>${this.groupDetails(light)}</span></label></div>`)}`)}${filtered.length === 0 ? html`<p role="status">${this.t("noResults")}</p>` : nothing}</div></details>`;
   }
 
   private renderAutomation(room: Room) {
+    const attributes = room.lux_entity_id ? (this.hass.states?.[room.lux_entity_id] ?? this.snapshot?.entities.find((entity) => entity.entity_id === room.lux_entity_id))?.attributes : undefined;
+    const unit = typeof attributes?.unit_of_measurement === "string" ? attributes.unit_of_measurement.trim() : "";
+    const suffix = unit ? ` ${unit}` : "";
     return html`<details><summary>${this.t("automation")}</summary><h3>${this.t("presence")}</h3><div class="field-grid">
       ${this.entityField("presenceEntity", room.presence_entity_id, (value) => this.modifyRoom((current) => { current.presence_entity_id = value; }))}
       ${this.textField("presentStates", room.presence_states.join(", "), (value) => this.modifyRoom((current) => { current.presence_states = value.split(",").map((state) => state.trim()).filter(Boolean); }), { required: Boolean(room.presence_entity_id) })}
-      ${this.numberField("absenceDelay", room.absence_delay, (value) => this.modifyRoom((current) => { current.absence_delay = value ?? 120; }), { min: 0, required: true })}</div>
+      ${this.numberField("absenceDelay", room.absence_delay, (value) => this.modifyRoom((current) => { current.absence_delay = value ?? 0; }), { min: 0, required: true })}</div>
       <h3>${this.t("lux")}</h3>${this.entityField("luxEntity", room.lux_entity_id, (value) => this.modifyRoom((current) => { current.lux_entity_id = value; }), "sensor")}
-      ${room.lux_entity_id ? html`<div class="field-grid">${this.numberField("luxThreshold", room.lux_threshold, (value) => this.modifyRoom((current) => { current.lux_threshold = value; }), { min: 0, required: true })}
-        ${this.numberField("hysteresis", room.lux_hysteresis, (value) => this.modifyRoom((current) => { current.lux_hysteresis = value ?? 0; }), { min: 0, required: true })}</div>
-        <p>${this.t("effectiveLow")}: ${room.lux_threshold ?? "—"} lx · ${this.t("effectiveHigh")}: ${room.lux_threshold == null ? "—" : room.lux_threshold + room.lux_hysteresis} lx</p>
+      ${room.lux_entity_id ? html`<div class="field-grid">${this.numberField("luxThreshold", room.lux_threshold, (value) => this.modifyRoom((current) => { current.lux_threshold = value; }), { min: 0, required: true, unit })}
+        ${this.numberField("hysteresis", room.lux_hysteresis, (value) => this.modifyRoom((current) => { current.lux_hysteresis = value ?? 0; }), { min: 0, required: true, unit })}</div>
+        <p>${this.t("effectiveLow")}: ${room.lux_threshold ?? "—"}${suffix} · ${this.t("effectiveHigh")}: ${room.lux_threshold == null ? "—" : room.lux_threshold + room.lux_hysteresis}${suffix}</p>
+        ${!unit ? html`<p class="help">${this.t("unknownUnit")}</p>` : nothing}
         ${this.check("luxOff", room.lux_off, (value) => this.modifyRoom((current) => { current.lux_off = value; }))}
         ${room.lux_off ? this.numberField("luxDelay", room.lux_off_delay, (value) => this.modifyRoom((current) => { current.lux_off_delay = value ?? 30; }), { min: 0, required: true }) : nothing}
         <p class="help">${this.t("luxHelp")}</p>` : nothing}
-      <h3>${this.t("manual")}</h3>${this.numberField("pauseDuration", room.manual_pause / 60, (value) => this.modifyRoom((current) => { current.manual_pause = (value ?? 15) * 60; }), { min: 0, required: true })}
+      <h3>${this.t("manual")}</h3>${this.numberField("pauseDuration", room.manual_pause / 60, (value) => this.modifyRoom((current) => { current.manual_pause = (value ?? 120) * 60; }), { min: 0, required: true })}
       ${this.check("allowOff", room.allow_off_during_pause, (value) => this.modifyRoom((current) => { current.allow_off_during_pause = value; }))}<p class="help">${this.t("pauseHelp")}</p></details>`;
   }
 
@@ -300,11 +323,12 @@ export class HaloPanel extends LitElement {
         <option value="" ?selected=${!association.profile_id}>${this.t("noProfile")}</option>${profiles.map((profile) => html`<option value=${profile.id} ?selected=${profile.id === association.profile_id}>${profile.name}</option>`)}</select></label>
         <button @click=${() => this.modifyRoom((current) => { current.associations.splice(index, 1); })}>${this.t("remove")}</button></div>
         ${this.numberField("offset", association.brightness_offset, (value) => this.modifyRoom((current) => { current.associations[index].brightness_offset = value ?? 0; }), { min: -100, max: 1000, required: true })}<p class="help">${this.t("offsetHelp")}</p>
-        ${room.lights.filter((id) => dimmable(this.light(id))).map((id) => {
+        ${this.lightSearch(`association-${index}`)}
+        ${this.filteredLights(room.lights, `association-${index}`).filter((id) => dimmable(this.light(id))).map((id) => {
           const used = room.associations.some((other, otherIndex) => otherIndex !== index && other.lights.includes(id));
           return html`<label class="check"><input type="checkbox" .checked=${live(association.lights.includes(id))} ?disabled=${used} @change=${(event: Event) => this.modifyRoom((current) => {
             const target = current.associations[index]; target.lights = (event.target as HTMLInputElement).checked ? [...target.lights, id] : target.lights.filter((light) => light !== id);
-          })}>${this.light(id).name}</label>`;
+          })}><span>${this.light(id).name}<small>${id}</small>${this.groupDetails(this.light(id))}</span></label>`;
         })}</div>`)}
       ${profiles.length ? html`<button @click=${() => this.modifyRoom((current) => { current.associations.push({ profile_id: profiles[0].id, lights: [], brightness_offset: 0 }); })}>${this.t("addAssociation")}</button>` : html`<p>${this.t("noProfiles")}</p>`}</details>`;
   }
@@ -317,7 +341,7 @@ export class HaloPanel extends LitElement {
     const modes: [string, TranslationKey][] = [["", "keepColor"]];
     if (light.supported_color_modes.includes("color_temp")) modes.push(["temperature", "nativeWhite"]);
     if (mode) modes.push([mode, mode === "rgb_color" ? "rgb" : mode === "hs_color" ? "hs" : "xy"]);
-    return html`<div class="lamp"><h4>${light.name} ${!light.available ? html`<span class="badge">${this.t("unavailable")}</span>` : nothing}</h4>
+    return html`<div class="lamp"><h4>${light.name} ${!light.available ? html`<span class="badge">${this.t("unavailable")}</span>` : nothing}</h4><small>${id}</small>${this.groupDetails(light)}
       ${optional ? this.check("include", Boolean(value), (checked) => change(checked ? { state: "on" } : undefined)) : nothing}
       ${value ? html`<label>${this.t("state")}<select data-selected=${value.state} .value=${live(value.state)} @change=${(event: Event) => update({ state: (event.target as HTMLSelectElement).value as "on" | "off" })}>
         <option value="on" ?selected=${value.state === "on"}>${this.t("on")}</option><option value="off" ?selected=${value.state === "off"}>${this.t("off")}</option></select></label>
@@ -372,8 +396,9 @@ export class HaloPanel extends LitElement {
     this.error = "";
     try {
       const { token } = await this.hass.callWS<{ token: string }>({ type: "halo/edit/begin", room_id: room.id });
-      const scene = existing ? structuredClone(existing) : { id: crypto.randomUUID(), name: "", can_turn_on: false, conditions: null, lights: {} };
+      const scene = existing ? structuredClone(existing) : { id: createId(), name: "", can_turn_on: false, conditions: null, lights: {} };
       for (const id of room.lights) scene.lights[id] ??= this.actualLampState(id);
+      this.lightSearches.delete("scene");
       this.editor = { token, roomId: room.id, scene, revision: this.snapshot!.revision };
       this.heartbeat = setInterval(() => {
         const editor = this.editor;
@@ -437,7 +462,7 @@ export class HaloPanel extends LitElement {
       ${this.textField("sceneName", scene.name, (value) => this.updateEditor((current) => { current.name = value; }), { required: true })}
       ${this.check("canTurnOn", scene.can_turn_on, (value) => this.updateEditor((current) => { current.can_turn_on = value; }))}<p class="help">${this.t("canTurnOnHelp")}</p>
       <h3>${this.t("conditions")}</h3>${this.renderCondition(scene.conditions, (condition) => this.updateEditor((current) => { current.conditions = condition; }))}
-      <h3>${this.t("lights")}</h3>${Object.entries(scene.lights).map(([id, state]) => this.lampEditor(id, state, (value) => this.updateEditor((current) => { if (value) current.lights[id] = value; }, true), false))}
+      <h3>${this.t("lights")}</h3>${this.lightSearch("scene")}${this.filteredLights(Object.keys(scene.lights), "scene").map((id) => this.lampEditor(id, scene.lights[id], (value) => this.updateEditor((current) => { if (value) current.lights[id] = value; }, true), false))}
       <div class="actions"><button ?disabled=${this.busy} @click=${() => this.endEditor(false)}>${this.t("cancel")}</button><button class="primary" ?disabled=${this.busy} @click=${() => this.endEditor(true)}>${this.t("saveScene")}</button></div>
     </section>`;
   }
@@ -482,7 +507,7 @@ export class HaloPanel extends LitElement {
     return html`<h2>${this.t("global")}</h2><section>${this.entityField("sunEntity", config.sun_entity_id, (value) => this.modify((draft) => { draft.sun_entity_id = value; }), "sun")}
       ${config.sun_entity_id && (!sun || typeof sun.attributes.elevation !== "number" || ["unknown", "unavailable"].includes(sun.state)) ? html`<div class="notice">${this.t("noSun")}</div>` : nothing}</section>
       <section><h2>${this.t("profiles")}</h2><p class="help">${this.t("profilesHelp")}</p>${Object.values(config.profiles).map((profile) => this.renderProfile(profile))}
-        <button @click=${() => this.modify((draft) => { const id = crypto.randomUUID(); draft.profiles[id] = newProfile(id, this.t("newProfile")); })}>${this.t("newProfile")}</button></section>
+        <button @click=${() => this.modify((draft) => { const id = createId(); draft.profiles[id] = newProfile(id, this.t("newProfile")); })}>${this.t("newProfile")}</button></section>
       <section><h2>${this.t("transitions")}</h2>${this.renderTransitions(config.transitions, (category, value) => this.modify((draft) => { draft.transitions[category] = value; }))}</section>`;
   }
 

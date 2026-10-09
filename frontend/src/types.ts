@@ -50,6 +50,9 @@ export interface Config { sun_entity_id: string | null; transitions: Transitions
 export interface Light {
   entity_id: string;
   name: string;
+  is_group?: boolean;
+  group_members?: string[];
+  member_of?: string[];
   area_id: string | null;
   available: boolean;
   supported_color_modes: string[];

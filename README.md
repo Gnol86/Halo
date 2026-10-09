@@ -6,7 +6,7 @@
 
 Une intégration Home Assistant destinée à gérer l’ensemble des lumières du logement.
 
-**Statut : première version de développement.** Halo dispose d’un panneau embarqué, d’appareils par pièce et d’un moteur d’éclairage. Les vérifications locales utilisent Home Assistant avec des lampes simulées et un navigateur avec des données simulées. Les essais sur une instance domestique et des lampes réelles restent à réaliser. La publication et le référencement dans HACS sont prévus à la fin du projet.
+**Statut : première version de développement.** Halo dispose d’un panneau embarqué, d’appareils par pièce et d’un moteur d’éclairage. Les vérifications locales utilisent Home Assistant avec des lampes simulées et un navigateur avec des données simulées. Les premiers retours du panneau dans Home Assistant sont pris en compte ; la validation complète dans une instance domestique et avec des lampes réelles reste à réaliser. La publication et le référencement dans HACS sont prévus à la fin du projet.
 
 ## Ce qui existe
 
@@ -23,7 +23,9 @@ Une intégration Home Assistant destinée à gérer l’ensemble des lumières d
 Les comportements retenus sont détaillés dans [PROJET.md](PROJET.md), et les règles d’interface dans [DESIGN.md](DESIGN.md). Le code et le panneau comprennent maintenant :
 
 - Un panneau **Halo** ajouté automatiquement à la barre latérale après l’installation unique, pour toute la configuration ; pilotage accessible aux utilisateurs et configuration réservée aux administrateurs.
+- Un lotus monochrome natif dans la barre latérale et l’en-tête, suivant le thème Home Assistant ; l’en-tête Halo ne comporte pas de bouton de menu supplémentaire.
 - Les pièces de Home Assistant, avec sélection explicite des lumières et un appareil par pièce regroupant la commande d’éclairage, les modes automatique et naturel, la reprise et les scènes.
+- La recherche par nom ou identifiant dans les sélecteurs d’entités et les listes de lampes, avec indication des groupes Home Assistant et des appartenances connues.
 - L’allumage et l’extinction selon la présence et la luminosité, avec seuil, hystérésis et temporisations configurables.
 - Une pause après une commande manuelle, avec une option par pièce pour maintenir les extinctions automatiques pendant cette pause.
 - Des profils de lumière naturelle fondés sur l’élévation du soleil, associables à plusieurs groupes dans une même pièce, avec courbes de luminosité et de température de blanc adaptées aux lampes compatibles.
@@ -32,6 +34,8 @@ Les comportements retenus sont détaillés dans [PROJET.md](PROJET.md), et les r
 - L’anglais comme langue de référence, une traduction française suivant la langue de l’interface Home Assistant et un repli en anglais pour les autres langues. Les noms personnalisés restent inchangés.
 
 Les pièces nouvellement configurées ont leurs automatismes **désactivés** jusqu’à leur activation. L’interface actuelle utilise une présentation fonctionnelle et les couleurs du thème Home Assistant ; la direction esthétique définitive reste à définir. Les étapes de validation figurent dans la [feuille de route](docs/ROADMAP.md).
+
+Les nouveaux réglages proposent **0 seconde** de délai d’absence et **120 minutes** de pause manuelle. Les transitions globales initiales sont **0 s** à l’allumage, **10 s** après baisse de luminosité, **60 s** pour la lumière naturelle, **10 s** pour les scènes et **2 s** à l’extinction ; les pièces en héritent. Les valeurs déjà enregistrées sont conservées. Le seuil et l’hystérésis affichent l’unité du capteur (`lx`, `%`, etc.), sans conversion implicite. La création des profils et des scènes est compatible avec un accès local en HTTP.
 
 Les transitions dépendent des capacités annoncées par chaque lampe. Sur les équipements qui ne restituent pas le contexte des commandes, la distinction entre une transition et une intervention physique repose sur les changements d’état observés et doit encore être vérifiée sur le matériel utilisé.
 

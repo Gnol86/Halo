@@ -21,6 +21,7 @@ from homeassistant.helpers.event import (
 from homeassistant.util import dt as dt_util
 
 from .conditions import UNAVAILABLE, condition_entities, evaluate_condition, number
+from .models import ROOM_DEFAULTS
 from .natural import lamp_parameters, natural_values, supports_brightness
 
 _LOGGER = logging.getLogger(__name__)
@@ -291,7 +292,7 @@ class HaloRoomEngine:
     def _pause(self) -> None:
         self._runtime.pop("manual_scene_id", None)
         self._runtime["pause_until"] = dt_util.utcnow().timestamp() + self.room.get(
-            "manual_pause", 900
+            "manual_pause", ROOM_DEFAULTS["manual_pause"]
         )
 
     def _inputs(self, now: float) -> None:
@@ -302,7 +303,9 @@ class HaloRoomEngine:
         )
         if self._presence is False:
             since = self._runtime.setdefault("absent_since", now)
-            self._absence_deadline = since + self.room.get("absence_delay", 120)
+            self._absence_deadline = since + self.room.get(
+                "absence_delay", ROOM_DEFAULTS["absence_delay"]
+            )
             if now >= self._absence_deadline:
                 self._runtime["absence_confirmed"] = True
         else:

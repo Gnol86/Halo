@@ -381,16 +381,47 @@ class HaloManager:
         areas.extend(
             {"id": key, "name": key} for key in config["rooms"] if key not in known
         )
-        lights, entities = [], []
-        for state in self.hass.states.async_all():
-            entity_id = state.entity_id
-            if not user.permissions.check_entity(entity_id, POLICY_READ):
+        visible_states = [
+            state
+            for state in self.hass.states.async_all()
+            if user.permissions.check_entity(state.entity_id, POLICY_READ)
+        ]
+        groups: dict[str, list[str]] = {}
+        member_of: dict[str, list[str]] = {}
+        for state in visible_states:
+            registered = registry.async_get(state.entity_id)
+            members = state.attributes.get("entity_id")
+            if not (
+                (registered and registered.platform == "group")
+                or isinstance(members, (list, tuple))
+            ):
                 continue
+            # Membership is metadata too: never disclose an unreadable entity
+            # through another group's attributes or reverse membership list.
+            visible_members = (
+                [
+                    member
+                    for member in members
+                    if isinstance(member, str)
+                    and user.permissions.check_entity(member, POLICY_READ)
+                ]
+                if isinstance(members, (list, tuple))
+                else []
+            )
+            groups[state.entity_id] = list(dict.fromkeys(visible_members))
+            for member in groups[state.entity_id]:
+                member_of.setdefault(member, []).append(state.entity_id)
+        lights, entities = [], []
+        for state in visible_states:
+            entity_id = state.entity_id
+            attributes = dict(state.attributes)
+            if isinstance(attributes.get("entity_id"), (list, tuple)):
+                attributes["entity_id"] = groups[entity_id].copy()
             item = {
                 "entity_id": entity_id,
                 "name": state.name,
                 "state": state.state,
-                "attributes": dict(state.attributes),
+                "attributes": attributes,
             }
             entities.append(item)
             if state.domain != "light":
@@ -405,6 +436,9 @@ class HaloManager:
             lights.append(
                 item
                 | {
+                    "is_group": entity_id in groups,
+                    "group_members": groups.get(entity_id, []).copy(),
+                    "member_of": member_of.get(entity_id, []).copy(),
                     "area_id": area_id,
                     "available": state.state not in ("unavailable", "unknown"),
                     "supported_color_modes": state.attributes.get(

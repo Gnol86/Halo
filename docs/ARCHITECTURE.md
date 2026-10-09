@@ -18,6 +18,8 @@ Les réglages sont validés côté serveur avant enregistrement : appartenance u
 
 Les cinq clés de transition sont `turn_on`, `lux_on`, `natural`, `scene` et `turn_off`. Globalement, une valeur est un nombre de secondes ou `null`. Par pièce, `"inherit"` demande l’héritage, `null` omet le paramètre et un nombre définit la durée locale, y compris zéro.
 
+Les nouvelles configurations utilisent respectivement 0, 10, 60, 10 et 2 secondes. Une pièce créée utilise un délai d’absence de 0 seconde et une pause manuelle de 7 200 secondes (120 minutes dans le panneau). La normalisation préserve les valeurs existantes, y compris `null` et zéro ; elle ne migre pas les réglages enregistrés vers les nouveaux défauts.
+
 L’hystérésis utilise un seuil bas égal au seuil configuré et un seuil haut égal à ce seuil plus l’hystérésis. L’allumage est autorisé sous le seuil bas ; la décision devient « luminosité suffisante » à partir du seuil haut. Entre les deux, la décision précédente est conservée.
 
 Les conditions sont des arbres de types `state`, `numeric`, `time`, `sun`, `and`, `or` et `not`. Une condition absente signifie une scène disponible uniquement pour un lancement explicite. Aucun code, modèle de texte exécutable ou action Home Assistant arbitraire n’est accepté dans cet éditeur.
@@ -48,6 +50,12 @@ Les sources sont dans `frontend/src/`. Le bundle Lit autonome est distribué dan
 Les permissions Home Assistant filtrent les états lisibles et contrôlent les commandes de lampes. Les erreurs possèdent un code traduit par le panneau, notamment `invalid_config`, `conflict`, `edit_locked` et `invalid_edit`.
 
 Le catalogue anglais est la référence, avec traduction française. Le panneau lit la langue effective de l’interface pour chaque utilisateur ; les variantes françaises utilisent le français, les autres langues l’anglais.
+
+Le catalogue des lumières expose `is_group`, `group_members` et `member_of`. Le registre (plateforme `group`) et l’attribut de membres `entity_id` fournissent les groupes connus. Les appartenances sont directes ; les identifiants non lisibles sont filtrés, y compris dans les attributs renvoyés. Le panneau peut recevoir d’anciens instantanés sans ces métadonnées et indique alors que l’information manque.
+
+Le composant Lit `halo-entity-picker` recherche les entités par nom et identifiant, sans tenir compte de la casse ou des accents. Il ne modifie la valeur qu’au choix explicite d’un résultat ou à son effacement ; une recherche abandonnée reste sans effet sur la configuration. Le panneau appelle sa validation avant sauvegarde, y compris dans l’éditeur de conditions. Les seuils de luminosité reprennent l’unité native du capteur sans conversion.
+
+Les identifiants des nouveaux profils et scènes sont des UUID v4 générés avec `crypto.getRandomValues`, disponible également sur HTTP local. Ils ne dépendent plus de `crypto.randomUUID`, réservé aux contextes sécurisés. Les jetons de session d’édition restent créés et vérifiés par le serveur. [Disponibilité de l’API Web Crypto](https://developer.mozilla.org/en-US/docs/Web/API/Crypto/getRandomValues).
 
 ## Vérification
 

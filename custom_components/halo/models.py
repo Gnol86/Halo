@@ -6,6 +6,13 @@ from copy import deepcopy
 from typing import Any
 
 TRANSITIONS = ("turn_on", "lux_on", "natural", "scene", "turn_off")
+TRANSITION_DEFAULTS = {
+    "turn_on": 0,
+    "lux_on": 10,
+    "natural": 60,
+    "scene": 10,
+    "turn_off": 2,
+}
 ROOM_DEFAULTS = {
     "lights": [],
     "presence_entity_id": None,
@@ -14,8 +21,8 @@ ROOM_DEFAULTS = {
     "lux_threshold": None,
     "lux_hysteresis": 0,
     "lux_off": False,
-    "absence_delay": 120,
-    "manual_pause": 900,
+    "absence_delay": 0,
+    "manual_pause": 7200,
     "lux_off_delay": 30,
     "allow_off_during_pause": True,
     "automation_enabled": False,
@@ -31,7 +38,7 @@ def default_config() -> dict[str, Any]:
     """Return a fresh configuration, never sharing mutable defaults."""
     return {
         "sun_entity_id": "sun.sun",
-        "transitions": dict.fromkeys(TRANSITIONS),
+        "transitions": TRANSITION_DEFAULTS.copy(),
         "profiles": {},
         "rooms": {},
     }
@@ -197,7 +204,9 @@ def _transitions(value: Any, *, room: bool) -> dict:
     settings = _mapping(value, "transitions")
     if set(settings) - set(TRANSITIONS):
         raise ValueError("Unknown transition category")
-    result = dict.fromkeys(TRANSITIONS, "inherit" if room else None)
+    result = (
+        dict.fromkeys(TRANSITIONS, "inherit") if room else TRANSITION_DEFAULTS.copy()
+    )
     for key, duration in settings.items():
         if duration is None or (room and duration == "inherit"):
             result[key] = duration

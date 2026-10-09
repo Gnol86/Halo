@@ -13,6 +13,8 @@ Le build produit `custom_components/halo/frontend/halo-panel.js`, chargé par le
 
 Les tests DOM utilisent une connexion Home Assistant simulée : ils couvrent les droits visibles, les langues, l’enregistrement avec révision, les conflits de modification, l’édition avec verrou et l’annulation. Ils ne remplacent pas un essai du panneau dans une instance Home Assistant ni une vérification visuelle sur mobile.
 
+Les sélecteurs partagent le composant `halo-entity-picker` : recherche sans casse ni accents par nom/identifiant, navigation clavier et sélection explicite. Les tests couvrent aussi les unités des capteurs, les informations de groupe et la création de profils/scènes avec `crypto.randomUUID` absent, comme sur une adresse HTTP locale. Le helper `createId` utilise `getRandomValues` sans imposer HTTPS au panneau.
+
 `dev.html` fournit un environnement visuel avec données simulées, sans connexion à un logement réel. Après le build, servir la racine du dépôt avec un serveur HTTP local puis ouvrir `/frontend/dev.html`. Des boutons permettent de changer de langue, de thème et de rôle. Ce fichier ne fait pas partie des ressources distribuées de l’intégration.
 
 L’anglais est le catalogue de référence dans `src/translations.ts`. Le français utilise les mêmes clés ; les tests vérifient leur parité. Les noms personnalisés ne sont pas traduits. La langue effective du frontend Home Assistant prend le pas sur une langue globale.

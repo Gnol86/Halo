@@ -28,8 +28,8 @@ def test_defaults_and_transition_semantics():
     room = validate_config(config)["rooms"]["living"]
     assert room["automation_enabled"] is False
     assert room["allow_off_during_pause"] is True
-    assert room["absence_delay"] == 120
-    assert room["manual_pause"] == 900
+    assert room["absence_delay"] == 0
+    assert room["manual_pause"] == 7200
     assert room["transitions"] == {
         "turn_on": 0,
         "turn_off": None,
@@ -38,6 +38,44 @@ def test_defaults_and_transition_semantics():
         "lux_on": "inherit",
     }
     assert "absence_delay" not in config["rooms"]["living"]
+
+
+def test_new_global_transition_defaults_are_independent():
+    expected = {"turn_on": 0, "lux_on": 10, "natural": 60, "scene": 10, "turn_off": 2}
+    assert default_config()["transitions"] == expected
+    assert validate_config({"transitions": {}})["transitions"] == expected
+    changed = default_config()
+    changed["transitions"]["natural"] = None
+    assert default_config()["transitions"] == expected
+
+
+def test_normalization_preserves_existing_durations_and_explicit_omissions():
+    config = configuration()
+    transitions = {
+        "turn_on": None,
+        "lux_on": 0,
+        "natural": None,
+        "scene": 3.5,
+        "turn_off": 0,
+    }
+    config["transitions"] = transitions
+    config["rooms"]["living"].update(
+        absence_delay=120,
+        manual_pause=900,
+        transitions={"turn_on": None, "lux_on": 0, "natural": 4.25},
+    )
+    normalized = validate_config(config)
+    assert normalized["transitions"] == transitions
+    room = normalized["rooms"]["living"]
+    assert room["absence_delay"] == 120
+    assert room["manual_pause"] == 900
+    assert room["transitions"] == {
+        "turn_on": None,
+        "lux_on": 0,
+        "natural": 4.25,
+        "scene": "inherit",
+        "turn_off": "inherit",
+    }
 
 
 @pytest.mark.parametrize("bad", [-1, float("inf"), float("nan"), True, "10"])

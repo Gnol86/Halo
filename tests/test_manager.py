@@ -146,3 +146,104 @@ async def test_failed_load_preserves_invalid_saved_data(hass):
     ):
         assert not await hass.config_entries.async_setup(entry.entry_id)
         save.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("absence_delay", "manual_pause", "transitions"),
+    [
+        (
+            120,
+            900,
+            dict.fromkeys(("turn_on", "lux_on", "natural", "scene", "turn_off")),
+        ),
+        (
+            0,
+            0,
+            {
+                "turn_on": None,
+                "lux_on": 0,
+                "natural": None,
+                "scene": 6.5,
+                "turn_off": None,
+            },
+        ),
+    ],
+)
+async def test_saved_defaults_are_not_replaced_when_reloading(
+    hass, absence_delay, manual_pause, transitions
+):
+    entry, area, manager = await configured(hass)
+    assert manager.config["rooms"][area.id]["absence_delay"] == 0
+    assert manager.config["rooms"][area.id]["manual_pause"] == 7200
+    saved = deepcopy(manager.config)
+    saved["transitions"] = transitions
+    saved["rooms"][area.id].update(
+        absence_delay=absence_delay,
+        manual_pause=manual_pause,
+        transitions={
+            "turn_on": None,
+            "lux_on": 0,
+            "natural": "inherit",
+            "scene": 4.5,
+            "turn_off": "inherit",
+        },
+    )
+    await manager.async_save_config(saved, manager.revision)
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert entry.runtime_data.config == saved
+
+
+async def test_light_catalogue_identifies_groups_and_direct_membership(
+    hass, hass_admin_user
+):
+    _, _, manager = await configured(hass)
+    registry_group = er.async_get(hass).async_get_or_create(
+        "light", "group", "registry-group", suggested_object_id="registry_group"
+    )
+    hass.states.async_set(registry_group.entity_id, "unavailable")
+    hass.states.async_set("light.other", "off")
+    hass.states.async_set(
+        "light.desk", "on", {"entity_id": ["light.bulb", "light.other"]}
+    )
+    hass.states.async_set("group.room", "on", {"entity_id": ["light.desk"]})
+    hass.states.async_set("light.nested", "on", {"entity_id": ("light.desk",)})
+    snapshot = manager.snapshot(hass_admin_user)
+    lights = {light["entity_id"]: light for light in snapshot["lights"]}
+    assert lights[registry_group.entity_id]["is_group"] is True
+    assert lights[registry_group.entity_id]["group_members"] == []
+    assert lights["light.bulb"]["is_group"] is False
+    assert lights["light.bulb"]["group_members"] == []
+    assert lights["light.bulb"]["member_of"] == ["light.desk"]
+    assert lights["light.desk"]["is_group"] is True
+    assert lights["light.desk"]["group_members"] == ["light.bulb", "light.other"]
+    assert lights["light.desk"]["member_of"] == ["group.room", "light.nested"]
+    assert lights["light.nested"]["group_members"] == ["light.desk"]
+    # Metadata returned to a browser must not mutate Home Assistant's state.
+    lights["light.desk"]["group_members"].clear()
+    assert hass.states.get("light.desk").attributes["entity_id"] == [
+        "light.bulb",
+        "light.other",
+    ]
+
+
+async def test_group_catalogue_does_not_expose_unreadable_members_or_groups(hass):
+    _, _, manager = await configured(hass)
+    hass.states.async_set("light.secret", "off")
+    hass.states.async_set(
+        "light.visible_group", "on", {"entity_id": ["light.bulb", "light.secret"]}
+    )
+    hass.states.async_set("light.hidden_group", "on", {"entity_id": ["light.bulb"]})
+    user = MockUser().add_to_hass(hass)
+    user.mock_policy(
+        {"entities": {"entity_ids": {"light.bulb": True, "light.visible_group": True}}}
+    )
+    snapshot = manager.snapshot(user)
+    lights = {light["entity_id"]: light for light in snapshot["lights"]}
+    assert set(lights) == {"light.bulb", "light.visible_group"}
+    assert lights["light.bulb"]["member_of"] == ["light.visible_group"]
+    assert lights["light.visible_group"]["group_members"] == ["light.bulb"]
+    entities = {entity["entity_id"]: entity for entity in snapshot["entities"]}
+    assert entities["light.visible_group"]["attributes"]["entity_id"] == ["light.bulb"]
+    assert "light.secret" not in repr(snapshot)
+    assert "light.hidden_group" not in repr(snapshot)

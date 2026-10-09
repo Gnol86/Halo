@@ -51,6 +51,27 @@ Le bundle dans `custom_components/halo/frontend/` doit rester synchronisé avec 
 
 Avant une release utilisable, effectuer également un essai dans une instance Home Assistant de test : installation manuelle, rendu du panneau et du lotus en thèmes clair et sombre, textes français et anglais, pilotage des lampes réelles, redémarrage et suppression. Les tests Python ne valident pas le rendu intégré de l’interface.
 
+## Menu et lotus du panneau — 9 octobre 2026
+
+Le bouton de menu ajouté par Halo est retiré. La barre latérale et l’en-tête utilisent désormais `mdi:spa`, le lotus monochrome du catalogue natif Home Assistant. L’ancien identifiant `mdi:flower-lotus` n’existe pas dans ce catalogue. Le nom est confirmé par la [fiche officielle de l’icône](https://pictogrammers.com/library/mdi/icon/spa/) et par sa présence dans Material Design Icons 7.4.47, embarqué par le frontend Home Assistant 20260930.2.
+
+- TypeScript conforme ; **24 tests frontend réussis**.
+- Synchronisation uv et Ruff conformes ; **105 tests Python réussis** avec une limite de 45 secondes par test. Une première exécution a été interrompue après 65 tests réussis, pendant le test HTTP du bundle ; les deux tests de cycle de vie/service HTTP, les 39 tests restants puis la suite complète ont réussi à la relance. Le blocage initial n’a pas été reproduit.
+- Bundle reconstruit avec Node.js 24 et reproductibilité vérifiée sur deux compilations. L’ancien identifiant et le bouton de menu sont absents du bundle.
+- Documentation fonctionnelle, design, README et distinction entre icône latérale et images HACS actualisés.
+- Correctif local, pas encore déployé dans le logement ; son rendu intégré dans Home Assistant reste à vérifier après installation.
+
+## Retours du panneau et corrections — 9 octobre 2026
+
+Les annotations et la lecture du panneau domestique confirment son ouverture dans Home Assistant. Cette observation ne vaut pas validation des automatismes ou des lampes réelles. Les corrections ci-dessous sont préparées dans le dépôt ; elles n’ont pas été déployées sur cette instance pendant cette tâche.
+
+- Tests Python : **105 réussis** ; synchronisation uv, analyse et formatage Ruff conformes. Les nouveaux cas vérifient les valeurs initiales, la conservation des réglages historiques au rechargement et les métadonnées de groupes filtrées par droits de lecture.
+- Tests frontend : **24 réussis**, avec TypeScript conforme. Recherche par nom/identifiant sans casse ni accents, sélection au clavier, conservation de la recherche et des valeurs, annulation, effacement, indisponibilité, filtrage des domaines, validation des conditions et catalogue de 240 entités couverts.
+- Création de profils et de scènes vérifiée dans les tests avec `crypto.randomUUID` absent ; le remplacement utilise `getRandomValues`. L’URL HTTP de ces tests DOM et l’absence simulée de cette API ne constituent pas un essai sur l’instance domestique.
+- Unités `%`, `lx` et absence d’unité testées sans conversion des seuils ; indication des groupes et préservation des lampes masquées par une recherche vérifiées.
+- Aperçu isolé dans le navigateur : groupes/membres visibles, recherche sans accents, sélection à la souris et au clavier, passage d’un capteur `lx` à `%`, absence à 0 seconde, pause à 120 minutes, valeurs des cinq transitions et création d’un profil examinés. Les données sont simulées, sans commande au logement.
+- Bundle reconstruit avec Node.js 24 ; une seconde compilation produit le même SHA-256. Les valeurs existantes de l’instance et la saisie non enregistrée du panneau utilisateur sont préservées.
+
 ## Vérifications de la première implémentation — 9 octobre 2026
 
 - Tests Python : **99 réussis**, avec Home Assistant 2026.10.0 et des lampes/capteurs simulés.

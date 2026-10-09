@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import { Window } from "happy-dom";
-import { newRoom } from "../src/model";
+import { newProfile, newRoom } from "../src/model";
+import type { HaloEntityPicker } from "../src/entity-picker";
 import type { Hass, Snapshot } from "../src/types";
 
-const window = new Window({ url: "http://localhost" });
-for (const key of ["window", "document", "customElements", "HTMLElement", "Element", "Node", "Document", "ShadowRoot", "CSSStyleSheet", "Event", "CustomEvent"] as const) {
+const window = new Window({ url: "http://192.168.1.4:8123" });
+for (const key of ["window", "document", "customElements", "HTMLElement", "Element", "Node", "Document", "ShadowRoot", "CSSStyleSheet", "Event", "CustomEvent", "KeyboardEvent", "FocusEvent"] as const) {
   Object.defineProperty(globalThis, key, { configurable: true, value: key === "window" ? window : window[key] });
 }
 const { HaloPanel } = await import("../src/halo-panel");
@@ -30,8 +31,8 @@ async function settle(panel: InstanceType<typeof HaloPanel>) {
   await panel.updateComplete;
 }
 
-async function mount(admin = true) {
-  let snapshot = fixture(admin);
+async function mount(admin = true, initial = fixture(admin)) {
+  let snapshot = initial;
   const calls: Record<string, unknown>[] = [];
   let callback: ((snapshot: Snapshot) => void) | undefined;
   let unsubscribed = 0;
@@ -129,7 +130,7 @@ test("scene editing takes a server lock, previews compatible controls and cancel
   await settle(panel);
   assert.ok(calls.some((call) => call.type === "halo/edit/begin" && call.room_id === "lounge"));
   assert.match(panel.shadowRoot!.textContent!, /Tu modifies les lampes réelles/);
-  assert.equal(panel.shadowRoot!.querySelectorAll<HTMLSelectElement>(".condition select")[1].value, "media_player.tv");
+  assert.equal(panel.shadowRoot!.querySelector<HaloEntityPicker>(".condition halo-entity-picker")!.value, "media_player.tv");
   const lamps = [...panel.shadowRoot!.querySelectorAll(".lamp")];
   assert.equal(lamps.length, 2);
   assert.ok(lamps[0].textContent?.includes("Luminosité (%)"));
@@ -204,4 +205,187 @@ test("live state snapshots do not erase text while the user is still typing", as
   await settle(panel);
   assert.equal(name.value, "Nouvelle ambiance en cours");
   button(panel, "Annuler").click(); await settle(panel);
+});
+
+
+function picker(panel: InstanceType<typeof HaloPanel>, label: string) {
+  const found = [...panel.shadowRoot!.querySelectorAll<HaloEntityPicker>("halo-entity-picker")].find((item) => item.label === label);
+  assert.ok(found, `Entity picker ${label} should exist`);
+  return found;
+}
+
+async function searchEntity(control: HaloEntityPicker, query: string) {
+  const input = control.shadowRoot!.querySelector<HTMLInputElement>("input")!;
+  input.focus();
+  input.value = query;
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  await control.updateComplete;
+  return input;
+}
+
+test("entity search matches names, accents and identifiers and commits only an explicit keyboard choice", async () => {
+  const snapshot = fixture();
+  snapshot.entities.push({ entity_id: "input_boolean.office_presence", name: "Présence Bureau", state: "on", attributes: {} });
+  const { panel, calls, emit } = await mount(true, snapshot);
+  button(panel, "Lumières · 2").click(); await settle(panel);
+  const control = picker(panel, "Entité de présence");
+  const input = await searchEntity(control, "presence office");
+  assert.equal(control.shadowRoot!.querySelectorAll('[role="option"]').length, 1);
+  assert.match(control.shadowRoot!.textContent!, /Présence Bureau/);
+  input.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+  await control.updateComplete;
+  assert.equal(input.getAttribute("aria-activedescendant"), "entity-option-0");
+  input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  await settle(panel);
+  assert.equal(control.value, "input_boolean.office_presence");
+  await searchEntity(control, "impossible");
+  assert.match(control.shadowRoot!.textContent!, /Aucune entité correspondante/);
+  emit({ ...snapshot, status: { lounge: { reason: "base" } } }); await settle(panel);
+  assert.equal(input.value, "impossible");
+  input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  await settle(panel);
+  assert.equal(input.value, "Présence Bureau (input_boolean.office_presence)");
+  button(panel, "Enregistrer les modifications").click(); await settle(panel);
+  assert.equal((calls.find((call) => call.type === "halo/save")!.config as Snapshot["config"]).rooms.lounge.presence_entity_id, "input_boolean.office_presence");
+});
+
+test("entity pickers filter domains, support pointer focus transfer and preserve unavailable selections", async () => {
+  const snapshot = fixture();
+  snapshot.config.rooms.lounge.presence_entity_id = "binary_sensor.removed";
+  snapshot.entities.push({ entity_id: "sensor.brightness", name: "Luminosité", state: "42", attributes: { unit_of_measurement: "%" } });
+  const { panel } = await mount(true, snapshot);
+  button(panel, "Lumières · 2").click(); await settle(panel);
+  const presence = picker(panel, "Entité de présence");
+  assert.match(presence.shadowRoot!.textContent!, /binary_sensor.removed.*Indisponible/);
+  const control = picker(panel, "Capteur de luminosité");
+  const input = await searchEntity(control, "luminosite");
+  const option = control.shadowRoot!.querySelector<HTMLElement>('[role="option"]')!;
+  input.dispatchEvent(new FocusEvent("blur", { relatedTarget: null }));
+  await control.updateComplete;
+  assert.ok(control.shadowRoot!.contains(option));
+  option.click(); await settle(panel);
+  assert.equal(control.value, "sensor.brightness");
+  assert.equal(control.entities.some((entity) => entity.entity_id === "media_player.tv"), false);
+  control.shadowRoot!.querySelector<HTMLButtonElement>("button")!.click(); await settle(panel);
+  assert.equal(control.value, null);
+  button(panel, "Abandonner les modifications").click(); await settle(panel);
+  button(panel, "Réglages globaux").click(); await settle(panel);
+  const sun = picker(panel, "Entité soleil");
+  await searchEntity(sun, "");
+  assert.deepEqual(sun.entities.map((entity) => entity.entity_id), ["sun.sun"]);
+});
+
+test("required entity search rejects arbitrary typed text rather than saving an empty condition", async () => {
+  const { panel, calls } = await mount();
+  button(panel, "Lumières · 2").click(); await settle(panel);
+  button(panel, "Régler dans la pièce").click(); await settle(panel);
+  const control = picker(panel, "Entité");
+  control.shadowRoot!.querySelector<HTMLButtonElement>("button")!.click(); await settle(panel);
+  await searchEntity(control, "media_player.typo");
+  button(panel, "Enregistrer la scène").click(); await settle(panel);
+  assert.equal(calls.some((call) => call.type === "halo/edit/end"), false);
+  assert.match(panel.shadowRoot!.textContent!, /Vérifie les champs/);
+  button(panel, "Annuler").click(); await settle(panel);
+});
+
+test("brightness uses live sensor units without converting configured values", async () => {
+  const snapshot = fixture();
+  Object.assign(snapshot.config.rooms.lounge, { lux_entity_id: "sensor.daylight", lux_threshold: 30, lux_hysteresis: 5 });
+  snapshot.entities.push({ entity_id: "sensor.daylight", name: "Daylight", state: "50", attributes: { unit_of_measurement: "%" } });
+  const { panel, hass, calls } = await mount(true, snapshot);
+  button(panel, "Lumières · 2").click(); await settle(panel);
+  const contents = () => panel.shadowRoot!.textContent!.replace(/\s+/g, " ");
+  assert.match(contents(), /Seuil d’allumage \(%\)/);
+  assert.match(contents(), /Hystérésis \(%\)/);
+  assert.match(contents(), /Seuil bas: 30 % · Seuil haut: 35 %/);
+  panel.hass = { ...hass, states: { "sensor.daylight": { state: "100", attributes: { unit_of_measurement: "lx" } } } }; await settle(panel);
+  assert.match(contents(), /Seuil d’allumage \(lx\)/);
+  assert.match(contents(), /Seuil bas: 30 lx · Seuil haut: 35 lx/);
+  panel.hass = { ...hass, states: { "sensor.daylight": { state: "100", attributes: {} } } }; await settle(panel);
+  assert.match(contents(), /Ce capteur ne fournit pas d’unité/);
+  assert.doesNotMatch(contents(), /\(lx\)|30 lx|30 %/);
+  const delay = [...panel.shadowRoot!.querySelectorAll("label")].find((label) => label.textContent?.includes("Délai d’absence"))!.querySelector("input")!;
+  delay.value = "10"; delay.dispatchEvent(new Event("change", { bubbles: true })); await settle(panel);
+  button(panel, "Enregistrer les modifications").click(); await settle(panel);
+  const saved = (calls.find((call) => call.type === "halo/save")!.config as Snapshot["config"]).rooms.lounge;
+  assert.equal(saved.lux_threshold, 30); assert.equal(saved.lux_hysteresis, 5);
+});
+
+test("lights distinguish groups and membership and searchable associations keep hidden selections", async () => {
+  const snapshot = fixture();
+  snapshot.lights[0].is_group = false;
+  snapshot.lights[0].member_of = ["light.office"];
+  snapshot.lights[1].is_group = false;
+  snapshot.lights[1].member_of = [];
+  snapshot.lights.push({ entity_id: "light.office", name: "Bureau", area_id: "lounge", available: true,
+    supported_color_modes: ["brightness"], supported_features: 0, is_group: true, group_members: ["light.colour"], member_of: [] });
+  snapshot.config.profiles.day = newProfile("day", "Journée");
+  snapshot.config.rooms.lounge.associations = [{ profile_id: "day", lights: ["light.colour"], brightness_offset: 0 }];
+  const { panel, calls } = await mount(true, snapshot);
+  button(panel, "Lumières · 2").click(); await settle(panel);
+  const list = panel.shadowRoot!.querySelector(".light-list")!;
+  assert.match(list.textContent!.replace(/\s+/g, " "), /Lampe individuelle · Membre de: Bureau/);
+  assert.match(list.textContent!.replace(/\s+/g, " "), /Lampe individuelle · Aucun groupe connu/);
+  assert.match(list.textContent!.replace(/\s+/g, " "), /Groupe de lumières · Membres: Lampe couleur/);
+  const filter = panel.shadowRoot!.querySelector<HTMLInputElement>('.association input[type="search"]')!;
+  filter.value = "absent"; filter.dispatchEvent(new Event("input", { bubbles: true })); await settle(panel);
+  assert.equal(panel.shadowRoot!.querySelectorAll('.association input[type="checkbox"]').length, 0);
+  filter.value = "light.colour"; filter.dispatchEvent(new Event("input", { bubbles: true })); await settle(panel);
+  assert.equal(panel.shadowRoot!.querySelector<HTMLInputElement>('.association input[type="checkbox"]')!.checked, true);
+  const offset = panel.shadowRoot!.querySelector<HTMLInputElement>('.association input[type="number"]')!;
+  offset.value = "-20"; offset.dispatchEvent(new Event("change", { bubbles: true })); await settle(panel);
+  button(panel, "Enregistrer les modifications").click(); await settle(panel);
+  assert.deepEqual((calls.find((call) => call.type === "halo/save")!.config as Snapshot["config"]).rooms.lounge.associations[0].lights, ["light.colour"]);
+});
+
+test("profile and scene creation work on HTTP LAN without crypto.randomUUID", async () => {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, "crypto")!;
+  const original = globalThis.crypto;
+  Object.defineProperty(globalThis, "crypto", { configurable: true, value: { getRandomValues: original.getRandomValues.bind(original) } });
+  try {
+    const { panel, calls } = await mount();
+    button(panel, "Réglages globaux").click(); await settle(panel);
+    button(panel, "Nouveau profil").click(); await settle(panel);
+    button(panel, "Nouveau profil").click(); await settle(panel);
+    assert.equal(panel.shadowRoot!.querySelectorAll(".profile").length, 2);
+    button(panel, "Enregistrer les modifications").click(); await settle(panel);
+    const profiles = (calls.find((call) => call.type === "halo/save")!.config as Snapshot["config"]).profiles;
+    const ids = Object.keys(profiles);
+    assert.equal(ids.length, 2); assert.notEqual(ids[0], ids[1]);
+    button(panel, "Pièces").click(); await settle(panel);
+    button(panel, "Lumières · 2").click(); await settle(panel);
+    button(panel, "Créer une scène").click(); await settle(panel);
+    assert.ok(panel.shadowRoot!.querySelector(".editor"));
+    const name = panel.shadowRoot!.querySelector<HTMLInputElement>('.editor input[type="text"]')!;
+    name.value = "Test HTTP"; name.dispatchEvent(new Event("change", { bubbles: true })); await settle(panel);
+    const filter = panel.shadowRoot!.querySelector<HTMLInputElement>('.editor input[type="search"]')!;
+    filter.value = "simple"; filter.dispatchEvent(new Event("input", { bubbles: true })); await settle(panel);
+    assert.equal(panel.shadowRoot!.querySelectorAll(".lamp").length, 1);
+    button(panel, "Enregistrer la scène").click(); await settle(panel);
+    const scene = calls.find((call) => call.type === "halo/edit/end")!.scene as { id: string; lights: Record<string, unknown> };
+    assert.match(scene.id, /^[0-9a-f-]{36}$/);
+    assert.deepEqual(Object.keys(scene.lights), ["light.colour", "light.simple"]);
+  } finally { Object.defineProperty(globalThis, "crypto", descriptor); }
+});
+
+
+test("large entity catalogs stay searchable and outside clicks cancel only the transient query", async () => {
+  const snapshot = fixture();
+  snapshot.entities.push(...Array.from({ length: 240 }, (_, index) => ({ entity_id: `binary_sensor.device_${index}`, name: `Device ${index}`, state: "off", attributes: {} })));
+  snapshot.config.rooms.lounge.presence_entity_id = "binary_sensor.device_239";
+  const { panel, hass } = await mount(true, snapshot);
+  button(panel, "Lumières · 2").click(); await settle(panel);
+  const control = picker(panel, "Entité de présence");
+  const input = await searchEntity(control, "device");
+  assert.equal(control.shadowRoot!.querySelectorAll('[role="option"]').length, 100);
+  assert.match(control.shadowRoot!.textContent!, /100 premiers résultats/);
+  await searchEntity(control, "device_239");
+  assert.equal(control.shadowRoot!.querySelectorAll('[role="option"]').length, 1);
+  window.document.body.dispatchEvent(new window.Event("pointerdown", { bubbles: true, composed: true }));
+  await control.updateComplete;
+  assert.equal(input.getAttribute("aria-expanded"), "false");
+  assert.equal(control.value, "binary_sensor.device_239");
+  panel.hass = { ...hass, locale: { language: "de" } }; await settle(panel);
+  await searchEntity(control, "unknown name");
+  assert.match(control.shadowRoot!.textContent!, /No matching entities/);
 });

@@ -1,18 +1,31 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { dimmable, interpolate, moveItem, newProfile, newRoom, optionalNumber } from "../src/model";
+import { createId, dimmable, interpolate, moveItem, newProfile, newRoom, optionalNumber } from "../src/model";
 import { en, fr, language, translate } from "../src/translations";
 
 test("room defaults preserve manual turn-off policy and opt-in automation", () => {
   const room = newRoom("living_room");
   assert.equal(room.automation_enabled, false);
   assert.equal(room.allow_off_during_pause, true);
-  assert.equal(room.manual_pause, 900);
-  assert.equal(room.absence_delay, 120);
+  assert.equal(room.manual_pause, 7200);
+  assert.equal(room.absence_delay, 0);
   assert.equal(room.lux_off_delay, 30);
   assert.equal(room.lux_threshold, null);
   assert.equal(room.lux_off, false);
   assert.deepEqual(new Set(Object.values(room.transitions)), new Set(["inherit"]));
+});
+
+test("new profile and scene identifiers work without secure-context randomUUID", () => {
+  const descriptor = Object.getOwnPropertyDescriptor(crypto, "randomUUID");
+  Object.defineProperty(crypto, "randomUUID", { value: undefined, configurable: true });
+  try {
+    const ids = Array.from({ length: 100 }, () => createId());
+    assert.equal(new Set(ids).size, ids.length);
+    for (const id of ids) assert.match(id, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  } finally {
+    if (descriptor) Object.defineProperty(crypto, "randomUUID", descriptor);
+    else Reflect.deleteProperty(crypto, "randomUUID");
+  }
 });
 
 test("curve preview preserves fractional elevation, interpolates and clamps", () => {

@@ -12,6 +12,12 @@ Depuis Home Assistant 2026.3, une intégration personnalisée peut embarquer ses
 
 ## Affichage du lotus
 
+### Barre latérale Home Assistant
+
+L’entrée **Halo** de la barre latérale relève de `panel_custom` de Home Assistant. Son icône se définit par `sidebar_icon`, indépendamment des images de la liste HACS. Halo utilise **`mdi:spa`**, une fleur de lotus native et monochrome, dans la barre latérale et l’en-tête du panneau. `flower-lotus` est un mot-clé du catalogue, pas un identifiant d’icône à préfixer par `mdi:`. La couleur est gérée par Home Assistant selon le thème et la sélection. [Panneaux personnalisés](https://developers.home-assistant.io/docs/frontend/custom-ui/creating-custom-panels/) · [Icône officielle `spa`](https://pictogrammers.com/library/mdi/icon/spa/).
+
+### Liste et présentation HACS
+
 Diagnostic du **9 octobre 2026**, sur HACS **2.0.5**, interface **20250128065759**, avec Halo ajouté comme dépôt personnalisé mais pas encore téléchargé :
 
 - **Page de présentation :** le README utilisait une balise HTML avec un chemin d’image relatif, donnant une image cassée dans HACS. Le chemin est remplacé par l’URL absolue de `icon@2x.png` sur `raw.githubusercontent.com`. Cette URL répond en HTTP 200 avec un PNG identique au fichier local. Le changement doit être poussé sur GitHub puis repris par HACS pour être visible dans cette page ; le rendu corrigé dans HACS n’a pas encore été vérifié.

@@ -1,9 +1,19 @@
 import type { Condition, Curve, Light, Profile, Room, Transition } from "./types";
 
 export const categories: Transition[] = ["turn_on", "lux_on", "natural", "scene", "turn_off"];
+
+export function createId(): string {
+  // getRandomValues is available on local HTTP Home Assistant instances too.
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
 export function newRoom(id: string): Room {
   return { id, lights: [], presence_entity_id: null, presence_states: ["on"], lux_entity_id: null,
-    lux_threshold: null, lux_hysteresis: 0, lux_off: false, absence_delay: 120, manual_pause: 900,
+    lux_threshold: null, lux_hysteresis: 0, lux_off: false, absence_delay: 0, manual_pause: 7200,
     lux_off_delay: 30, allow_off_during_pause: true, automation_enabled: false, natural_enabled: true,
     transitions: { turn_on: "inherit", lux_on: "inherit", natural: "inherit", scene: "inherit", turn_off: "inherit" },
     base: {}, associations: [], scenes: [] };

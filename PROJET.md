@@ -34,6 +34,8 @@ Limite vérifiée le 9 octobre 2026 : HACS 2.0.5 ne charge pas les icônes embar
 
 L’utilisateur ajoute Halo une seule fois dans Home Assistant. L’intégration ajoute automatiquement un panneau **Halo** dans la barre latérale, sans configuration YAML ni installation séparée de carte. Toute la configuration fonctionnelle se fait dans ce panneau.
 
+La barre latérale et l’en-tête du panneau utilisent le lotus monochrome natif `mdi:spa`, avec les couleurs du thème Home Assistant. Le panneau n’ajoute pas de bouton de menu dans son en-tête. Ce choix d’interface est distinct des images de marque distribuées pour la présentation de l’intégration dans HACS.
+
 Home Assistant fournit un mécanisme de panneau personnalisé pour cette interface. [Documentation officielle](https://developers.home-assistant.io/docs/frontend/custom-ui/creating-custom-panels/).
 
 Le panneau présente :
@@ -70,6 +72,10 @@ La préférence d’interface Home Assistant se règle dans le profil utilisateu
 ### Sélection des lumières
 
 Les pièces proviennent du registre Home Assistant. L’utilisateur choisit explicitement les entités `light` gérées dans chacune d’elles. Le sélecteur présente d’abord les lumières rattachées à la pièce dans Home Assistant et permet ensuite de rechercher les autres.
+
+Les listes distinguent les entités de groupe Home Assistant des lumières individuelles. Elles indiquent les groupes d’appartenance et leurs membres lorsque Home Assistant expose ces informations, dans la limite des droits de lecture de l’utilisateur. Les groupes non exposés par une intégration ne sont pas déduits du nom des lampes. Ces informations restent distinctes des associations de profils naturels de Halo.
+
+Tous les sélecteurs d’entités proposent une recherche immédiate par nom ou identifiant, insensible à la casse et aux accents. Cela couvre notamment la présence, la luminosité, le soleil et les conditions de scènes. Les listes de lampes de la pièce, des associations naturelles, de l’ambiance de base et des scènes sont également filtrables. Abandonner une recherche ne modifie pas la sélection enregistrée.
 
 - Une lampe appartient à une seule pièce Halo.
 - Dans cette pièce, elle appartient au maximum à une association de profil naturel.
@@ -108,6 +114,8 @@ Ces décisions sont soumises au mode automatique, aux pauses et à la priorité 
 ### Luminosité et hystérésis
 
 Le capteur de luminosité est facultatif. Lorsqu’il est configuré, l’utilisateur renseigne un seuil fixe et une hystérésis. Le dashboard affiche les seuils effectifs bas et haut ; entre ces seuils, la décision précédente est conservée. Dans l’implémentation, le seuil bas est le seuil renseigné et le seuil haut est ce seuil augmenté de l’hystérésis : la pièce est sombre sous le seuil bas et suffisamment lumineuse à partir du seuil haut.
+
+L’unité affichée pour le seuil, l’hystérésis et les seuils effectifs provient de l’attribut `unit_of_measurement` du capteur sélectionné : par exemple `lx` ou `%`. Aucune unité n’est inventée si elle manque. Les comparaisons utilisent les valeurs natives du capteur ; sélectionner un autre capteur ne convertit pas automatiquement les seuils existants.
 
 Chaque pièce choisit si la luminosité :
 
@@ -296,18 +304,20 @@ Ces valeurs sont les valeurs par défaut retenues et appliquées dans la premiè
 | Paramètre | Valeur initiale |
 | --- | --- |
 | Automatismes d’une pièce nouvellement configurée | Désactivés jusqu’à leur activation. |
-| Transitions globales | Champs vides : aucun paramètre de transition demandé. |
+| Transitions globales | Allumage habituel : 0 s ; baisse de luminosité : 10 s ; ajustement naturel : 60 s ; scène : 10 s ; extinction : 2 s. |
 | Transitions par pièce | Héritage des valeurs globales. |
 | Courbes matin/soir d’un profil | Liées. |
 | Extinction sur forte luminosité | Désactivée. |
 | Extinction automatique pendant la pause manuelle | Autorisée ; configurable par pièce. |
-| Délai d’absence | 120 secondes, modifiable. |
-| Durée de pause manuelle | 15 minutes, modifiable. |
+| Délai d’absence | 0 seconde, modifiable. |
+| Durée de pause manuelle | 120 minutes, modifiable. |
 | Confirmation de forte luminosité avant extinction | 30 secondes, modifiable. |
 | Seuil lumineux | À renseigner lorsqu’un capteur est configuré. |
 | Hystérésis | Zéro, modifiable. |
 | Langue de référence et de repli | Anglais. |
 | Autre langue fournie | Français, pour `fr` et ses variantes. |
+
+Ces valeurs remplacent les choix initiaux (absence 120 secondes, pause 15 minutes et transitions globales vides), à la demande du 9 octobre 2026. Elles s’appliquent aux nouvelles configurations ; les réglages déjà enregistrés, y compris `0` et les transitions vides (`null`), sont conservés. Les pièces continuent d’hériter des transitions globales par défaut. Le champ vide reste un choix explicite valide pour omettre une transition.
 
 ## 14. Scénarios d’acceptation
 
@@ -340,6 +350,11 @@ Ces valeurs sont les valeurs par défaut retenues et appliquées dans la premiè
 | A23 | Rendre une source de présence, de luminosité, de soleil ou une lampe indisponible, puis la rétablir. | Indisponibilité explicite ; aucune mesure remplacée par zéro ; récupération vérifiée. |
 | A24 | Fermer le panneau, recharger l’intégration et redémarrer Home Assistant pendant une pause. | Moteur indépendant du panneau ; ressources libérées ; configuration, identifiants et échéance de pause conservés. |
 | A25 | Utiliser le français, ses variantes, l’anglais et une langue non prise en charge. | Français pour les variantes françaises ; anglais autrement ; noms personnalisés et identifiants inchangés. |
+| A26 | Rechercher par nom ou identifiant dans les sélecteurs d’entités et listes de lumières, au clavier et à la souris. | Filtrage immédiat ; sélection conservée si la recherche est abandonnée ; entités indisponibles identifiables. |
+| A27 | Afficher une entité de groupe, une lampe membre et une lampe sans groupe connu. | Nature et appartenances connues explicites ; aucune information inaccessible divulguée. |
+| A28 | Sélectionner des capteurs en `lx`, en `%`, puis sans unité. | Unités adaptées sur seuil et hystérésis ; aucune conversion implicite des valeurs. |
+| A29 | Créer un profil naturel et une scène via une adresse Home Assistant locale en HTTP. | Création et sauvegarde possibles sans dépendre de `crypto.randomUUID`, réservé aux contextes sécurisés. |
+| A30 | Créer une configuration puis recharger une ancienne configuration. | Nouveaux défauts appliqués à la création ; durées et transitions déjà enregistrées conservées. |
 
 Pour chaque scénario réalisé, consigner son résultat, la version examinée et le périmètre : test automatisé, essai d’interface ou essai sur des lumières réelles. Une fonctionnalité implémentée n’est pas automatiquement validée dans Home Assistant.
 
@@ -357,5 +372,6 @@ Chaque évolution met à jour dans la même tâche la spécification, le statut 
 | 9 octobre 2026 | Adopter les profils réutilisables, les scènes prioritaires éditables en direct et les transitions globales avec réglages locaux. | Configuration centralisée dans le futur panneau. |
 | 9 octobre 2026 | Utiliser l’anglais comme référence, avec français selon la langue de l’interface Home Assistant. | Localisation complète à développer et catalogues extensibles. |
 | 9 octobre 2026 | Lancer le développement du cahier des charges. | Première implémentation du moteur, des entités et du panneau ; validation locale et essais matériels distingués. |
+| 9 octobre 2026 | Préciser les groupes, rendre les entités recherchables, suivre les unités des capteurs et ajuster les valeurs initiales après les premiers retours du panneau. | Nouvelles règles décrites ci-dessus ; conservation des réglages existants et création de profils/scènes compatible HTTP local. |
 
 Le développement et les essais précèdent toute publication. La release et la demande d’inclusion HACS suivent ensuite la [procédure documentée](docs/HACS.md). Aucun référencement n’est déclenché par la rédaction de ce cahier des charges.

@@ -19,7 +19,9 @@ Les choix esthétiques détaillés restent à définir dans la section « Règle
 
 Le README référence le lotus par une URL absolue GitHub pour permettre son affichage dans la présentation HACS. La liste de HACS 2.0.5 utilise un mécanisme distinct qui ne prend pas encore en charge les icônes embarquées ; ce défaut d’affichage ne remet pas en cause les ressources graphiques. Voir le [diagnostic HACS](docs/HACS.md#affichage-du-lotus).
 
-L’icône actuelle emploie des tons chauds. Ces couleurs ne constituent pas, à elles seules, une palette validée pour le dashboard. L’usage du lotus dans l’interface reste à préciser.
+L’image de marque actuelle emploie des tons chauds. Ces couleurs ne constituent pas, à elles seules, une palette validée pour le dashboard. La barre latérale Home Assistant et l’en-tête Halo utilisent le lotus monochrome natif **`mdi:spa`**, dont la couleur suit le thème et l’état de sélection, comme les autres icônes. Le nom `mdi:flower-lotus`, qui ne désigne pas une icône valide, est remplacé. [Lotus du catalogue Material Design Icons](https://pictogrammers.com/library/mdi/icon/spa/).
+
+Le bouton « Ouvrir le menu Home Assistant » ajouté par Halo est supprimé de son en-tête, à la demande du 9 octobre 2026. L’en-tête conserve le lotus, le nom Halo et son descriptif ; le menu de l’application hôte n’est pas modifié.
 
 ## Accès, navigation et droits
 
@@ -41,6 +43,10 @@ L’implémentation actuelle utilise une liste de pièces, une page par pièce a
 ### Lumières et capacités
 
 Le sélecteur présente d’abord les lumières rattachées à la pièce dans Home Assistant, puis permet de rechercher les autres entités `light`. L’affectation est explicite : aucune lumière n’est ajoutée automatiquement à la configuration Halo.
+
+Les listes précisent si l’entité est un groupe Home Assistant ou une lumière individuelle, et affichent les groupes d’appartenance connus ainsi que les membres visibles d’un groupe. L’absence de groupe connu ne prétend pas exclure un regroupement non exposé par l’intégration de la lampe. Ces indications ne désignent pas les associations de profils naturels Halo.
+
+Chaque sélection d’entité propose une recherche immédiate par nom et identifiant, insensible à la casse et aux accents, avec navigation au clavier et choix à la souris ou au toucher. La sélection courante reste lisible ; quitter une recherche sans choisir conserve cette sélection. Les cas sans résultat et les entités sélectionnées devenues indisponibles sont explicites. Les listes de lampes de la pièce, des associations naturelles, de l’ambiance de base et des scènes proposent aussi un filtre.
 
 Une lampe ne peut appartenir qu’à une pièce Halo et qu’à une association de profil naturel au sein de cette pièce. Les lumières générées par Halo sont exclues de la sélection. L’interface doit rendre ces contraintes compréhensibles au moment de l’affectation.
 
@@ -65,13 +71,15 @@ La page de pièce expose les commandes correspondant à l’appareil Home Assist
 
 ### Présence, luminosité et pause manuelle
 
-La configuration de présence permet de choisir une entité de mouvement, de présence ou personnalisée et de renseigner les états signifiant « présent ». Le délai d’absence est modifiable, avec une valeur initiale de **120 secondes**.
+La configuration de présence permet de choisir une entité de mouvement, de présence ou personnalisée et de renseigner les états signifiant « présent ». Le délai d’absence est modifiable, avec une valeur initiale de **0 seconde**.
 
 Le capteur de luminosité est facultatif. Lorsqu’il est configuré, l’utilisateur renseigne le seuil et l’hystérésis, initialement à zéro. L’interface affiche les seuils effectifs bas et haut et permet de choisir entre l’autorisation d’allumage seule et l’extinction lorsque la luminosité devient suffisante. Cette extinction est désactivée par défaut ; son délai de confirmation initial est de **30 secondes**.
 
+Les libellés du seuil, de l’hystérésis et des seuils effectifs affichent l’unité `unit_of_measurement` du capteur sélectionné (`lx`, `%` ou autre unité déclarée). Sans unité déclarée, aucun suffixe n’est supposé. Changer de capteur conserve les valeurs numériques ; aucune conversion entre lux et pourcentage n’est appliquée.
+
 La pause manuelle couvre toute la pièce. Elle concerne les modifications de couleur ou de luminosité, les allumages, les extinctions et les lancements explicites de scènes. Ses réglages comprennent :
 
-- Une durée modifiable, initialement **15 minutes**.
+- Une durée modifiable, initialement **120 minutes**.
 - L’autorisation des extinctions automatiques sur absence et sur forte luminosité pendant la pause, **configurable par pièce et activée par défaut**.
 - Une explication de la reprise : expiration du délai, retour après une absence confirmée ou commande de reprise.
 
@@ -141,7 +149,7 @@ Les réglages présentent cinq catégories avec leurs valeurs en **secondes** :
 | Scène | Activation, changement ou sortie de scène ; comprend une scène provoquant elle-même l’allumage. |
 | Extinction | Extinction de la pièce. |
 
-Les valeurs globales sont initialement vides. Pour chaque catégorie, chaque pièce propose trois choix explicites :
+Les valeurs globales initiales sont respectivement **0, 10, 60, 10 et 2 secondes**, dans l’ordre du tableau. Ces nouveaux défauts ne remplacent pas les réglages déjà enregistrés, y compris les champs vides. Pour chaque catégorie, chaque pièce propose trois choix explicites :
 
 1. **Hériter** de la valeur globale, choix initial.
 2. **Définir une durée** propre à la pièce.

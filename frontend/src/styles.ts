@@ -26,7 +26,7 @@ export const styles = css`
   .notice { background:var(--secondary-background-color,#eee); border-left:4px solid var(--primary-color,#03a9f4); padding:14px; margin:12px 0; line-height:1.5; }
   .error { border-color:var(--error-color,#db4437); } .savebar { position:sticky; bottom:0; z-index:2; display:flex; gap:12px; align-items:center; flex-wrap:wrap; padding:14px 20px; border-top:1px solid var(--divider-color,#ddd); background:var(--card-background-color,#fff); }
   .light-list { max-height:380px; overflow:auto; } .light-option { display:flex; align-items:center; gap:12px; padding:9px 0; border-bottom:1px solid var(--divider-color,#ddd); }
-  .light-option .check { flex:1; } .light-option small { display:block; overflow-wrap:anywhere; }
+  .light-option .check { flex:1; } .light-option small,.association small,.group-info { display:block; overflow-wrap:anywhere; }
   .field-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr)); gap:6px 18px; }
   .lamp,.association,.scene-row,.profile { padding:16px; border:1px solid var(--divider-color,#ddd); border-radius:8px; margin:12px 0; }
   .scene-row { display:flex; align-items:center; gap:12px; flex-wrap:wrap; } .scene-row[draggable="true"] { cursor:grab; }
@@ -35,7 +35,7 @@ export const styles = css`
   .condition .condition { margin-left:10px; background:var(--card-background-color,#fff); }
   .editor { border:2px solid var(--primary-color,#03a9f4); } .muted { opacity:.7; }
   svg { width:100%; max-height:220px; overflow:visible; color:var(--primary-color,#03a9f4); } svg text { fill:var(--secondary-text-color,#555); font-size:11px; }
-  .empty { padding:28px 0; color:var(--secondary-text-color,#666); } .status-line { margin:8px 0; } .menu { padding:6px 10px; }
+  .empty { padding:28px 0; color:var(--secondary-text-color,#666); } .status-line { margin:8px 0; }
   @media (max-width:600px) { main { padding:14px; } header { padding:10px 14px; } header small { display:none; } section,details { padding:16px; } .savebar { padding:12px 14px; } .scene-row .actions { width:100%; } }
   @media (prefers-reduced-motion:reduce) { * { scroll-behavior:auto!important; } }
 `;
