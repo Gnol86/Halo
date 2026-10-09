@@ -8,7 +8,18 @@ HACS distribue une intégration personnalisée Home Assistant. Un seul domaine, 
 
 Le fichier racine `hacs.json` indique le nom et le minimum Home Assistant. Les valeurs par défaut conviennent : pas d’archive ZIP à produire, pas de contenu à la racine et aucune restriction géographique. HACS demande aussi un dépôt public sur GitHub, une description, des sujets et un README d’utilisation. [Exigences générales](https://www.hacs.xyz/docs/publish/start/).
 
-Depuis Home Assistant 2026.3, une intégration personnalisée peut embarquer ses images dans `brand/`. Halo utilise `brand/icon.png` et `brand/icon@2x.png` ; aucune contribution à `home-assistant/brands` n’est nécessaire pour cette approche. [Images de marque](https://developers.home-assistant.io/docs/core/integration/brand_images/).
+Depuis Home Assistant 2026.3, une intégration personnalisée peut embarquer ses images dans `brand/`. Halo utilise `brand/icon.png` et `brand/icon@2x.png` pour l’interface native Home Assistant, une fois les fichiers installés et l’intégration découverte. Cette prise en charge ne garantit pas l’affichage dans HACS. [Images de marque](https://developers.home-assistant.io/docs/core/integration/brand_images/).
+
+## Affichage du lotus
+
+Diagnostic du **9 octobre 2026**, sur HACS **2.0.5**, interface **20250128065759**, avec Halo ajouté comme dépôt personnalisé mais pas encore téléchargé :
+
+- **Page de présentation :** le README utilisait une balise HTML avec un chemin d’image relatif, donnant une image cassée dans HACS. Le chemin est remplacé par l’URL absolue de `icon@2x.png` sur `raw.githubusercontent.com`. Cette URL répond en HTTP 200 avec un PNG identique au fichier local. Le changement doit être poussé sur GitHub puis repris par HACS pour être visible dans cette page ; le rendu corrigé dans HACS n’a pas encore été vérifié.
+- **Liste des dépôts :** cette version de HACS demande encore l’image au CDN `brands.home-assistant.io`, sans lire le dossier `brand/` de Halo. Le dossier local est conforme au mécanisme Home Assistant. Ajouter un champ `icon` à `hacs.json` ne corrigerait pas le problème : ce champ n’est pas pris en charge. [Champs de `hacs.json`](https://www.hacs.xyz/docs/publish/start/#hacsjson).
+
+La correction proposée dans [hacs/integration #5388](https://github.com/hacs/integration/pull/5388) et [hacs/frontend #945](https://github.com/hacs/frontend/pull/945) vise à servir les images locales des intégrations téléchargées et à récupérer celles des autres dépôts sur GitHub. Ces deux propositions sont encore ouvertes à la date du diagnostic ; il faudra vérifier une version HACS qui les intègre avant d’annoncer cette limite résolue. Une installation de Halo ne corrige pas à elle seule la liste de HACS 2.0.5.
+
+Le dépôt `home-assistant/brands` n’accepte plus les images des nouvelles intégrations personnalisées : les images doivent rester embarquées dans Halo. Aucune soumission à ce dépôt ni au catalogue HACS n’est effectuée pour ce correctif. [Annonce officielle du changement](https://developers.home-assistant.io/blog/2026/02/24/brands-proxy-api/).
 
 ## À exécuter à la fin du projet
 

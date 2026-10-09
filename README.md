@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="custom_components/halo/brand/icon@2x.png" alt="Lotus de Halo" width="144" height="144">
+  <img src="https://raw.githubusercontent.com/Gnol86/Halo/main/custom_components/halo/brand/icon@2x.png" alt="Lotus de Halo" width="144" height="144">
 </p>
 
 # Halo
@@ -15,6 +15,8 @@ Une intégration Home Assistant destinée à gérer l’ensemble des lumières d
 - Chargement, déchargement et rechargement de l’intégration.
 - Textes en français et en anglais, icône de lotus embarquée.
 - Tests avec Home Assistant et workflows de validation préparés.
+
+**Icône dans HACS :** HACS 2.0.5 affiche encore une image de remplacement dans sa liste pour les nouvelles intégrations comme Halo. Les fichiers du lotus sont bien embarqués pour Home Assistant ; l’image de présentation de ce README utilise une URL absolue indépendante de cette limite. Le [diagnostic et le correctif attendu côté HACS](docs/HACS.md#affichage-du-lotus) sont documentés.
 
 ## Première implémentation fonctionnelle
 

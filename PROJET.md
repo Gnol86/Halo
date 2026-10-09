@@ -12,6 +12,8 @@ Halo est une intégration personnalisée Home Assistant destinée à gérer tout
 
 Le socle initial est implémenté : ajout depuis l’interface Home Assistant, entrée de configuration unique, chargement/déchargement/rechargement, textes de configuration anglais et français, icônes locales, tests et workflows préparés. Les vérifications historiques et leurs limites sont consignées dans [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
+Limite vérifiée le 9 octobre 2026 : HACS 2.0.5 ne charge pas les icônes embarquées pour sa liste de dépôts. L’image du README utilise une URL absolue GitHub ; les ressources `brand/` restent celles prévues pour Home Assistant. Le [diagnostic des deux emplacements](docs/HACS.md#affichage-du-lotus) distingue cette limite externe de la correction du README. Le référencement par défaut reste un jalon final.
+
 **Une première implémentation du panneau et du moteur d’éclairage est disponible dans le dépôt.** Les tests locaux utilisent Home Assistant avec des lampes simulées ; les essais matériels et la validation finale du dashboard dans une instance Home Assistant restent à effectuer. Les résultats sont consignés dans [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 | Ensemble | Statut actuel |

@@ -17,6 +17,8 @@ Les choix esthétiques détaillés restent à définir dans la section « Règle
 - **Ressources disponibles :** icônes transparentes de 256 et 512 pixels dans `custom_components/halo/brand/`.
 - **Source et prompt :** [assets/branding/README.md](assets/branding/README.md).
 
+Le README référence le lotus par une URL absolue GitHub pour permettre son affichage dans la présentation HACS. La liste de HACS 2.0.5 utilise un mécanisme distinct qui ne prend pas encore en charge les icônes embarquées ; ce défaut d’affichage ne remet pas en cause les ressources graphiques. Voir le [diagnostic HACS](docs/HACS.md#affichage-du-lotus).
+
 L’icône actuelle emploie des tons chauds. Ces couleurs ne constituent pas, à elles seules, une palette validée pour le dashboard. L’usage du lotus dans l’interface reste à préciser.
 
 ## Accès, navigation et droits
