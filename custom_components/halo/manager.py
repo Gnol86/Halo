@@ -26,6 +26,7 @@ from .models import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+_GROUP_MEMBER_TYPES = (list, tuple, set, frozenset)
 
 
 class HaloError(HomeAssistantError):
@@ -391,9 +392,20 @@ class HaloManager:
         for state in visible_states:
             registered = registry.async_get(state.entity_id)
             members = state.attributes.get("entity_id")
+            # Hue v1 only exposes the flag. Hue v2 additionally returns member
+            # IDs as a set and keeps its entity type in the registry when offline.
+            is_hue_group = state.domain == "light" and (
+                state.attributes.get("is_hue_group") is True
+                or (
+                    registered
+                    and registered.platform == "hue"
+                    and registered.translation_key == "hue_grouped_light"
+                )
+            )
             if not (
                 (registered and registered.platform == "group")
-                or isinstance(members, (list, tuple))
+                or is_hue_group
+                or isinstance(members, _GROUP_MEMBER_TYPES)
             ):
                 continue
             # Membership is metadata too: never disclose an unreadable entity
@@ -405,9 +417,11 @@ class HaloManager:
                     if isinstance(member, str)
                     and user.permissions.check_entity(member, POLICY_READ)
                 ]
-                if isinstance(members, (list, tuple))
+                if isinstance(members, _GROUP_MEMBER_TYPES)
                 else []
             )
+            if isinstance(members, (set, frozenset)):
+                visible_members.sort()
             groups[state.entity_id] = list(dict.fromkeys(visible_members))
             for member in groups[state.entity_id]:
                 member_of.setdefault(member, []).append(state.entity_id)
@@ -415,7 +429,7 @@ class HaloManager:
         for state in visible_states:
             entity_id = state.entity_id
             attributes = dict(state.attributes)
-            if isinstance(attributes.get("entity_id"), (list, tuple)):
+            if isinstance(attributes.get("entity_id"), _GROUP_MEMBER_TYPES):
                 attributes["entity_id"] = groups[entity_id].copy()
             item = {
                 "entity_id": entity_id,

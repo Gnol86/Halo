@@ -347,6 +347,32 @@ async def test_natural_adjusts_only_on_members_and_suspends_without_sun(
     assert engine.status["reason"] == "unavailable"
 
 
+@pytest.mark.parametrize(
+    ("interpolation", "brightness", "temperature"),
+    [("linear", 42, 4000), ("ease_in", 28, 3000)],
+)
+async def test_natural_curve_mode_reaches_lamp_commands(
+    hass, room_engine, interpolation, brightness, temperature
+):
+    engine, manager, room, calls = room_engine
+    room["associations"] = [
+        {"profile_id": "day", "lights": room["lights"], "brightness_offset": -30}
+    ]
+    profile = natural_profile()
+    for curve in profile["morning"].values():
+        curve["interpolation"] = interpolation
+    manager.config["profiles"]["day"] = profile
+    await engine.async_reconfigure()
+    await enable(hass, engine)
+    hass.states.async_set("binary_sensor.presence", "on")
+    await hass.async_block_till_done()
+    assert {call.data["entity_id"] for call in calls} == set(room["lights"])
+    for call in calls:
+        assert call.service == "turn_on"
+        assert call.data["brightness_pct"] == brightness
+        assert call.data["color_temp_kelvin"] == temperature
+
+
 async def test_unavailable_lux_does_not_turn_on_and_recovers(hass, room_engine):
     engine, _, _, calls = room_engine
     hass.states.async_set("binary_sensor.presence", "on")

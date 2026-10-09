@@ -4,7 +4,7 @@ import { categories, createId, colorMode, dimmable, interpolate, moveItem, newCo
 import { en, language, translate, type TranslationKey } from "./translations";
 import { styles } from "./styles";
 import { HaloEntityPicker, matchesEntity } from "./entity-picker";
-import type { Condition, Config, Curve, Hass, LampState, Light, Profile, Room, Scene, Snapshot, Transition, Transitions } from "./types";
+import type { Condition, Config, Curve, CurveInterpolation, Hass, LampState, Light, Profile, Room, Scene, Snapshot, Transition, Transitions } from "./types";
 
 type Editor = { roomId: string; token: string; scene: Scene; revision: number };
 type FieldOptions = { min?: number; max?: number; step?: number | "any"; required?: boolean; type?: string; unit?: string };
@@ -207,7 +207,7 @@ export class HaloPanel extends LitElement {
   protected render() {
     return html`<header>
       <ha-icon icon="mdi:spa"></ha-icon><h1>Halo</h1><small>${this.t("title")}</small></header>
-      <main lang=${language(this.locale)}>
+      <div class="content"><main lang=${language(this.locale)}>
         ${this.error ? html`<div class="notice error" role="alert">${this.error} <button ?disabled=${this.editing} @click=${() => this.connect()}>${this.t("retry")}</button></div>` : nothing}
         ${this.notice ? html`<div class="notice" role="status">${this.notice}</div>` : nothing}
         ${!this.snapshot || !this.draft ? html`<p role="status">${this.t("loading")}</p><button @click=${() => this.connect()}>${this.t("retry")}</button>` : html`
@@ -217,7 +217,7 @@ export class HaloPanel extends LitElement {
           ${!this.admin ? html`<p class="help">${this.t("adminOnly")}</p>` : nothing}
           ${this.editor ? this.renderEditor(this.editor) : this.page === "global" && this.admin ? this.renderGlobal() : this.page === "rooms" ? this.renderRooms() : this.renderRoom()}
         `}
-      </main>
+      </main></div>
       ${this.dirty ? html`<div class="savebar" role="status"><span class="grow">${this.hasConflict ? this.t("conflict") : this.t("unsaved")}</span>
         <button ?disabled=${this.busy} @click=${this.discard}>${this.t("discard")}</button><button class="primary" ?disabled=${this.busy || this.hasConflict} @click=${this.save}>${this.t("save")}</button></div>` : nothing}`;
   }
@@ -488,11 +488,11 @@ export class HaloPanel extends LitElement {
 
   private renderTransitions(values: Transitions, change: (category: Transition, value: number | null | "inherit") => void, roomId?: string) {
     const label: Record<Transition, TranslationKey> = { turn_on: "turn_on", lux_on: "lux_on", natural: "naturalTransition", scene: "sceneTransition", turn_off: "turn_off" };
-    return html`<p class="help">${this.t("transitionHelp")}</p><div class="field-grid">${categories.map((category) => {
+    return html`<p class="help">${this.t("transitionHelp")}</p><div class="field-grid transition-grid">${categories.map((category) => {
       const value = values[category];
       const key = `${roomId ?? "global"}:${category}`;
       const mode = value === "inherit" ? "inherit" : value !== null || this.durationModes.has(key) ? "duration" : "none";
-      return html`<div><h4>${this.t(label[category])}</h4>${roomId ? html`<label>${this.t("transitions")}<select data-selected=${mode} .value=${live(mode)} @change=${(event: Event) => {
+      return html`<div class="transition-field"><h4>${this.t(label[category])}</h4>${roomId ? html`<label>${this.t("transitions")}<select data-selected=${mode} .value=${live(mode)} @change=${(event: Event) => {
         const selected = (event.target as HTMLSelectElement).value; if (selected === "duration") this.durationModes.add(key); else this.durationModes.delete(key);
         change(category, selected === "inherit" ? "inherit" : selected === "duration" ? typeof value === "number" ? value : null : null);
       }}><option value="inherit" ?selected=${mode === "inherit"}>${this.t("inherit")}</option><option value="duration" ?selected=${mode === "duration"}>${this.t("duration")}</option><option value="none" ?selected=${mode === "none"}>${this.t("noTransition")}</option></select></label>` : nothing}
@@ -518,25 +518,38 @@ export class HaloPanel extends LitElement {
       ${(profile.linked ? ["morning"] as const : ["morning", "evening"] as const).map((period) => html`<h3>${this.t(period)}</h3><div class="grid">
         ${(["brightness", "temperature"] as const).map((kind) => {
           const curve = profile[period][kind];
-          const update = (key: keyof Curve, value: number | null) => this.modify((config) => { config.profiles[profile.id][period][kind][key] = value ?? 0; });
-          return html`<div><h4>${this.t(kind === "brightness" ? "brightnessCurve" : "temperatureCurve")}</h4><div class="field-grid">
+          const interpolation = curve.interpolation ?? "linear";
+          const helpId = `curve-help-${profile.id}-${period}-${kind}`;
+          const update = (key: Exclude<keyof Curve, "interpolation">, value: number | null) => this.modify((config) => { config.profiles[profile.id][period][kind][key] = value ?? 0; });
+          return html`<div><h4>${this.t(kind === "brightness" ? "brightnessCurve" : "temperatureCurve")}</h4>
+            <label>${this.t("curveType")}<select aria-describedby=${helpId} data-selected=${interpolation} .value=${live(interpolation)} @change=${(event: Event) => this.modify((config) => {
+              config.profiles[profile.id][period][kind].interpolation = (event.target as HTMLSelectElement).value as CurveInterpolation;
+            })}><option value="linear" ?selected=${interpolation === "linear"}>${this.t("linearCurve")}</option><option value="ease_in" ?selected=${interpolation === "ease_in"}>${this.t("easeInCurve")}</option></select></label>
+            <div class="field-grid">
             ${this.numberField("lowElevation", curve.low_elevation, (value) => update("low_elevation", value), { min: -90, max: 90, required: true })}
             ${this.numberField("highElevation", curve.high_elevation, (value) => update("high_elevation", value), { min: -90, max: 90, required: true })}
             ${this.numberField("lowValue", curve.low, (value) => update("low", value), { min: kind === "brightness" ? 0 : 1000, max: kind === "brightness" ? 100 : 40000, required: true, unit: kind === "brightness" ? "%" : "K" })}
             ${this.numberField("highValue", curve.high, (value) => update("high", value), { min: kind === "brightness" ? 0 : 1000, max: kind === "brightness" ? 100 : 40000, required: true, unit: kind === "brightness" ? "%" : "K" })}
-          </div>${curve.low_elevation >= curve.high_elevation ? html`<p class="danger" role="alert">${this.t("badCurve")}</p>` : this.curveGraph(curve, kind === "brightness" ? "%" : "K")}</div>`;
+          </div>${curve.low_elevation >= curve.high_elevation ? html`<p class="danger" role="alert">${this.t("badCurve")}</p>` : this.curveGraph(curve, kind === "brightness" ? "%" : "K")}
+          <p class="help" id=${helpId}>${this.t(interpolation === "ease_in" ? "easeInCurveHelp" : "linearCurveHelp")}</p></div>`;
         })}</div>`)}
       <button class="danger" ?disabled=${inUse} @click=${() => this.modify((config) => { delete config.profiles[profile.id]; })}>${this.t("remove")}</button>
       ${inUse ? html`<p class="help">${this.t("profileInUse")}</p>` : nothing}</div>`;
   }
 
   private curveGraph(curve: Curve, unit: string) {
-    const xMin = Math.max(-90, curve.low_elevation - 10), xMax = Math.min(90, curve.high_elevation + 10);
-    const min = Math.min(curve.low, curve.high), max = Math.max(curve.low, curve.high), span = Math.max(1, max - min);
-    const points = Array.from({ length: 41 }, (_, index) => { const x = xMin + (xMax - xMin) * index / 40; return `${42 + index * 6.4},${155 - (interpolate(curve, x) - min) / span * 115}`; }).join(" ");
-    return svg`<svg viewBox="0 0 330 190" role="img" aria-label="${this.t("curve")}: ${curve.low}–${curve.high} ${unit}, ${curve.low_elevation}–${curve.high_elevation}°">
+    const margin = Math.min(10, (curve.high_elevation - curve.low_elevation) / 4);
+    const xMin = Math.max(-90, curve.low_elevation - margin), xMax = Math.min(90, curve.high_elevation + margin);
+    const min = Math.min(curve.low, curve.high), max = Math.max(curve.low, curve.high), span = max - min || 1;
+    const xPosition = (elevation: number) => 42 + (elevation - xMin) / (xMax - xMin) * 256;
+    const elevations = curve.interpolation === "ease_in"
+      ? [xMin, ...Array.from({ length: 33 }, (_, index) => index === 32 ? curve.high_elevation : curve.low_elevation + (curve.high_elevation - curve.low_elevation) * index / 32), xMax]
+      : [xMin, curve.low_elevation, curve.high_elevation, xMax];
+    const points = elevations.map((elevation) => `${xPosition(elevation)},${155 - (interpolate(curve, elevation) - min) / span * 115}`).join(" ");
+    return svg`<svg viewBox="0 0 330 190" role="img" aria-label="${this.t("curve")}: ${this.t(curve.interpolation === "ease_in" ? "easeInCurve" : "linearCurve")}, ${curve.low}–${curve.high} ${unit}, ${curve.low_elevation}–${curve.high_elevation}°">
       <path d="M42 20 V155 H305" fill="none" stroke="currentColor" opacity=".4"></path><polyline points=${points} fill="none" stroke="currentColor" stroke-width="3"></polyline>
-      <text x="2" y="42">${max}${unit}</text><text x="2" y="155">${min}${unit}</text><text x="42" y="178">${xMin}°</text><text x="278" y="178">${xMax}°</text></svg>`;
+      ${max !== min ? svg`<text x="2" y="42">${max}${unit}</text>` : nothing}<text x="2" y="155">${min}${unit}</text>
+      ${[curve.low_elevation, curve.high_elevation].map((elevation) => svg`<line x1=${xPosition(elevation)} x2=${xPosition(elevation)} y1="155" y2="160" stroke="currentColor"></line><text x=${xPosition(elevation)} y="178" text-anchor="middle">${elevation}°</text>`)}</svg>`;
   }
 }
 

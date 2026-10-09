@@ -3,7 +3,7 @@ import { afterEach, test } from "node:test";
 import { Window } from "happy-dom";
 import { newProfile, newRoom } from "../src/model";
 import type { HaloEntityPicker } from "../src/entity-picker";
-import type { Hass, Snapshot } from "../src/types";
+import type { Curve, Hass, Snapshot } from "../src/types";
 
 const window = new Window({ url: "http://192.168.1.4:8123" });
 for (const key of ["window", "document", "customElements", "HTMLElement", "Element", "Node", "Document", "ShadowRoot", "CSSStyleSheet", "Event", "CustomEvent", "KeyboardEvent", "FocusEvent"] as const) {
@@ -63,6 +63,109 @@ function button(panel: InstanceType<typeof HaloPanel>, text: string): HTMLButton
 }
 
 afterEach(() => { window.document.body.replaceChildren(); });
+
+test("natural graphs place entered elevations at the exact curve thresholds, including close and boundary values", async () => {
+  const curves: Curve[] = [
+    { low_elevation: -6, high_elevation: 45, low: 20, high: 100 },
+    { low_elevation: -6.125, high_elevation: -6.12, low: 6500, high: 2200 },
+    { low_elevation: -90, high_elevation: 90, low: 45.5, high: 46 },
+    { low_elevation: 89.75, high_elevation: 90, low: 4500.5, high: 4500.5 },
+  ];
+  const snapshot = fixture();
+  const profile = newProfile("solar", "Natural");
+  profile.linked = false;
+  [profile.morning.brightness, profile.morning.temperature, profile.evening.brightness, profile.evening.temperature] = curves;
+  snapshot.config.profiles.solar = profile;
+  const { panel } = await mount(true, snapshot);
+  button(panel, "Réglages globaux").click();
+  await settle(panel);
+  const graphs = [...panel.shadowRoot!.querySelectorAll<SVGSVGElement>('svg[role="img"]')];
+  assert.equal(graphs.length, curves.length);
+  graphs.forEach((graph, index) => {
+    const curve = curves[index];
+    const labels = [...graph.querySelectorAll<SVGTextElement>('text[y="178"]')];
+    assert.deepEqual(labels.map((label) => label.textContent), [`${curve.low_elevation}°`, `${curve.high_elevation}°`]);
+    const points = graph.querySelector("polyline")!.getAttribute("points")!.split(" ").map((point) => point.split(",").map(Number));
+    assert.equal(points.length, 4);
+    assert.deepEqual(labels.map((label) => Number(label.getAttribute("x"))), [points[1][0], points[2][0]]);
+    assert.ok(points[2][0] - points[1][0] > 100, "Close thresholds remain readable without changing their values");
+    assert.equal(points[0][1], points[1][1], "The lower plateau reaches the first threshold exactly");
+    assert.equal(points[2][1], points[3][1], "The upper plateau starts at the second threshold exactly");
+    assert.ok(points.flat().every(Number.isFinite));
+    assert.equal(Math.sign(points[1][1] - points[2][1]), Math.sign(curve.high - curve.low));
+    if (curve.low === curve.high) assert.equal(graph.querySelectorAll('text[x="2"]').length, 1);
+  });
+});
+
+test("gradual acceleration previews its actual values and keeps plateau thresholds and accessible labels", async () => {
+  const snapshot = fixture();
+  const profile = newProfile("solar", "Natural");
+  profile.morning.brightness = { low_elevation: -6.125, high_elevation: -6.12, low: 20, high: 100, interpolation: "ease_in" };
+  profile.morning.temperature = { low_elevation: -90, high_elevation: 90, low: 6500, high: 2200, interpolation: "ease_in" };
+  snapshot.config.profiles.solar = profile;
+  const { panel } = await mount(true, snapshot);
+  button(panel, "Réglages globaux").click();
+  await settle(panel);
+  [...panel.shadowRoot!.querySelectorAll<SVGSVGElement>('svg[role="img"]')].forEach((graph, index) => {
+    const points = graph.querySelector("polyline")!.getAttribute("points")!.split(" ").map((point) => point.split(",").map(Number));
+    assert.ok(points.flat().every(Number.isFinite));
+    const labels = [...graph.querySelectorAll<SVGTextElement>('text[y="178"]')];
+    assert.deepEqual(labels.map((label) => Number(label.getAttribute("x"))), [points[1][0], points.at(-2)![0]]);
+    assert.equal(points[0][1], points[1][1]);
+    assert.equal(points.at(-2)![1], points.at(-1)![1]);
+    const midpoint = points[Math.floor(points.length / 2)];
+    assert.ok(Math.abs(midpoint[1] - (index === 0 ? 126.25 : 68.75)) < 1e-8, "The midpoint represents 25% of the value change instead of the linear 50%");
+    assert.match(graph.getAttribute("aria-label")!, /Accélération progressive/);
+  });
+});
+
+test("each natural curve type can be selected and saved independently while old profiles stay linear", async () => {
+  const snapshot = fixture();
+  const profile = newProfile("solar", "Natural");
+  for (const period of [profile.morning, profile.evening]) {
+    delete period.brightness.interpolation;
+    delete period.temperature.interpolation;
+  }
+  snapshot.config.profiles.solar = profile;
+  const { panel, calls, hass } = await mount(true, snapshot);
+  button(panel, "Réglages globaux").click();
+  await settle(panel);
+  const selectors = () => [...panel.shadowRoot!.querySelectorAll<HTMLSelectElement>('.profile select[aria-describedby]')];
+  assert.deepEqual(selectors().map((select) => select.value), ["linear", "linear"]);
+  assert.deepEqual([...selectors()[0].options].map((option) => option.textContent), ["Linéaire", "Accélération progressive"]);
+  selectors()[0].value = "ease_in";
+  selectors()[0].dispatchEvent(new Event("change", { bubbles: true }));
+  await settle(panel);
+  assert.deepEqual(selectors().map((select) => select.value), ["ease_in", "linear"]);
+  assert.match(panel.shadowRoot!.getElementById(selectors()[0].getAttribute("aria-describedby")!)!.textContent!, /hauteur solaire basse/);
+  button(panel, "Enregistrer les modifications").click();
+  await settle(panel);
+  const firstSave = calls.find((call) => call.type === "halo/save")!.config as Snapshot["config"];
+  assert.equal(firstSave.profiles.solar.morning.brightness.interpolation, "ease_in");
+  assert.equal(firstSave.profiles.solar.morning.temperature.interpolation, undefined);
+
+  const linked = panel.shadowRoot!.querySelector<HTMLInputElement>('.profile input[type="checkbox"]')!;
+  linked.checked = false;
+  linked.dispatchEvent(new Event("change", { bubbles: true }));
+  await settle(panel);
+  assert.deepEqual(selectors().map((select) => select.value), ["ease_in", "linear", "ease_in", "linear"]);
+  selectors()[2].value = "linear";
+  selectors()[2].dispatchEvent(new Event("change", { bubbles: true }));
+  await settle(panel);
+  selectors()[3].value = "ease_in";
+  selectors()[3].dispatchEvent(new Event("change", { bubbles: true }));
+  await settle(panel);
+  button(panel, "Enregistrer les modifications").click();
+  await settle(panel);
+  const lastSave = calls.filter((call) => call.type === "halo/save").at(-1)!.config as Snapshot["config"];
+  const saved = lastSave.profiles.solar;
+  assert.equal(saved.linked, false);
+  assert.deepEqual([saved.morning.brightness.interpolation, saved.morning.temperature.interpolation, saved.evening.brightness.interpolation, saved.evening.temperature.interpolation], ["ease_in", undefined, "linear", "ease_in"]);
+  assert.deepEqual(selectors().map((select) => select.value), ["ease_in", "linear", "linear", "ease_in"]);
+  panel.hass = { ...hass, locale: { language: "en" } };
+  await settle(panel);
+  assert.deepEqual([...selectors()[0].options].map((option) => option.textContent), ["Linear", "Gradual acceleration"]);
+});
 
 test("panel follows HA user locale and keeps custom names without changing entity IDs", async () => {
   const { panel, hass } = await mount();

@@ -19,14 +19,15 @@ export function newRoom(id: string): Room {
     base: {}, associations: [], scenes: [] };
 }
 export function newProfile(id: string, name: string): Profile {
-  const morning = { brightness: { low_elevation: -6, high_elevation: 45, low: 20, high: 100 },
-    temperature: { low_elevation: -6, high_elevation: 45, low: 2200, high: 6500 } };
+  const morning: Profile["morning"] = { brightness: { low_elevation: -6, high_elevation: 45, low: 20, high: 100, interpolation: "linear" },
+    temperature: { low_elevation: -6, high_elevation: 45, low: 2200, high: 6500, interpolation: "linear" } };
   return { id, name, linked: true, morning, evening: structuredClone(morning) };
 }
 export function interpolate(curve: Curve, elevation: number): number {
   if (curve.high_elevation <= curve.low_elevation) return curve.low;
   const progress = Math.min(1, Math.max(0, (elevation - curve.low_elevation) / (curve.high_elevation - curve.low_elevation)));
-  return curve.low + (curve.high - curve.low) * progress;
+  const valueProgress = curve.interpolation === "ease_in" ? progress * progress : progress;
+  return curve.low + (curve.high - curve.low) * valueProgress;
 }
 export function dimmable(light: Light): boolean {
   return light.supported_color_modes.some((mode) => !["onoff", "unknown"].includes(mode));

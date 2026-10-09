@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createId, dimmable, interpolate, moveItem, newProfile, newRoom, optionalNumber } from "../src/model";
 import { en, fr, language, translate } from "../src/translations";
+import type { Curve } from "../src/types";
 
 test("room defaults preserve manual turn-off policy and opt-in automation", () => {
   const room = newRoom("living_room");
@@ -36,6 +37,23 @@ test("curve preview preserves fractional elevation, interpolates and clamps", ()
   const profile = newProfile("a", "My profile");
   profile.evening.brightness.low = 80;
   assert.equal(profile.morning.brightness.low, 20);
+  for (const period of [profile.morning, profile.evening]) {
+    assert.equal(period.brightness.interpolation, "linear");
+    assert.equal(period.temperature.interpolation, "linear");
+  }
+});
+
+test("gradual acceleration follows solar elevation quadratically for increasing, decreasing and constant values", () => {
+  for (const [low, high] of [[20, 100], [6500, 2200], [42, 42]]) {
+    const curve: Curve = { low_elevation: -6.25, high_elevation: 45.25, low, high, interpolation: "ease_in" };
+    const midpoint = (curve.low_elevation + curve.high_elevation) / 2;
+    assert.equal(interpolate(curve, midpoint), low + (high - low) / 4);
+    assert.equal(interpolate(curve, -90), low);
+    assert.equal(interpolate(curve, curve.low_elevation), low);
+    assert.equal(interpolate(curve, curve.high_elevation), high);
+    assert.equal(interpolate(curve, 90), high);
+    assert.equal(interpolate({ ...curve, interpolation: "linear" }, midpoint), low + (high - low) / 2);
+  }
 });
 
 test("transition blank differs from an explicit immediate transition", () => {

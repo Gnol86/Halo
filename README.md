@@ -25,10 +25,11 @@ Les comportements retenus sont détaillés dans [PROJET.md](PROJET.md), et les r
 - Un panneau **Halo** ajouté automatiquement à la barre latérale après l’installation unique, pour toute la configuration ; pilotage accessible aux utilisateurs et configuration réservée aux administrateurs.
 - Un lotus monochrome natif dans la barre latérale et l’en-tête, suivant le thème Home Assistant ; l’en-tête Halo ne comporte pas de bouton de menu supplémentaire.
 - Les pièces de Home Assistant, avec sélection explicite des lumières et un appareil par pièce regroupant la commande d’éclairage, les modes automatique et naturel, la reprise et les scènes.
-- La recherche par nom ou identifiant dans les sélecteurs d’entités et les listes de lampes, avec indication des groupes Home Assistant et des appartenances connues.
+- La recherche par nom ou identifiant dans les sélecteurs d’entités et les listes de lampes, avec indication des groupes Home Assistant, y compris Philips Hue, et des appartenances connues. Certains groupes Hue n’exposent pas leurs membres.
+- Une barre d’enregistrement toujours visible au bas du panneau pendant le défilement, des repères graphiques placés aux hauteurs solaires configurées et des champs de transition alignés.
 - L’allumage et l’extinction selon la présence et la luminosité, avec seuil, hystérésis et temporisations configurables.
 - Une pause après une commande manuelle, avec une option par pièce pour maintenir les extinctions automatiques pendant cette pause.
-- Des profils de lumière naturelle fondés sur l’élévation du soleil, associables à plusieurs groupes dans une même pièce, avec courbes de luminosité et de température de blanc adaptées aux lampes compatibles.
+- Des profils de lumière naturelle fondés sur l’élévation du soleil, associables à plusieurs groupes dans une même pièce, avec courbes de luminosité et de température de blanc adaptées aux lampes compatibles. Chaque courbe peut être **linéaire** ou à **accélération progressive**, avec aperçu ; les anciens profils restent linéaires.
 - Une ambiance de base et des scènes conditionnelles prioritaires, ordonnées dans le dashboard, avec édition en direct sur les lampes pendant la suspension de l’automatisation de la pièce.
 - Des transitions par type de changement, définies globalement et personnalisables ou désactivables par pièce.
 - L’anglais comme langue de référence, une traduction française suivant la langue de l’interface Home Assistant et un repli en anglais pour les autres langues. Les noms personnalisés restent inchangés.

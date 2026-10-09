@@ -22,7 +22,8 @@ export interface Scene {
   conditions: Condition | null;
   lights: Record<string, LampState>;
 }
-export interface Curve { low_elevation: number; high_elevation: number; low: number; high: number }
+export type CurveInterpolation = "linear" | "ease_in";
+export interface Curve { low_elevation: number; high_elevation: number; low: number; high: number; interpolation?: CurveInterpolation }
 export interface Curves { brightness: Curve; temperature: Curve }
 export interface Profile { id: string; name: string; linked: boolean; morning: Curves; evening: Curves }
 export interface Association { profile_id: string; lights: string[]; brightness_offset: number }

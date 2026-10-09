@@ -14,6 +14,10 @@ Le document enregistré contient `config`, `revision` et `runtime`. La révision
 
 La configuration regroupe `sun_entity_id`, `transitions`, `profiles` et `rooms`. Les profils sont indexés par identifiant stable. Les pièces sont indexées par identifiant de zone Home Assistant. Les scènes sont une liste ordonnée dans chaque pièce.
 
+Chaque courbe naturelle contient `low_elevation`, `high_elevation`, `low`, `high` et `interpolation`. Les modes autorisés sont `linear` et `ease_in`. Pour les courbes actives, l’absence du champ est normalisée en `linear`, pour préserver les profils historiques sans changement du stockage version 1 ; une valeur inconnue est rejetée. Comme les autres paramètres, les courbes du soir ne sont utilisées et validées que lorsque les périodes sont dissociées. Le choix se fait par courbe de luminosité/température et par branche matin/soir, avec le comportement existant de liaison des branches.
+
+Le moteur Python et l’aperçu TypeScript utilisent le même calcul : `t = clamp((elevation - low_elevation) / (high_elevation - low_elevation), 0, 1)`, puis `low + (high - low) × t` en linéaire ou `low + (high - low) × t²` en accélération progressive. Les corrections relatives et limites des lampes s’appliquent ensuite. Le temps écoulé n’intervient pas dans cette interpolation : les transitions des commandes restent indépendantes.
+
 Les réglages sont validés côté serveur avant enregistrement : appartenance unique des lampes, exclusion des lumières Halo, références aux profils, bornes solaires, valeurs numériques finies, capacités de variation et portée des états de scène. Les données indisponibles restent distinctes des valeurs numériques valides.
 
 Les cinq clés de transition sont `turn_on`, `lux_on`, `natural`, `scene` et `turn_off`. Globalement, une valeur est un nombre de secondes ou `null`. Par pièce, `"inherit"` demande l’héritage, `null` omet le paramètre et un nombre définit la durée locale, y compris zéro.
@@ -51,7 +55,9 @@ Les permissions Home Assistant filtrent les états lisibles et contrôlent les c
 
 Le catalogue anglais est la référence, avec traduction française. Le panneau lit la langue effective de l’interface pour chaque utilisateur ; les variantes françaises utilisent le français, les autres langues l’anglais.
 
-Le catalogue des lumières expose `is_group`, `group_members` et `member_of`. Le registre (plateforme `group`) et l’attribut de membres `entity_id` fournissent les groupes connus. Les appartenances sont directes ; les identifiants non lisibles sont filtrés, y compris dans les attributs renvoyés. Le panneau peut recevoir d’anciens instantanés sans ces métadonnées et indique alors que l’information manque.
+Le catalogue des lumières expose `is_group`, `group_members` et `member_of`. Le registre (plateforme `group`) et l’attribut de membres `entity_id` fournissent les groupes connus. Les listes, tuples, ensembles et ensembles immuables sont acceptés, normalisés en listes détachées ; les ensembles sont triés. Hue expose aussi le marqueur booléen `is_hue_group` ; le registre Hue avec `translation_key=hue_grouped_light` identifie les groupes v2 même indisponibles. Hue v1 peut signaler un groupe sans exposer ses membres. Les appartenances sont directes ; les identifiants non lisibles sont filtrés, y compris dans les attributs renvoyés. Le panneau peut recevoir d’anciens instantanés sans ces métadonnées et indique alors que l’information manque.
+
+Le panneau occupe la hauteur dynamique de la fenêtre (`100dvh`, avec repli `100vh`). Seule la zone de contenu défile ; l’en-tête et la barre d’enregistrement occupent leur propre espace, sans recouvrir les formulaires. Les champs de transition partagent leurs rangées grâce à CSS subgrid, pour aligner les contrôles indépendamment de la longueur des titres.
 
 Le composant Lit `halo-entity-picker` recherche les entités par nom et identifiant, sans tenir compte de la casse ou des accents. Il ne modifie la valeur qu’au choix explicite d’un résultat ou à son effacement ; une recherche abandonnée reste sans effet sur la configuration. Le panneau appelle sa validation avant sauvegarde, y compris dans l’éditeur de conditions. Les seuils de luminosité reprennent l’unité native du capteur sans conversion.
 

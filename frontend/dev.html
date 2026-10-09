@@ -5,10 +5,10 @@
 <title>Halo — isolated UI test harness</title>
 <link rel="icon" href="data:,">
 <style>
-  body { margin: 0; --primary-color:#03a9f4; --primary-text-color:#212121; --secondary-text-color:#666; --primary-background-color:#fafafa; --card-background-color:#fff; --secondary-background-color:#eee; --divider-color:#ddd; --text-primary-color:#fff; }
+  body { margin: 0; height:100dvh; display:flex; flex-direction:column; overflow:hidden; --primary-color:#03a9f4; --primary-text-color:#212121; --secondary-text-color:#666; --primary-background-color:#fafafa; --card-background-color:#fff; --secondary-background-color:#eee; --divider-color:#ddd; --text-primary-color:#fff; }
   body.dark { color-scheme:dark; --primary-text-color:#eee; --secondary-text-color:#bbb; --primary-background-color:#111; --card-background-color:#1c1c1c; --secondary-background-color:#2c2c2c; --divider-color:#454545; }
-  .harness { background:#e6edf3; color:#111; padding:8px; font:12px system-ui; display:flex; gap:8px; align-items:center; }
-  halo-panel { height:calc(100dvh - 36px); }
+  .harness { background:#e6edf3; color:#111; padding:8px; font:12px system-ui; display:flex; gap:8px; align-items:center; flex-shrink:0; }
+  halo-panel { height:auto; min-height:0; flex:1; }
 </style>
 <div class="harness">Simulated Home Assistant <button id="language">EN / FR</button><button id="theme">Light / dark</button><button id="admin">Admin / user</button></div>
 <halo-panel></halo-panel>

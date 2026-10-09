@@ -21,6 +21,11 @@ def interpolate(curve: dict[str, Any], elevation: float) -> float:
     fraction = max(
         0.0, min(1.0, (elevation - low_elevation) / (high_elevation - low_elevation))
     )
+    interpolation = curve.get("interpolation", "linear")
+    if interpolation == "ease_in":
+        fraction *= fraction
+    elif interpolation != "linear":
+        raise ValueError("Unknown curve interpolation")
     return low + (high - low) * fraction
 
 

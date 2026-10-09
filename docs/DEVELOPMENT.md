@@ -51,6 +51,29 @@ Le bundle dans `custom_components/halo/frontend/` doit rester synchronisé avec 
 
 Avant une release utilisable, effectuer également un essai dans une instance Home Assistant de test : installation manuelle, rendu du panneau et du lotus en thèmes clair et sombre, textes français et anglais, pilotage des lampes réelles, redémarrage et suppression. Les tests Python ne valident pas le rendu intégré de l’interface.
 
+## Types de courbes naturelles — 9 octobre 2026
+
+Chaque courbe de luminosité et de température dispose d’un choix entre linéaire et accélération progressive quadratique. Le moteur et l’aperçu utilisent la même progression selon la hauteur solaire ; les transitions en secondes restent indépendantes. Les anciens profils sans choix explicite restent linéaires.
+
+- **132 tests Python réussis**, avec une limite de 45 secondes par test ; synchronisation uv, analyse et formatage Ruff conformes. Les nouveaux cas vérifient les calculs, les pentes croissantes/décroissantes, les plateaux, les modes indépendants, les offsets, les commandes aux lampes simulées et la conservation des modes après sauvegarde/rechargement. Le chargement d’un ancien profil ne réécrit pas le stockage ; les modes invalides sont rejetés sans modifier la configuration.
+- **28 tests frontend réussis** et TypeScript conforme : choix par courbe, indépendance des périodes dissociées, parité des traductions, courbes historiques, rendu du mode progressif et sauvegarde des sélections couverts.
+- Aperçu local en navigateur avec données simulées : passage de la luminosité à « Accélération progressive », température conservée en « Linéaire », courbe transformée immédiatement, graduations aux seuils conservées et sélection maintenue après enregistrement. Aucun appel à l’instance domestique.
+- Bundle reconstruit sous Node.js 24 ; reproduction du bundle vérifiée. `PROJET.md`, `DESIGN.md`, `README.md` et le contrat d’architecture actualisés.
+
+Fonction implémentée et vérifiée localement, pas déployée dans Home Assistant par cette tâche. Les essais sur les lampes réelles restent à réaliser.
+
+## Barre d’enregistrement, graphiques et groupes Hue — 9 octobre 2026
+
+Les nouveaux retours du panneau sont corrigés dans le dépôt. Une lecture du DOM de l’instance domestique a confirmé que la hauteur du panneau suivait le contenu (2 379 px pour une fenêtre de 1 264 px), empêchant la barre de rester au bas de la fenêtre. Le panneau utilise désormais la hauteur dynamique de la fenêtre et une zone de contenu défilante distincte des actions.
+
+- **112 tests Python réussis**, avec une limite de 45 secondes par test ; synchronisation uv et contrôles Ruff conformes. Les nouveaux cas couvrent les groupes Hue sans membres, les ensembles de membres, les permissions et les métadonnées conservées lorsqu’un groupe est indisponible.
+- **25 tests frontend réussis** et TypeScript conforme. Le nouveau test des graphiques couvre les seuils saisis, leurs positions exactes, les décimales proches, les limites ±90°, les courbes descendantes et constantes.
+- Aperçu local avec données simulées aux tailles **1 436 × 1 264**, **768 × 1 024** et **375 × 812** : barre visible en bas pendant le défilement, contenu accessible sans recouvrement ni débordement horizontal observé. Les actions mobiles sont alignées côte à côte sous le message.
+- Repères **−6° / 45°** examinés sur la courbe et seuils décimaux conservés ; champs globaux alignés, y compris après passage sur plusieurs rangées. Sélecteurs et durées par pièce alignés avec un mélange des modes durée, héritage et absence de transition. Français/anglais et thèmes clair/sombre examinés.
+- Bundle reconstruit sous Node.js 24. La correction concerne aussi le format des membres Hue v2 (`set`) et le marqueur des groupes Hue v1 (`is_hue_group`), confirmés dans les sources Home Assistant 2026.10 : [Hue v2](https://github.com/home-assistant/core/blob/2026.10.0/homeassistant/components/hue/v2/group.py) et [Hue v1](https://github.com/home-assistant/core/blob/2026.10.0/homeassistant/components/hue/v1/light.py).
+
+Ces corrections ne sont pas déployées par cette tâche. Le cas réel `light.bureau_2` devra être vérifié après installation ; aucune commande aux lampes et aucune modification de la configuration domestique n’ont été effectuées. Les contrôles visuels ci-dessus utilisent l’aperçu simulé, pas le panneau corrigé dans Home Assistant.
+
 ## Menu et lotus du panneau — 9 octobre 2026
 
 Le bouton de menu ajouté par Halo est retiré. La barre latérale et l’en-tête utilisent désormais `mdi:spa`, le lotus monochrome du catalogue natif Home Assistant. L’ancien identifiant `mdi:flower-lotus` n’existe pas dans ce catalogue. Le nom est confirmé par la [fiche officielle de l’icône](https://pictogrammers.com/library/mdi/icon/spa/) et par sa présence dans Material Design Icons 7.4.47, embarqué par le frontend Home Assistant 20260930.2.

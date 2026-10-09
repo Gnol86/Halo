@@ -49,6 +49,51 @@ def test_linked_and_separate_evening():
     assert natural_values(configured, 20, True)["color_temp_kelvin"] == 6500
 
 
+@pytest.mark.parametrize(
+    ("interpolation", "expected"),
+    [
+        ("linear", [20, 20, 40, 60, 80, 100, 100]),
+        ("ease_in", [20, 20, 25, 40, 65, 100, 100]),
+    ],
+)
+def test_curve_modes_keep_solar_bounds_and_plateaus(interpolation, expected):
+    curve = profile()["morning"]["brightness"] | {"interpolation": interpolation}
+    assert [
+        interpolate(curve, elevation)
+        for elevation in (-20, -5.5, -1.5, 2.5, 6.5, 10.5, 30)
+    ] == expected
+    # Acceleration depends on the solar interval, including a decreasing value.
+    descending = curve | {"low": 100, "high": 20}
+    assert interpolate(descending, 2.5) == 120 - expected[3]
+
+
+def test_independent_interpolation_modes_periods_and_offset():
+    configured = profile()
+    configured["morning"]["brightness"]["interpolation"] = "ease_in"
+    configured["evening"]["temperature"]["interpolation"] = "ease_in"
+    assert natural_values(configured, 2.5, True, -30) == {
+        "brightness_pct": 28,
+        "color_temp_kelvin": 3875,
+    }
+    # Linked periods use the morning modes even on a descending sun.
+    assert natural_values(configured, 2.5, False, -30) == {
+        "brightness_pct": 28,
+        "color_temp_kelvin": 3875,
+    }
+    configured["linked"] = False
+    assert natural_values(configured, 2.5, False, -30) == {
+        "brightness_pct": 42,
+        "color_temp_kelvin": 2781,
+    }
+
+
+@pytest.mark.parametrize("interpolation", [None, "ease_out", [], {}, 0, True])
+def test_unknown_curve_interpolation_rejected(interpolation):
+    curve = profile()["morning"]["brightness"] | {"interpolation": interpolation}
+    with pytest.raises(ValueError, match="interpolation"):
+        interpolate(curve, 0)
+
+
 @pytest.mark.parametrize("elevation", [float("nan"), float("inf")])
 def test_nonfinite_elevation_is_not_zero(elevation):
     with pytest.raises(ValueError):

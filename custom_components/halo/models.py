@@ -240,6 +240,9 @@ def validate_config(value: Any) -> dict[str, Any]:
                 ("temperature", 1000, 40000),
             ):
                 curve = _mapping(branch.get(quantity), quantity)
+                curve.setdefault("interpolation", "linear")
+                if curve["interpolation"] not in ("linear", "ease_in"):
+                    raise ValueError("Unknown curve interpolation")
                 for bound in ("low_elevation", "high_elevation"):
                     _number(curve.get(bound), bound, -90, 90)
                 if curve["low_elevation"] >= curve["high_elevation"]:

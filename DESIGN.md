@@ -36,6 +36,8 @@ Le bouton « Ouvrir le menu Home Assistant » ajouté par Halo est supprimé de 
 
 L’implémentation actuelle utilise une liste de pièces, une page par pièce avec sections et une page globale. Cette présentation fonctionnelle reste ajustable lors de la définition esthétique.
 
+Lorsqu’il existe des modifications non enregistrées, la barre d’enregistrement reste visible au bas de la fenêtre du panneau, quel que soit le défilement. Le contenu défile entre l’en-tête et cette barre, sans être masqué par les actions. Sur petit écran, les actions peuvent revenir à la ligne et la zone sûre inférieure est préservée.
+
 ## Configuration et pilotage d’une pièce
 
 **Statut : implémenté dans la première version de développement ; validation matérielle à réaliser.**
@@ -45,6 +47,8 @@ L’implémentation actuelle utilise une liste de pièces, une page par pièce a
 Le sélecteur présente d’abord les lumières rattachées à la pièce dans Home Assistant, puis permet de rechercher les autres entités `light`. L’affectation est explicite : aucune lumière n’est ajoutée automatiquement à la configuration Halo.
 
 Les listes précisent si l’entité est un groupe Home Assistant ou une lumière individuelle, et affichent les groupes d’appartenance connus ainsi que les membres visibles d’un groupe. L’absence de groupe connu ne prétend pas exclure un regroupement non exposé par l’intégration de la lampe. Ces indications ne désignent pas les associations de profils naturels Halo.
+
+Les groupes fournis par Philips Hue sont également reconnus. Un groupe reste indiqué comme tel lorsque son intégration n’expose pas ses membres ; aucune appartenance n’est inventée.
 
 Chaque sélection d’entité propose une recherche immédiate par nom et identifiant, insensible à la casse et aux accents, avec navigation au clavier et choix à la souris ou au toucher. La sélection courante reste lisible ; quitter une recherche sans choisir conserve cette sélection. Les cas sans résultat et les entités sélectionnées devenues indisponibles sont explicites. Les listes de lampes de la pièce, des associations naturelles, de l’ambiance de base et des scènes proposent aussi un filtre.
 
@@ -93,11 +97,18 @@ La configuration globale permet de sélectionner une entité soleil et de créer
 
 - La courbe de température de blanc : deux hauteurs solaires et leurs températures en kelvins.
 - La courbe de luminosité : deux hauteurs solaires et leurs luminosités en pourcentage.
-- Un aperçu graphique montrant l’interpolation linéaire entre les bornes et les valeurs constantes au-delà.
+- Un choix du type de courbe pour la luminosité et pour la température : **Linéaire** ou **Accélération progressive**.
+- Un aperçu graphique montrant le type sélectionné entre les bornes et les valeurs constantes au-delà.
+
+Le sélecteur **« Type de courbe »** accompagne les réglages de chaque courbe. **Linéaire** est la valeur initiale et le repli pour les profils existants sans ce réglage. Une aide décrit la progression : constante par degré de hauteur solaire en linéaire, lente près de la hauteur basse puis de plus en plus rapide vers la hauteur haute en accélération progressive. Il ne s’agit pas d’une durée en secondes. Le changement de type met à jour l’aperçu avant l’enregistrement.
 
 Les champs de hauteur solaire conservent les décimales. Les unités doivent être explicites, sans mélanger hauteur du soleil, température de blanc et luminosité.
 
+L’axe horizontal des aperçus affiche les deux hauteurs solaires saisies, avec leurs graduations à la position exacte des seuils de la courbe. Par exemple, les libellés **−6°** et **45°** se placent au début et à la fin de la pente ; les marges utilisées pour montrer les plateaux ne sont pas étiquetées comme des seuils. La précision décimale est conservée et les seuils proches restent lisibles.
+
 La case **« Lier le matin et le soir »** est cochée par défaut. Lorsqu’elle est décochée, l’éditeur permet de définir distinctement les courbes du soleil montant et descendant ; l’aperçu les distingue.
+
+Cela inclut le type de courbe : les sélecteurs de luminosité et de température restent indépendants, et chaque période dispose de ses propres choix lorsqu’elle est dissociée.
 
 Dans chaque pièce, l’utilisateur peut créer plusieurs associations entre un profil et des lampes compatibles. Une correction relative de luminosité, par exemple **−30 %**, se règle sur l’association sans modifier le profil partagé. L’interface indique que les valeurs appliquées sont limitées aux capacités de chaque lampe et que les ajustements naturels ne rallument pas les lampes éteintes.
 
@@ -154,6 +165,8 @@ Les valeurs globales initiales sont respectivement **0, 10, 60, 10 et 2 secondes
 1. **Hériter** de la valeur globale, choix initial.
 2. **Définir une durée** propre à la pièce.
 3. **Ne demander aucune transition**, sans reprendre la valeur globale.
+
+Sur chaque rangée de catégories, les sélecteurs et les champs de durée sont alignés verticalement, même lorsque les titres occupent des nombres de lignes différents. L’alignement s’adapte au nombre de colonnes disponible, dans les réglages globaux comme dans ceux d’une pièce.
 
 Un champ vide en configuration explicite omet le paramètre de transition. Il se distingue de `0`, qui demande une transition immédiate lorsque la lampe le permet. Une lampe sans prise en charge ne reçoit pas ce paramètre. L’interface doit présenter cette distinction sans faire croire qu’une transition est garantie sur tous les équipements.
 

@@ -47,6 +47,8 @@ Le panneau présente :
 
 La fermeture du panneau n’interrompt pas les automatismes.
 
+La barre signalant les modifications non enregistrées reste accessible au bas de la fenêtre pendant le défilement des réglages, sans masquer le contenu.
+
 ### Accès et droits
 
 Les utilisateurs peuvent piloter les pièces et lancer leurs scènes. Les administrateurs peuvent également modifier la configuration.
@@ -74,6 +76,8 @@ La préférence d’interface Home Assistant se règle dans le profil utilisateu
 Les pièces proviennent du registre Home Assistant. L’utilisateur choisit explicitement les entités `light` gérées dans chacune d’elles. Le sélecteur présente d’abord les lumières rattachées à la pièce dans Home Assistant et permet ensuite de rechercher les autres.
 
 Les listes distinguent les entités de groupe Home Assistant des lumières individuelles. Elles indiquent les groupes d’appartenance et leurs membres lorsque Home Assistant expose ces informations, dans la limite des droits de lecture de l’utilisateur. Les groupes non exposés par une intégration ne sont pas déduits du nom des lampes. Ces informations restent distinctes des associations de profils naturels de Halo.
+
+Cela comprend les groupes Philips Hue v1 et v2 : un marqueur de groupe ou les métadonnées du registre permettent de reconnaître leur nature, même sans liste de membres. Les listes et ensembles de membres exposés sont pris en charge ; les appartenances non exposées restent inconnues.
 
 Tous les sélecteurs d’entités proposent une recherche immédiate par nom ou identifiant, insensible à la casse et aux accents. Cela couvre notamment la présence, la luminosité, le soleil et les conditions de scènes. Les listes de lampes de la pièce, des associations naturelles, de l’ambiance de base et des scènes sont également filtrables. Abandonner une recherche ne modifie pas la sélection enregistrée.
 
@@ -165,9 +169,18 @@ Chaque profil définit deux courbes indépendantes :
 - Une courbe de température de blanc : deux hauteurs solaires et les valeurs associées en kelvins.
 - Une courbe de luminosité : deux hauteurs solaires et les valeurs associées en pourcentage.
 
-Les valeurs sont interpolées linéairement entre les bornes et restent aux valeurs limites au-delà. Les hauteurs solaires conservent leur précision décimale. Les paramètres incohérents empêchant le calcul doivent être signalés lors de la configuration.
+Chaque courbe propose un **type de courbe** :
+
+- **Linéaire**, sélectionné par défaut : la valeur évolue à rythme constant par degré de hauteur solaire.
+- **Accélération progressive** : la valeur évolue lentement depuis la hauteur solaire basse, puis de plus en plus vite vers la hauteur haute. Cette progression suit une courbe quadratique.
+
+Le choix est indépendant pour la luminosité et la température du blanc. Il concerne la relation entre hauteur solaire et valeur cible, pas la durée d’une transition de lampe. Au soleil descendant, la même courbe se parcourt dans l’autre sens. Les valeurs restent aux limites au-delà des deux hauteurs configurées. Les hauteurs solaires conservent leur précision décimale. Les paramètres incohérents empêchant le calcul doivent être signalés lors de la configuration. Les profils déjà enregistrés sans type de courbe conservent leur comportement linéaire.
 
 La case **« Lier le matin et le soir »** est cochée par défaut. Elle partage les courbes entre soleil montant et descendant. Décochée, elle permet de régler les deux périodes distinctement. L’éditeur présente un aperçu graphique des courbes.
+
+Le type de courbe suit ce même fonctionnement : partagé lorsque matin et soir sont liés, configurable séparément pour chaque période lorsqu’ils sont dissociés. L’aperçu représente immédiatement le type sélectionné et les valeurs calculées par le moteur.
+
+Les graduations horizontales de cet aperçu correspondent aux deux hauteurs solaires configurées, à leur position exacte sur la courbe, et non aux extrémités des marges du graphique. Les plateaux et les valeurs décimales restent visibles.
 
 ### Associations dans les pièces
 
@@ -355,6 +368,12 @@ Ces valeurs remplacent les choix initiaux (absence 120 secondes, pause 15 minute
 | A28 | Sélectionner des capteurs en `lx`, en `%`, puis sans unité. | Unités adaptées sur seuil et hystérésis ; aucune conversion implicite des valeurs. |
 | A29 | Créer un profil naturel et une scène via une adresse Home Assistant locale en HTTP. | Création et sauvegarde possibles sans dépendre de `crypto.randomUUID`, réservé aux contextes sécurisés. |
 | A30 | Créer une configuration puis recharger une ancienne configuration. | Nouveaux défauts appliqués à la création ; durées et transitions déjà enregistrées conservées. |
+| A31 | Modifier un réglage puis faire défiler une longue page sur ordinateur et mobile. | Barre d’enregistrement visible au bas de la fenêtre ; derniers champs accessibles sans recouvrement. |
+| A32 | Afficher des courbes avec seuils décimaux, proches, négatifs ou aux limites. | Graduations aux hauteurs saisies et aux positions exactes ; plateaux conservés et libellés lisibles. |
+| A33 | Afficher les transitions avec des titres de longueurs différentes, globalement et par pièce. | Champs alignés dans chaque rangée, y compris après un changement de largeur. |
+| A34 | Afficher des groupes Philips Hue v1/v2, dont un groupe sans membres exposés. | Nature du groupe reconnue ; seuls les membres connus et autorisés sont affichés. |
+| A35 | Choisir le type de chaque courbe, enregistrer et recharger ; ouvrir un ancien profil sans type. | Choix indépendants conservés, ancien profil linéaire, valeur inconnue rejetée par le serveur. |
+| A36 | Comparer linéaire et accélération progressive aux seuils et à mi-parcours, sur des courbes croissantes ou décroissantes. | Valeurs limites inchangées ; à mi-parcours solaire, 50 % du chemin entre les valeurs en linéaire contre 25 % en accélération progressive ; aperçu et moteur concordants. |
 
 Pour chaque scénario réalisé, consigner son résultat, la version examinée et le périmètre : test automatisé, essai d’interface ou essai sur des lumières réelles. Une fonctionnalité implémentée n’est pas automatiquement validée dans Home Assistant.
 

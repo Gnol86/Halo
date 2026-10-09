@@ -227,13 +227,23 @@ async def test_light_catalogue_identifies_groups_and_direct_membership(
     ]
 
 
-async def test_group_catalogue_does_not_expose_unreadable_members_or_groups(hass):
+@pytest.mark.parametrize("member_type", [list, tuple, set, frozenset])
+async def test_group_catalogue_does_not_expose_unreadable_members_or_groups(
+    hass, member_type
+):
     _, _, manager = await configured(hass)
     hass.states.async_set("light.secret", "off")
     hass.states.async_set(
-        "light.visible_group", "on", {"entity_id": ["light.bulb", "light.secret"]}
+        "light.visible_group",
+        "on",
+        {
+            "is_hue_group": True,
+            "entity_id": member_type(["light.bulb", "light.secret"]),
+        },
     )
-    hass.states.async_set("light.hidden_group", "on", {"entity_id": ["light.bulb"]})
+    hass.states.async_set(
+        "light.hidden_group", "on", {"entity_id": member_type(["light.bulb"])}
+    )
     user = MockUser().add_to_hass(hass)
     user.mock_policy(
         {"entities": {"entity_ids": {"light.bulb": True, "light.visible_group": True}}}
@@ -247,3 +257,79 @@ async def test_group_catalogue_does_not_expose_unreadable_members_or_groups(hass
     assert entities["light.visible_group"]["attributes"]["entity_id"] == ["light.bulb"]
     assert "light.secret" not in repr(snapshot)
     assert "light.hidden_group" not in repr(snapshot)
+
+
+async def test_hue_groups_without_members_and_individual_lights(hass, hass_admin_user):
+    """A Hue v1 group has an explicit flag but no member entity IDs."""
+    _, _, manager = await configured(hass)
+    for entity_id, attributes in (
+        ("light.hue_group", {"is_hue_group": True}),
+        ("light.hue_bulb", {"is_hue_group": False}),
+        ("light.room_named_bulb", {"friendly_name": "Hue Room Group"}),
+        ("light.invalid_marker", {"is_hue_group": "false"}),
+    ):
+        hass.states.async_set(entity_id, "on", attributes)
+    lights = {
+        light["entity_id"]: light
+        for light in manager.snapshot(hass_admin_user)["lights"]
+    }
+    assert lights["light.hue_group"]["is_group"] is True
+    assert lights["light.hue_group"]["group_members"] == []
+    for entity_id in (
+        "light.hue_bulb",
+        "light.room_named_bulb",
+        "light.invalid_marker",
+    ):
+        assert lights[entity_id]["is_group"] is False
+
+
+@pytest.mark.parametrize("member_type", [set, frozenset])
+async def test_hue_group_members_as_sets(hass, hass_admin_user, member_type):
+    """Hue v2 returns sets; expose ordered, detached members and reverse links."""
+    _, _, manager = await configured(hass)
+    hass.states.async_set("light.other", "off")
+    members = member_type(["light.other", "light.bulb"])
+    hass.states.async_set(
+        "light.hue_group", "on", {"is_hue_group": True, "entity_id": members}
+    )
+    snapshot = manager.snapshot(hass_admin_user)
+    lights = {light["entity_id"]: light for light in snapshot["lights"]}
+    assert lights["light.hue_group"]["is_group"] is True
+    assert lights["light.hue_group"]["group_members"] == ["light.bulb", "light.other"]
+    assert lights["light.bulb"]["member_of"] == ["light.hue_group"]
+    assert lights["light.other"]["member_of"] == ["light.hue_group"]
+    group = next(
+        entity
+        for entity in snapshot["entities"]
+        if entity["entity_id"] == "light.hue_group"
+    )
+    assert group["attributes"]["entity_id"] == ["light.bulb", "light.other"]
+    group["attributes"]["entity_id"].clear()
+    assert hass.states.get("light.hue_group").attributes["entity_id"] == members
+    assert lights["light.hue_group"]["group_members"] == ["light.bulb", "light.other"]
+
+
+async def test_hue_group_registry_metadata_survives_unavailability(
+    hass, hass_admin_user
+):
+    """Use Hue's entity type, never its editable name or a generic device model."""
+    _, _, manager = await configured(hass)
+    registry = er.async_get(hass)
+    for platform, translation_key, expected in (
+        ("hue", "hue_grouped_light", True),
+        ("hue", None, False),
+        ("other", "hue_grouped_light", False),
+    ):
+        entity = registry.async_get_or_create(
+            "light",
+            platform,
+            f"{platform}-{translation_key}",
+            translation_key=translation_key,
+        )
+        hass.states.async_set(entity.entity_id, "unavailable")
+        lights = {
+            light["entity_id"]: light
+            for light in manager.snapshot(hass_admin_user)["lights"]
+        }
+        assert lights[entity.entity_id]["is_group"] is expected
+        assert lights[entity.entity_id]["group_members"] == []
