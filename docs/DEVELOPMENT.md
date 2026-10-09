@@ -75,6 +75,14 @@ Le réglage global `presence_return_window` vaut initialement 30 secondes, y com
 
 Ces vérifications automatisées locales ne constituent pas un nouvel essai visuel dans Home Assistant ni une validation matérielle. Aucun déploiement domestique ou commande aux équipements réels n’a été effectué pour cet ajout.
 
+## Filtre des lumières des autres pièces — 9 octobre 2026
+
+L’onglet Lumières masque par défaut les lampes extérieures non sélectionnées. Une case permet de les afficher, y compris celles sans pièce ; les lampes extérieures déjà sélectionnées restent dans un groupe distinct. Ce filtre est temporaire et ne modifie pas la configuration.
+
+- Installation npm, contrôle TypeScript et **55 tests frontend réussis** sous Node.js 24 ; bundle reconstruit.
+- Vérification DOM ciblée avec données simulées : affichage initial, recherche limitée à la liste visible, ouverture/fermeture, lampes sans pièce ou indisponibles, affectation à une autre pièce verrouillée, absence de brouillon et d’appel de sauvegarde pour le filtre seul, sélection conservée au masquage, abandon, changement de pièce et remontage du panneau.
+- Aucun changement du moteur ni de l’API ; aucun essai sur l’instance domestique pour cet ajout.
+
 ## Capteur d’état par pièce — 9 octobre 2026
 
 Chaque appareil de pièce comprend maintenant un capteur `Status` / `État`. Il expose `off`, `manual`, `natural` avec traductions natives ou le nom de la scène active ; les attributs `mode`, `scene_id` et `scene_name` permettent d’identifier une scène indépendamment de son nom. Les lampes réellement éteintes et leur indisponibilité priment sur le mode d’éclairage. Cet ajout ne modifie pas les décisions du moteur ni les commandes aux lampes.

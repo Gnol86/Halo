@@ -267,7 +267,7 @@ L’édition réelle bloque la navigation jusqu’à sa fin. Après import ou é
 
 #### Lumières et capacités
 
-Le sélecteur présente d’abord les lumières rattachées à la pièce dans Home Assistant, puis permet de rechercher les autres entités `light`. L’affectation est explicite : aucune lumière n’est ajoutée automatiquement à la configuration Halo.
+Dans l’onglet **Lumières**, le sélecteur affiche par défaut les lampes rattachées à la pièce dans Home Assistant. Les lampes déjà sélectionnées dans la pièce Halo mais rattachées ailleurs ou sans pièce restent visibles dans **« Lumières sélectionnées hors de cette pièce »**. Une case **« Afficher les lumières des autres pièces »**, décochée par défaut, révèle les autres entités `light`, y compris celles sans pièce. La recherche ne porte que sur la liste affichée et n’ouvre pas les autres pièces automatiquement. Le filtre reste temporaire, sans modification des sélections ni du brouillon, et se réinitialise au changement de pièce ou au rechargement du panneau. Les lampes affectées à une autre pièce Halo restent désactivées. Les contrôles et indications de groupe et d’indisponibilité suivent toujours le thème Home Assistant. L’affectation est explicite : aucune lumière n’est ajoutée automatiquement à la configuration Halo.
 
 Les listes précisent si l’entité est un groupe Home Assistant ou une lumière individuelle, et affichent les groupes d’appartenance connus ainsi que les membres visibles d’un groupe. L’absence de groupe connu ne prétend pas exclure un regroupement non exposé par l’intégration de la lampe. Ces indications ne désignent pas les associations de profils naturels Halo.
 

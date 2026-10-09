@@ -83,7 +83,7 @@ La préférence d’interface Home Assistant se règle dans le profil utilisateu
 
 ### Sélection des lumières
 
-Les pièces proviennent du registre Home Assistant. L’utilisateur choisit explicitement les entités `light` gérées dans chacune d’elles. Le sélecteur présente d’abord les lumières rattachées à la pièce dans Home Assistant et permet ensuite de rechercher les autres.
+Les pièces proviennent du registre Home Assistant. L’utilisateur choisit explicitement les entités `light` gérées dans chacune d’elles. Dans l’onglet **Lumières**, le sélecteur affiche par défaut les lumières rattachées à la pièce dans Home Assistant et conserve, dans un groupe distinct, celles déjà sélectionnées dans cette pièce Halo mais rattachées ailleurs ou sans pièce. La case **« Afficher les lumières des autres pièces »**, décochée par défaut, révèle les autres lampes, y compris celles sans pièce. La recherche filtre uniquement la liste ainsi affichée et n’ouvre pas automatiquement les autres pièces. Ce choix d’affichage ne modifie ni les sélections ni le brouillon ; il revient au masquage au changement de pièce ou au rechargement du panneau. Les lampes affectées à une autre pièce Halo restent non sélectionnables.
 
 Les listes distinguent les entités de groupe Home Assistant des lumières individuelles. Elles indiquent les groupes d’appartenance et leurs membres lorsque Home Assistant expose ces informations, dans la limite des droits de lecture de l’utilisateur. Les groupes non exposés par une intégration ne sont pas déduits du nom des lampes. Ces informations restent distinctes des associations de profils naturels de Halo.
 

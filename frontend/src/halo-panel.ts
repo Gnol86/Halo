@@ -15,7 +15,7 @@ type FieldOptions = { min?: number; max?: number; step?: number | "any"; require
 export class HaloPanel extends LitElement {
   static properties = { hass: { attribute: false }, narrow: { type: Boolean }, snapshot: { state: true },
     draft: { state: true }, page: { state: true }, dirty: { state: true }, busy: { state: true },
-    error: { state: true }, notice: { state: true }, editor: { state: true }, importer: { state: true }, search: { state: true }, roomSearch: { state: true }, roomSection: { state: true }, selectedProfile: { state: true } };
+    error: { state: true }, notice: { state: true }, editor: { state: true }, importer: { state: true }, search: { state: true }, showOtherLights: { state: true }, roomSearch: { state: true }, roomSection: { state: true }, selectedProfile: { state: true } };
   static styles = styles;
   declare hass: Hass;
   narrow = false;
@@ -29,6 +29,7 @@ export class HaloPanel extends LitElement {
   private error = "";
   private notice = "";
   private search = "";
+  private showOtherLights = false;
   private roomSearch = "";
   private roomSection: RoomSection = "control";
   private selectedProfile = "";
@@ -78,6 +79,7 @@ export class HaloPanel extends LitElement {
     this.clearEditorTimers();
     this.editor = undefined;
     this.importer = undefined;
+    this.showOtherLights = false;
   }
 
   private async connect() {
@@ -201,6 +203,7 @@ export class HaloPanel extends LitElement {
   private navigate(page: string) {
     if (this.editing || this.busy || (!this.importer && this.dirty && !this.validateFields())) return false;
     this.importer = undefined;
+    if (page !== this.page) this.showOtherLights = false;
     this.page = page;
     this.roomSection = "control";
     this.search = "";
@@ -395,13 +398,20 @@ export class HaloPanel extends LitElement {
 
   private renderLightSelection(room: Room) {
     const assigned = new Set(Object.values(this.draft!.rooms).filter((other) => other.id !== room.id).flatMap((other) => other.lights));
+    const selected = new Set(room.lights);
     const lights = [...this.snapshot!.lights];
     for (const id of room.lights) if (!lights.some((light) => light.entity_id === id)) lights.push(this.light(id));
-    const filtered = lights.filter((light) => matchesEntity(light, this.search));
+    const filtered = lights.filter((light) => (light.area_id === room.id || selected.has(light.entity_id) || this.showOtherLights) && matchesEntity(light, this.search));
+    const groups: { label: TranslationKey; lights: Light[] }[] = [
+      { label: "ownArea", lights: filtered.filter((light) => light.area_id === room.id) },
+      { label: "selectedOtherLights", lights: filtered.filter((light) => light.area_id !== room.id && selected.has(light.entity_id)) },
+      { label: "otherAreas", lights: filtered.filter((light) => light.area_id !== room.id && !selected.has(light.entity_id)) },
+    ];
     return html`<section class="light-selection"><div class="section-heading"><h3>${this.t("lights")} <span class="count">${room.lights.length}</span></h3>${this.help("lightsHelp")}</div>
       <label>${this.t("search")}<input type="search" .value=${this.search} @input=${(event: Event) => { this.search = (event.target as HTMLInputElement).value; }}></label>
-      <div class="light-list">${[true, false].map((own) => html`<h3>${this.t(own ? "ownArea" : "otherAreas")}</h3>
-        ${filtered.filter((light) => (light.area_id === room.id) === own).map((light) => html`<div class="light-option"><label class="check">
+      ${this.check("showOtherLights", this.showOtherLights, (value) => { this.showOtherLights = value; })}
+      <div class="light-list">${groups.filter((group) => group.lights.length).map((group) => html`<h3>${this.t(group.label)}</h3>
+        ${group.lights.map((light) => html`<div class="light-option"><label class="check">
           <input type="checkbox" .checked=${live(room.lights.includes(light.entity_id))} ?disabled=${assigned.has(light.entity_id)} @change=${(event: Event) => this.modifyRoom((current) => {
             if ((event.target as HTMLInputElement).checked) current.lights.push(light.entity_id);
             else { current.lights = current.lights.filter((id) => id !== light.entity_id); delete current.base[light.entity_id];
