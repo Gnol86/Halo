@@ -64,6 +64,11 @@ async def _handle(
             return
         if kind == "halo/save":
             await manager.async_save_config(msg["config"], msg["revision"])
+        elif kind == "halo/scene/import":
+            connection.send_result(
+                msg["id"], manager.import_scene(msg["room_id"], msg["config"])
+            )
+            return
         elif kind == "halo/command":
             room_id, command = msg["room_id"], msg["command"]
             manager.check_control(connection.user, room_id)
@@ -97,6 +102,8 @@ async def _handle(
                 msg["save"],
                 msg.get("scene"),
                 msg.get("revision"),
+                capture=msg.get("capture", False),
+                capture_entities=msg.get("capture_entities"),
             )
         connection.send_result(msg["id"], manager.snapshot(connection.user))
     except HaloError as err:
@@ -141,6 +148,7 @@ def async_register(hass: HomeAssistant) -> None:
             False,
         ),
         "halo/edit/begin": (room, True),
+        "halo/scene/import": (room | {probatio.Required("config"): dict}, True),
         "halo/edit/preview": (edit | {probatio.Required("lights"): dict}, True),
         "halo/edit/touch": (edit, True),
         "halo/edit/end": (
@@ -149,6 +157,8 @@ def async_register(hass: HomeAssistant) -> None:
                 probatio.Required("save"): bool,
                 probatio.Optional("scene"): dict,
                 probatio.Optional("revision"): int,
+                probatio.Optional("capture", default=False): bool,
+                probatio.Optional("capture_entities"): [str],
             },
             True,
         ),

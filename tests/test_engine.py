@@ -7,11 +7,12 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 from homeassistant.components.light import LightEntityFeature
-from homeassistant.core import Context, HomeAssistant
+from homeassistant.core import Context, HomeAssistant, State
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
 from custom_components.halo.engine import HaloRoomEngine
+from custom_components.halo.scene_import import normalize_scene_import
 
 
 @pytest.fixture
@@ -316,6 +317,40 @@ async def test_scene_without_power_permission_waits_for_presence(hass, room_engi
     assert room["automation_enabled"] is False
 
 
+@pytest.mark.parametrize("conditional", [False, True])
+async def test_imported_partial_scene_leaves_other_room_lights_unchanged(
+    hass, room_engine, conditional
+):
+    engine, _, room, calls = room_engine
+    imported = normalize_scene_import(
+        {
+            "name": "Native",
+            "entities": {"light.one": {"state": "on", "brightness": 50}},
+        },
+        room["lights"],
+    )["scene"]
+    room["scenes"] = [imported]
+    room["base"] = {"light.two": {"state": "on", "brightness_pct": 80}}
+    before = hass.states.get("light.two")
+    if conditional:
+        imported["conditions"] = {
+            "type": "state",
+            "entity_id": "media_player.tv",
+            "state": "on",
+        }
+        imported["can_turn_on"] = True
+        await engine.async_reconfigure()
+        await enable(hass, engine)
+        hass.states.async_set("media_player.tv", "on")
+        await hass.async_block_till_done()
+    else:
+        await engine.async_activate_scene(imported["id"])
+        await hass.async_block_till_done()
+    assert hass.states.get("light.one").attributes["brightness"] == 50
+    assert hass.states.get("light.two") == before
+    assert calls and {call.data["entity_id"] for call in calls} == {"light.one"}
+
+
 async def test_natural_adjusts_only_on_members_and_suspends_without_sun(
     hass, room_engine
 ):
@@ -349,7 +384,7 @@ async def test_natural_adjusts_only_on_members_and_suspends_without_sun(
 
 @pytest.mark.parametrize(
     ("interpolation", "brightness", "temperature"),
-    [("linear", 42, 4000), ("ease_in", 28, 3000)],
+    [("linear", 28, 3000), ("ease_in_out", 22.75, 2625), ("ease_in", 22.75, 2625)],
 )
 async def test_natural_curve_mode_reaches_lamp_commands(
     hass, room_engine, interpolation, brightness, temperature
@@ -362,6 +397,10 @@ async def test_natural_curve_mode_reaches_lamp_commands(
     for curve in profile["morning"].values():
         curve["interpolation"] = interpolation
     manager.config["profiles"]["day"] = profile
+    manager.config["transitions"]["turn_on"] = 7.5
+    hass.states.async_set(
+        "sun.sun", "above_horizon", {"elevation": 2.5, "rising": True}
+    )
     await engine.async_reconfigure()
     await enable(hass, engine)
     hass.states.async_set("binary_sensor.presence", "on")
@@ -371,6 +410,7 @@ async def test_natural_curve_mode_reaches_lamp_commands(
         assert call.service == "turn_on"
         assert call.data["brightness_pct"] == brightness
         assert call.data["color_temp_kelvin"] == temperature
+        assert call.data["transition"] == 7.5
 
 
 async def test_unavailable_lux_does_not_turn_on_and_recovers(hass, room_engine):
@@ -530,6 +570,136 @@ async def test_preview_cancel_restores_initial_on_brightness_and_color(
     assert result.state == "on"
     assert result.attributes["brightness"] == 128
     assert result.attributes["color_temp_kelvin"] == 3000
+
+
+@pytest.mark.parametrize("expired", [False, True])
+async def test_native_editor_cancel_and_expiry_restore_effect_exact_rgbww(
+    hass, freezer, room_engine, expired
+):
+    engine, _, _, calls = room_engine
+    initial = {
+        "brightness": 123,
+        "effect": "candle",
+        "color_mode": "rgbww",
+        "rgbww_color": [13, 27, 82, 54, 201],
+        "rgb_color": [255, 250, 200],
+        "supported_color_modes": ["rgbww"],
+        "supported_features": LightEntityFeature.EFFECT,
+    }
+    hass.states.async_set("light.one", "on", initial)
+    await hass.async_block_till_done()
+    token = await engine.async_begin_edit("owner")
+    # The native HA dialog changes the real entity directly, without Halo preview.
+    hass.states.async_set(
+        "light.one", "on", {**initial, "effect": "off", "brightness": 19}
+    )
+    await hass.async_block_till_done()
+    assert engine.status["editing"]
+    if expired:
+        await advance(hass, freezer, 121)
+    else:
+        await engine.async_end_edit(token, save=False)
+    restored = next(call for call in calls if call.data["entity_id"] == "light.one")
+    assert restored.data == {
+        "entity_id": "light.one",
+        "brightness": 123,
+        "effect": "candle",
+        "rgbww_color": [13, 27, 82, 54, 201],
+    }
+    assert not engine.status["editing"]
+    # The other lamp was initially off: no attempt to restore color by turning it on.
+    other = [call for call in calls if call.data["entity_id"] == "light.two"]
+    assert len(other) == 1 and other[0].service == "turn_off"
+    assert other[0].data == {"entity_id": "light.two"}
+
+
+def test_effect_transition_feedback_and_manual_effect_change(room_engine):
+    engine, _, _, _ = room_engine
+    engine._expected["light.one"] = {
+        "until": dt_util.utcnow().timestamp() + 60,
+        "target": {
+            "state": "on",
+            "brightness": 180,
+            "effect": "candle",
+            "rgbw_color": [50, 60, 70, 80],
+        },
+    }
+    initial = {"brightness": 128, "effect": "off", "rgbw_color": [10, 20, 30, 40]}
+    old = State("light.one", "on", initial)
+    feedback = State(
+        "light.one",
+        "on",
+        {
+            **initial,
+            "brightness": 150,
+            "effect": "candle",
+            "rgbw_color": [30, 40, 50, 60],
+        },
+    )
+    assert engine._own_change("light.one", old, feedback)
+    different = State("light.one", "on", {**feedback.attributes, "effect": "colorloop"})
+    assert not engine._own_change("light.one", feedback, different)
+
+
+def test_white_transition_feedback_is_not_a_manual_override(room_engine):
+    engine, _, _, _ = room_engine
+    engine._expected["light.one"] = {
+        "until": dt_util.utcnow().timestamp() + 60,
+        "target": {"state": "on", "white": 180},
+    }
+    old = State(
+        "light.one",
+        "on",
+        {"brightness": 128, "color_mode": "rgb", "rgb_color": [255, 0, 0]},
+    )
+    feedback = State("light.one", "on", {"brightness": 150, "color_mode": "white"})
+    assert engine._own_change("light.one", old, feedback)
+
+
+def test_effect_can_clear_native_colors_without_manual_override(room_engine):
+    engine, _, _, _ = room_engine
+    engine._expected["light.one"] = {
+        "until": dt_util.utcnow().timestamp() + 60,
+        "target": {"state": "on", "effect": "candle"},
+    }
+    old = State(
+        "light.one",
+        "on",
+        {"effect": "off", "color_mode": "rgb", "rgb_color": [255, 0, 0]},
+    )
+    feedback = State("light.one", "on", {"effect": "candle", "color_mode": "onoff"})
+    assert engine._own_change("light.one", old, feedback)
+
+
+async def test_manual_effect_change_starts_room_pause(hass, room_engine):
+    engine, _, _, _ = room_engine
+    state = hass.states.get("light.one")
+    await enable(hass, engine)
+    hass.states.async_set(
+        "light.one", state.state, {**state.attributes, "effect": "candle"}
+    )
+    await hass.async_block_till_done()
+    assert engine.status["pause_until"] is not None
+
+
+def test_natural_values_replace_native_base_brightness_and_white_mode(room_engine):
+    engine, manager, room, _ = room_engine
+    room["base"] = {
+        "light.one": {
+            "state": "on",
+            "brightness": 12,
+            "color_mode": "white",
+            "effect": "candle",
+            "white": 12,
+        }
+    }
+    room["associations"] = [{"profile_id": "day", "lights": ["light.one"]}]
+    manager.config["profiles"]["day"] = natural_profile()
+    assert engine._ambience()["light.one"] == {
+        "state": "on",
+        "brightness_pct": 60,
+        "color_temp_kelvin": 4000,
+    }
 
 
 async def test_new_off_command_cancels_pending_old_turn_on_members(hass, room_engine):

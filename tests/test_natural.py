@@ -3,9 +3,15 @@
 from copy import deepcopy
 
 import pytest
+from homeassistant.components.light import LightEntityFeature
 from homeassistant.core import State
 
-from custom_components.halo.natural import interpolate, lamp_parameters, natural_values
+from custom_components.halo.natural import (
+    capture_lamp_state,
+    interpolate,
+    lamp_parameters,
+    natural_values,
+)
 
 
 def profile():
@@ -53,7 +59,8 @@ def test_linked_and_separate_evening():
     ("interpolation", "expected"),
     [
         ("linear", [20, 20, 40, 60, 80, 100, 100]),
-        ("ease_in", [20, 20, 25, 40, 65, 100, 100]),
+        ("ease_in_out", [20, 20, 32.5, 60, 87.5, 100, 100]),
+        ("ease_in", [20, 20, 32.5, 60, 87.5, 100, 100]),
     ],
 )
 def test_curve_modes_keep_solar_bounds_and_plateaus(interpolation, expected):
@@ -69,21 +76,21 @@ def test_curve_modes_keep_solar_bounds_and_plateaus(interpolation, expected):
 
 def test_independent_interpolation_modes_periods_and_offset():
     configured = profile()
-    configured["morning"]["brightness"]["interpolation"] = "ease_in"
-    configured["evening"]["temperature"]["interpolation"] = "ease_in"
-    assert natural_values(configured, 2.5, True, -30) == {
-        "brightness_pct": 28,
-        "color_temp_kelvin": 3875,
+    configured["morning"]["brightness"]["interpolation"] = "ease_in_out"
+    configured["evening"]["temperature"]["interpolation"] = "ease_in_out"
+    assert natural_values(configured, -1.5, True, -30) == {
+        "brightness_pct": 22.75,
+        "color_temp_kelvin": 3275,
     }
     # Linked periods use the morning modes even on a descending sun.
-    assert natural_values(configured, 2.5, False, -30) == {
-        "brightness_pct": 28,
-        "color_temp_kelvin": 3875,
+    assert natural_values(configured, -1.5, False, -30) == {
+        "brightness_pct": 22.75,
+        "color_temp_kelvin": 3275,
     }
     configured["linked"] = False
-    assert natural_values(configured, 2.5, False, -30) == {
-        "brightness_pct": 42,
-        "color_temp_kelvin": 2781,
+    assert natural_values(configured, -1.5, False, -30) == {
+        "brightness_pct": 28,
+        "color_temp_kelvin": 2879,
     }
 
 
@@ -159,3 +166,51 @@ def test_scene_color_conversion_and_native_rgbw_restore():
     assert lamp_parameters(rgbw, {"rgbw_color": [10, 20, 30, 40]}) == {
         "rgbw_color": [10, 20, 30, 40]
     }
+
+
+@pytest.mark.parametrize(
+    ("mode", "native"),
+    [
+        ("rgbw", {"rgbw_color": [13, 27, 82, 54]}),
+        ("rgbww", {"rgbww_color": [13, 27, 82, 54, 201]}),
+        ("xy", {"xy_color": [0.3214, 0.5678]}),
+        ("white", {}),
+        ("onoff", {}),
+    ],
+)
+def test_capture_roundtrip_retains_effect_and_active_color(mode, native):
+    state = State(
+        "light.native",
+        "on",
+        {
+            "brightness": 123,
+            "effect": "candle",
+            "color_mode": mode,
+            "supported_color_modes": [mode] if mode != "onoff" else ["rgb"],
+            "supported_features": LightEntityFeature.EFFECT,
+            "effect_list": ["candle", "off"],
+            # These derived attributes must not replace native white channels or XY.
+            "rgb_color": [255, 250, 200],
+            "hs_color": [42, 37],
+            **native,
+        },
+    )
+    captured = capture_lamp_state(state)
+    assert captured == {
+        "state": "on",
+        "brightness": 123,
+        "effect": "candle",
+        "color_mode": mode,
+        **native,
+    }
+    expected = {"brightness": 123, "effect": "candle", **native}
+    if mode == "white":
+        expected["white"] = 123
+    assert lamp_parameters(state, captured) == expected
+
+
+def test_unadvertised_effect_and_white_are_not_dispatched():
+    state = State("light.dimmer", "on", {"supported_color_modes": ["brightness"]})
+    assert lamp_parameters(
+        state, {"brightness": 123, "effect": "candle", "white": 80}
+    ) == {"brightness": 123}

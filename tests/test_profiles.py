@@ -10,7 +10,7 @@ from custom_components.halo.manager import HaloError
 from custom_components.halo.models import default_config, validate_config
 
 
-def profile_config(*, legacy=False):
+def profile_config(*, legacy=False, curved_mode="ease_in_out"):
     """Include all four curves with distinct modes, or omit historical modes."""
     config = default_config()
     profile = {"id": "warm", "name": "My light", "linked": False}
@@ -25,7 +25,7 @@ def profile_config(*, legacy=False):
             }
             if not legacy:
                 curve["interpolation"] = (
-                    "ease_in"
+                    curved_mode
                     if (period == "morning") == (quantity == "brightness")
                     else "linear"
                 )
@@ -42,16 +42,24 @@ def test_config_rejects_unknown_curve_mode(mode):
         validate_config(config)
 
 
-@pytest.mark.parametrize("legacy", [True, False])
-async def test_profile_modes_survive_load_save_and_reload(hass, hass_storage, legacy):
-    config = profile_config(legacy=legacy)
+@pytest.mark.parametrize(
+    ("legacy", "curved_mode"),
+    [(True, "ease_in_out"), (False, "ease_in_out"), (False, "ease_in")],
+)
+async def test_profile_modes_survive_load_save_and_reload(
+    hass, hass_storage, legacy, curved_mode
+):
+    config = profile_config(legacy=legacy, curved_mode=curved_mode)
     original = deepcopy(config)
     expected = validate_config(config)
     for period in ("morning", "evening"):
         for quantity in ("brightness", "temperature"):
             actual = expected["profiles"]["warm"][period][quantity]
             old = original["profiles"]["warm"][period][quantity]
-            assert actual == {"interpolation": "linear"} | old
+            mode = old.get("interpolation", "linear")
+            assert actual == old | {
+                "interpolation": "ease_in_out" if mode == "ease_in" else mode
+            }
     assert config == original
     entry = MockConfigEntry(domain=DOMAIN, unique_id=DOMAIN, title="Halo", data={})
     entry.add_to_hass(hass)
@@ -77,6 +85,7 @@ async def test_profile_modes_survive_load_save_and_reload(hass, hass_storage, le
     assert manager.config == expected
     assert manager.revision == 3
     await manager.async_save_config(manager.config, manager.revision)
+    assert hass_storage[storage_key]["data"]["config"] == expected
     assert await hass.config_entries.async_reload(entry.entry_id)
     await hass.async_block_till_done()
     assert entry.runtime_data.config == expected
@@ -91,3 +100,15 @@ def test_linked_legacy_profile_does_not_require_evening_curves():
     assert normalized["morning"]["brightness"]["interpolation"] == "linear"
     assert normalized["morning"]["temperature"]["interpolation"] == "linear"
     assert "evening" not in normalized
+
+
+def test_old_acceleration_is_normalized_in_inactive_evening_curves():
+    config = profile_config(curved_mode="ease_in")
+    config["profiles"]["warm"]["linked"] = True
+    normalized = validate_config(config)["profiles"]["warm"]
+    assert normalized["morning"]["brightness"]["interpolation"] == "ease_in_out"
+    assert normalized["evening"]["temperature"]["interpolation"] == "ease_in_out"
+    assert (
+        config["profiles"]["warm"]["evening"]["temperature"]["interpolation"]
+        == "ease_in"
+    )

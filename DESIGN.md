@@ -52,6 +52,8 @@ Les groupes fournis par Philips Hue sont également reconnus. Un groupe reste in
 
 Chaque sélection d’entité propose une recherche immédiate par nom et identifiant, insensible à la casse et aux accents, avec navigation au clavier et choix à la souris ou au toucher. La sélection courante reste lisible ; quitter une recherche sans choisir conserve cette sélection. Les cas sans résultat et les entités sélectionnées devenues indisponibles sont explicites. Les listes de lampes de la pièce, des associations naturelles, de l’ambiance de base et des scènes proposent aussi un filtre.
 
+L’utilisation du sélecteur natif Home Assistant partout est demandée, mais reste **non implémentée** : le panneau ne dispose pas d’un mécanisme public de chargement identifié pour ce composant. Les sélecteurs Halo restent en place ; ils ne sont pas présentés comme natifs. La fenêtre native des lampes dans l’éditeur de scènes utilise, elle, une action publique documentée.
+
 Une lampe ne peut appartenir qu’à une pièce Halo et qu’à une association de profil naturel au sein de cette pièce. Les lumières générées par Halo sont exclues de la sélection. L’interface doit rendre ces contraintes compréhensibles au moment de l’affectation.
 
 Les contrôles correspondent aux capacités réellement annoncées par chaque lampe :
@@ -97,10 +99,10 @@ La configuration globale permet de sélectionner une entité soleil et de créer
 
 - La courbe de température de blanc : deux hauteurs solaires et leurs températures en kelvins.
 - La courbe de luminosité : deux hauteurs solaires et leurs luminosités en pourcentage.
-- Un choix du type de courbe pour la luminosité et pour la température : **Linéaire** ou **Accélération progressive**.
+- Un choix du type de courbe pour la luminosité et pour la température : **Linéaire** ou **Accélération et décélération progressives**.
 - Un aperçu graphique montrant le type sélectionné entre les bornes et les valeurs constantes au-delà.
 
-Le sélecteur **« Type de courbe »** accompagne les réglages de chaque courbe. **Linéaire** est la valeur initiale et le repli pour les profils existants sans ce réglage. Une aide décrit la progression : constante par degré de hauteur solaire en linéaire, lente près de la hauteur basse puis de plus en plus rapide vers la hauteur haute en accélération progressive. Il ne s’agit pas d’une durée en secondes. Le changement de type met à jour l’aperçu avant l’enregistrement.
+Le sélecteur **« Type de courbe »** accompagne les réglages de chaque courbe. **Linéaire** est la valeur initiale et le repli pour les profils existants sans ce réglage. Une aide décrit la progression : constante par degré de hauteur solaire en linéaire ; lente près des deux bornes, avec accélération puis décélération dans le mode progressif. L’aperçu montre une courbe en S raccordée doucement aux plateaux, y compris au soleil descendant. Il ne s’agit pas d’une durée en secondes. Le changement de type met à jour l’aperçu avant l’enregistrement. Les anciennes sélections d’accélération progressive affichent et utilisent ce comportement corrigé.
 
 Les champs de hauteur solaire conservent les décimales. Les unités doivent être explicites, sans mélanger hauteur du soleil, température de blanc et luminosité.
 
@@ -133,9 +135,19 @@ Les deux modes respectent la désactivation générale de l’automatisation et 
 
 Le lancement explicite d’une scène applique son ambiance et déclenche la pause manuelle commune ; ce comportement doit être identifiable depuis le panneau.
 
+### Import d’une scène Home Assistant
+
+**Implémenté ; vérifié dans Home Assistant isolé avec des lampes simulées.** Dans une pièce enregistrée, l’action administrateur **« Importer depuis Home Assistant »** ouvre une recherche de scène. Le formulaire présente un nom modifiable, la liste des lampes retenues et le nombre d’entités ignorées. Il explique que les autres lampes restent inchangées et que l’import ne commande aucune lampe. Les scènes inaccessibles, les erreurs de lecture et l’absence de lampes communes ont un retour explicite.
+
+Confirmer ajoute une nouvelle scène au brouillon, en dernière position ; la barre d’enregistrement reste le point de sauvegarde ou d’abandon. Annuler le formulaire conserve le brouillon précédent. Les changements non enregistrés doivent être résolus avant de commencer l’import. Le lancement des scènes est désactivé tant qu’il reste des modifications non enregistrées. L’import ne lance pas l’éditeur en direct ni la scène source ; l’utilisateur peut ensuite modifier la copie avec le parcours habituel.
+
 ### Réglage des lampes réelles
 
-L’éditeur ajuste les lampes en temps réel à partir de contrôles adaptés à leurs capacités. Il indique clairement que les réglages modifient les lampes physiques et que **toute automatisation Halo de cette pièce est temporairement suspendue** pendant l’édition.
+L’éditeur présente une liste Halo recherchable des lampes avec leur état réel et leur effet actif, lorsque disponible. Un clic ouvre la fenêtre native Home Assistant, qui fournit les contrôles adaptés à la lampe. Ce parcours est implémenté et vérifié dans le frontend officiel Home Assistant 20260930.2, avec des lampes simulées dans une instance locale. L’ouverture utilise l’action documentée `more-info` ; aucun composant interne Home Assistant n’est copié ou détourné.
+
+Chaque lampe dispose d’une case d’inclusion dans la scène. La réouverture conserve exactement les inclusions enregistrées ; les autres lampes restent proposées mais exclues, sans contrôle matériel tant qu’elles ne sont pas incluses. Une scène manuelle nouvelle inclut toutes les lampes de la pièce. L’aide précise que les lampes exclues restent inchangées au lancement.
+
+L’éditeur indique clairement que les réglages modifient les lampes physiques et que **toute automatisation Halo de cette pièce est temporairement suspendue** pendant l’édition. L’aide précise que les réglages enregistrés, effets compris, sont ceux remontés par la lampe à Home Assistant. Une indisponibilité est visible et ne se traduit jamais par un état éteint inventé.
 
 - Une seule session d’édition peut contrôler une pièce à la fois. Le panneau signale lorsqu’une autre session en détient le contrôle.
 - L’état initial est mémorisé avant les réglages.
@@ -144,7 +156,7 @@ L’éditeur ajuste les lampes en temps réel à partir de contrôles adaptés �
 - Une fermeture ou une perte de connexion libère la session après expiration, sans laisser une suspension permanente.
 - L’automatisation ne doit pas être réactivée à la sortie de l’éditeur si elle était désactivée avant l’édition.
 
-Le nom et les conditions de la scène se configurent dans ce parcours. L’implémentation actuelle les présente avec les contrôles de lampe dans une vue d’édition dédiée ; sa présentation visuelle reste à affiner.
+Le nom et les conditions de la scène restent dans la vue d’édition Halo. La fenêtre native sert au réglage des lampes ; fermer cette fenêtre ne termine pas la session Halo. L’enregistrement capture côté serveur les états réels après les réglages ; l’annulation restaure l’instantané initial, effets compris. Les contrôles existants de l’ambiance de base restent distincts de ce parcours de scène. La présentation visuelle de Halo reste à affiner.
 
 ## Transitions des lumières
 
@@ -221,6 +233,9 @@ Les rubriques suivantes servent à recueillir les prochaines décisions ; elles 
 - Lecture des modes, de la pause manuelle et de sa politique d’extinction propre à la pièce, des temporisations et de l’indisponibilité.
 - Courbes naturelles, matin/soir liés ou séparés, associations multiples et correction de luminosité visible sans modification du profil partagé.
 - Ordre des scènes, conditions combinées, option d’allumage et indication de la scène effectivement sélectionnée.
+- Import depuis Home Assistant : recherche, aperçu des lampes retenues et entités ignorées, nom modifiable, annulation, erreurs et sauvegarde avec la barre habituelle, sans commande matérielle.
+- Scène partielle : inclusions conservées à la réouverture, cases explicites et lampes exclues inchangées au lancement.
+- Clic sur une lampe ouvrant la vraie fenêtre Home Assistant ; effet actif visible au retour, capture des états lors de l’enregistrement et restauration après annulation.
 - Édition réelle, enregistrement, annulation, déconnexion et accès concurrent.
 - Transitions héritées, propres à la pièce, absentes, égales à zéro ou non prises en charge.
 - Français, anglais, repli anglais et préservation des noms personnalisés.

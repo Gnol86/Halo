@@ -101,11 +101,17 @@ def validate_lamp_states(value: Any, members: list[str]) -> dict:
     output = deepcopy(_mapping(value, "lamp states"))
     allowed = {
         "state",
+        "brightness",
         "brightness_pct",
+        "effect",
+        "color_mode",
         "color_temp_kelvin",
         "rgb_color",
+        "rgbw_color",
+        "rgbww_color",
         "hs_color",
         "xy_color",
+        "white",
     }
     for entity_id, settings in output.items():
         if entity_id not in members:
@@ -115,18 +121,56 @@ def validate_lamp_states(value: Any, members: list[str]) -> dict:
             raise ValueError("Invalid lamp state")
         if "brightness_pct" in settings:
             _number(settings["brightness_pct"], "brightness_pct", 0, 100)
+        if "brightness" in settings:
+            _number(settings["brightness"], "brightness", 0, 255)
+            if int(settings["brightness"]) != settings["brightness"]:
+                raise ValueError("brightness must be an integer")
+            if "brightness_pct" in settings:
+                raise ValueError("Use only one brightness representation per light")
+        if "effect" in settings:
+            _text(settings["effect"], "effect")
+        if "color_mode" in settings and settings["color_mode"] not in (
+            "onoff",
+            "brightness",
+            "color_temp",
+            "hs",
+            "rgb",
+            "rgbw",
+            "rgbww",
+            "xy",
+            "white",
+        ):
+            raise ValueError("Invalid color mode")
+        if "white" in settings:
+            _number(settings["white"], "white", 0, 255)
         if "color_temp_kelvin" in settings:
             _number(settings["color_temp_kelvin"], "color_temp_kelvin", 1000, 40000)
         color_keys = set(settings) & {
             "color_temp_kelvin",
             "rgb_color",
+            "rgbw_color",
+            "rgbww_color",
             "hs_color",
             "xy_color",
+            "white",
         }
         if len(color_keys) > 1:
             raise ValueError("Use only one color representation per light")
+        if color_keys and "color_mode" in settings:
+            mode = settings["color_mode"]
+            expected = (
+                "color_temp_kelvin"
+                if mode == "color_temp"
+                else "white"
+                if mode == "white"
+                else f"{mode}_color"
+            )
+            if expected not in color_keys:
+                raise ValueError("Color attributes must match the active color mode")
         for key, bounds in (
             ("rgb_color", (255, 255, 255)),
+            ("rgbw_color", (255, 255, 255, 255)),
+            ("rgbww_color", (255, 255, 255, 255, 255)),
             ("hs_color", (360, 100)),
             ("xy_color", (1, 1)),
         ):
@@ -232,6 +276,16 @@ def validate_config(value: Any) -> dict[str, Any]:
         _text(profile.get("name"), "profile name")
         profile.setdefault("linked", True)
         _boolean(profile["linked"], "linked")
+        # Migrate the original one-sided acceleration, including stored evening
+        # curves of a linked profile, without requiring inactive curves to exist.
+        for period in ("morning", "evening"):
+            if isinstance(branch := profile.get(period), dict):
+                for curve in branch.values():
+                    if (
+                        isinstance(curve, dict)
+                        and curve.get("interpolation") == "ease_in"
+                    ):
+                        curve["interpolation"] = "ease_in_out"
         periods = ["morning"] if profile["linked"] else ["morning", "evening"]
         for period in periods:
             branch = _mapping(profile.get(period), period)
@@ -241,7 +295,7 @@ def validate_config(value: Any) -> dict[str, Any]:
             ):
                 curve = _mapping(branch.get(quantity), quantity)
                 curve.setdefault("interpolation", "linear")
-                if curve["interpolation"] not in ("linear", "ease_in"):
+                if curve["interpolation"] not in ("linear", "ease_in_out"):
                     raise ValueError("Unknown curve interpolation")
                 for bound in ("low_elevation", "high_elevation"):
                     _number(curve.get(bound), bound, -90, 90)

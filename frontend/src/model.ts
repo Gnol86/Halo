@@ -1,4 +1,4 @@
-import type { Condition, Curve, Light, Profile, Room, Transition } from "./types";
+import type { Condition, Curve, CurveInterpolation, Light, Profile, Room, Transition } from "./types";
 
 export const categories: Transition[] = ["turn_on", "lux_on", "natural", "scene", "turn_off"];
 
@@ -23,10 +23,13 @@ export function newProfile(id: string, name: string): Profile {
     temperature: { low_elevation: -6, high_elevation: 45, low: 2200, high: 6500, interpolation: "linear" } };
   return { id, name, linked: true, morning, evening: structuredClone(morning) };
 }
+export function curveInterpolation(curve: Curve): CurveInterpolation {
+  return curve.interpolation === "ease_in" ? "ease_in_out" : curve.interpolation ?? "linear";
+}
 export function interpolate(curve: Curve, elevation: number): number {
   if (curve.high_elevation <= curve.low_elevation) return curve.low;
   const progress = Math.min(1, Math.max(0, (elevation - curve.low_elevation) / (curve.high_elevation - curve.low_elevation)));
-  const valueProgress = curve.interpolation === "ease_in" ? progress * progress : progress;
+  const valueProgress = curveInterpolation(curve) === "ease_in_out" ? progress * progress * (3 - 2 * progress) : progress;
   return curve.low + (curve.high - curve.low) * valueProgress;
 }
 export function dimmable(light: Light): boolean {

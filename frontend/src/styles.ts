@@ -34,6 +34,14 @@ export const styles = css`
   .transition-field > h4 { margin-bottom:0; }
   .lamp,.association,.scene-row,.profile { padding:16px; border:1px solid var(--divider-color,#ddd); border-radius:8px; margin:12px 0; }
   .scene-row { display:flex; align-items:center; gap:12px; flex-wrap:wrap; } .scene-row[draggable="true"] { cursor:grab; }
+  .scene-lights { list-style:none; padding:0; margin:12px 0 20px; }
+  .scene-lights li + li { margin-top:10px; }
+  .scene-inclusion { margin-bottom:6px; }
+  .import-lights li { margin:10px 0; }
+  .import-lights small { display:block; overflow-wrap:anywhere; }
+  .scene-lamp { display:flex; align-items:center; gap:16px; width:100%; padding:14px 16px; text-align:start; }
+  .scene-lamp strong,.scene-lamp small,.scene-lamp .grow > span { display:block; overflow-wrap:anywhere; }
+  .scene-lamp .grow > span { margin-top:4px; font-size:14px; }
   summary { cursor:pointer; font-weight:500; min-height:32px; } details[open]>summary { margin-bottom:12px; }
   .condition { padding:12px; margin:12px 0; border-left:3px solid var(--divider-color,#ddd); background:var(--secondary-background-color,#f6f6f6); }
   .condition .condition { margin-left:10px; background:var(--card-background-color,#fff); }

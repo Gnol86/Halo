@@ -10,7 +10,7 @@
   .harness { background:#e6edf3; color:#111; padding:8px; font:12px system-ui; display:flex; gap:8px; align-items:center; flex-shrink:0; }
   halo-panel { height:auto; min-height:0; flex:1; }
 </style>
-<div class="harness">Simulated Home Assistant <button id="language">EN / FR</button><button id="theme">Light / dark</button><button id="admin">Admin / user</button></div>
+<div class="harness">Simulated Home Assistant <button id="language">EN / FR</button><button id="theme">Light / dark</button><button id="admin">Admin / user</button><span id="native-action" role="status">Native light controls require a real Home Assistant frontend.</span></div>
 <halo-panel></halo-panel>
 <script type="module">
 import "../custom_components/halo/frontend/halo-panel.js";
@@ -24,19 +24,50 @@ for (const light of snapshot.lights) { light.is_group ??= false; light.group_mem
 for (const light of snapshot.lights.slice(0,2)) light.member_of=["light.lounge_group"];
 snapshot.entities.push({entity_id:"sensor.daylight_percent",name:"Luminosité relative",state:"25",attributes:{unit_of_measurement:"%"}});
 snapshot.entities.push({entity_id:"input_boolean.presence",name:"Présence personnalisée",state:"off",attributes:{}});
+snapshot.entities.push({entity_id:"scene.reading",name:"Lecture du soir",state:"unknown",attributes:{id:"reading"}});
+snapshot.entities.push({entity_id:"scene.hue_ambience",name:"Ambiance Hue",state:"unknown",attributes:{}});
+const sourceScene={id:"reading",name:"Lecture du soir",entities:{"light.sofa":{state:"on",brightness:110,color_mode:"rgb",rgb_color:[255,180,100],effect:"Candle"},"light.ceiling":{state:"off"},"light.kitchen":{state:"on"},"media_player.tv":"off"}};
 let callback;
+let initialStates;
 window.haloCalls=[];
 const panel=document.querySelector("halo-panel");
 const send=()=>callback?.(structuredClone(snapshot));
-const hass={locale:{language:"fr-BE"},states:{"light.sofa":{state:"on",attributes:{brightness:128,rgb_color:[255,255,255]}},"light.ceiling":{state:"on",attributes:{brightness:128,color_mode:"color_temp",color_temp_kelvin:3000}},"light.table":{state:"off",attributes:{}}},connection:{async subscribeMessage(cb){callback=cb;return()=>callback=undefined;}},async callWS(message){
+const hass={locale:{language:"fr-BE"},states:{"light.sofa":{state:"on",attributes:{brightness:128,color_mode:"rgb",rgb_color:[255,255,255],effect:"Candle"}},"light.ceiling":{state:"on",attributes:{brightness:128,color_mode:"color_temp",color_temp_kelvin:3000}},"light.table":{state:"off",attributes:{}}},connection:{async subscribeMessage(cb){callback=cb;return()=>callback=undefined;}},async callApi(method,path){
+  window.haloCalls.push({type:"api",method,path});
+  if(method==="GET"&&path==="config/scene/config/reading")return structuredClone(sourceScene);
+  throw {status_code:404};
+},async callWS(message){
   window.haloCalls.push(structuredClone(message));
+  if(message.type==="halo/scene/import"){
+    const room=snapshot.config.rooms[message.room_id];
+    const entries=Object.entries(message.config.entities).filter(([id])=>room.lights.includes(id));
+    if(!entries.length)throw{code:"no_matching_lights"};
+    return{scene:{id:crypto.randomUUID(),name:message.config.name,conditions:null,can_turn_on:false,lights:Object.fromEntries(entries)},ignored_entities:Object.keys(message.config.entities).length-entries.length};
+  }
   if(message.type==="halo/save"){if(message.revision!==snapshot.revision)throw{code:"conflict"};snapshot.config=structuredClone(message.config);snapshot.revision++;send();}
-  if(message.type==="halo/edit/begin"){snapshot.status[message.room_id].reason="editing";send();return{token:"mock-token"};}
-  if(message.type==="halo/edit/end"){if(message.save){const room=snapshot.config.rooms[message.room_id];room.scenes=room.scenes.filter(scene=>scene.id!==message.scene.id);room.scenes.push(message.scene);snapshot.revision++;}snapshot.status[message.room_id].reason="disabled";send();}
+  if(message.type==="halo/edit/begin"){initialStates=structuredClone(hass.states);snapshot.status[message.room_id].reason="editing";send();return{token:"mock-token"};}
+  if(message.type==="halo/edit/preview"){
+    for(const [id,target] of Object.entries(message.lights)){
+      const {state,...attributes}=target;
+      if(attributes.brightness_pct!=null){attributes.brightness=Math.round(attributes.brightness_pct*255/100);delete attributes.brightness_pct;}
+      hass.states[id]={state,attributes};
+    }
+    panel.hass={...hass};
+  }
+  if(message.type==="halo/edit/end"){
+    if(message.save){
+      const room=snapshot.config.rooms[message.room_id];const scene=structuredClone(message.scene);
+      if(message.capture){const included=message.capture_entities??room.lights;scene.lights=Object.fromEntries(Object.entries(scene.lights).filter(([id])=>included.includes(id)));for(const id of included){const current=hass.states[id];if(current&&["on","off"].includes(current.state))scene.lights[id]={state:current.state,...current.attributes};}}
+      room.scenes=room.scenes.filter(item=>item.id!==scene.id);room.scenes.push(scene);snapshot.revision++;
+    }else if(initialStates){hass.states=initialStates;panel.hass={...hass};}
+    initialStates=undefined;snapshot.status[message.room_id].reason="disabled";send();
+  }
   if(message.type==="halo/command"){const room=snapshot.config.rooms[message.room_id];if(["automation","natural"].includes(message.command)){room[message.command+"_enabled"]=message.enabled;snapshot.revision++;}if(message.command==="turn_on")snapshot.status[room.id].is_on=true;if(message.command==="turn_off")snapshot.status[room.id].is_on=false;send();}
   return structuredClone(snapshot);
 }};
 panel.hass=hass;
+// Record the public event, but never pretend a copied control is Home Assistant.
+panel.addEventListener("hass-action",event=>{window.haloCalls.push({type:"hass-action",...structuredClone(event.detail)});document.querySelector("#native-action").textContent=`Native controls requested for ${event.detail.config.entity}; open Halo in Home Assistant to use them.`;});
 document.querySelector("#language").onclick=()=>{hass.locale={language:hass.locale.language.startsWith("fr")?"en":"fr-BE"};panel.hass={...hass};};
 document.querySelector("#theme").onclick=()=>document.body.classList.toggle("dark");
 document.querySelector("#admin").onclick=()=>{snapshot.is_admin=!snapshot.is_admin;send();};

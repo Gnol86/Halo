@@ -3,7 +3,7 @@ import { afterEach, test } from "node:test";
 import { Window } from "happy-dom";
 import { newProfile, newRoom } from "../src/model";
 import type { HaloEntityPicker } from "../src/entity-picker";
-import type { Curve, Hass, Snapshot } from "../src/types";
+import type { Curve, Hass, Scene, Snapshot } from "../src/types";
 
 const window = new Window({ url: "http://192.168.1.4:8123" });
 for (const key of ["window", "document", "customElements", "HTMLElement", "Element", "Node", "Document", "ShadowRoot", "CSSStyleSheet", "Event", "CustomEvent", "KeyboardEvent", "FocusEvent"] as const) {
@@ -23,6 +23,8 @@ function fixture(admin = true): Snapshot {
       { entity_id: "light.simple", name: "Lampe simple", area_id: "lounge", available: true, supported_color_modes: ["onoff"], supported_features: 0 },
       { entity_id: "light.extra", name: "Lampe libre", area_id: "kitchen", available: true, supported_color_modes: ["brightness"], supported_features: 0 }],
     entities: [{ entity_id: "sun.sun", name: "Sun", state: "above_horizon", attributes: { elevation: 15 } },
+      { entity_id: "light.colour", name: "Lampe couleur", state: "on", attributes: { brightness: 128, color_mode: "rgb", rgb_color: [255, 128, 0], effect: "Rainbow" } },
+      { entity_id: "light.simple", name: "Lampe simple", state: "off", attributes: {} },
       { entity_id: "media_player.tv", name: "TV", state: "off", attributes: {} }] };
 }
 
@@ -31,12 +33,13 @@ async function settle(panel: InstanceType<typeof HaloPanel>) {
   await panel.updateComplete;
 }
 
-async function mount(admin = true, initial = fixture(admin)) {
+async function mount(admin = true, initial = fixture(admin), pending: { begin?: () => Promise<void>; preview?: () => Promise<void>; touch?: () => Promise<void>; api?: () => Promise<unknown>; import?: () => Promise<{ scene: Scene; ignored_entities: number }> } = {}) {
   let snapshot = initial;
   const calls: Record<string, unknown>[] = [];
   let callback: ((snapshot: Snapshot) => void) | undefined;
   let unsubscribed = 0;
   const hass: Hass = { locale: { language: "fr-BE" }, language: "en", states: {},
+    async callApi<T>(method: "GET", path: string) { calls.push({ type: "api", method, path }); return await pending.api?.() as T; },
     async callWS<T>(message: Record<string, unknown>) {
       calls.push(structuredClone(message));
       if (message.type === "halo/get") return structuredClone(snapshot) as T;
@@ -44,8 +47,11 @@ async function mount(admin = true, initial = fixture(admin)) {
         snapshot = { ...snapshot, config: structuredClone(message.config) as Snapshot["config"], revision: snapshot.revision + 1 };
         return structuredClone(snapshot) as T;
       }
-      if (message.type === "halo/edit/begin") return { token: "editor-token" } as T;
+      if (message.type === "halo/edit/begin") { await pending.begin?.(); return { token: "editor-token" } as T; }
+      if (message.type === "halo/edit/preview") await pending.preview?.();
+      if (message.type === "halo/edit/touch") await pending.touch?.();
       if (message.type === "halo/edit/end") return structuredClone(snapshot) as T;
+      if (message.type === "halo/scene/import") return await pending.import?.() as T;
       return undefined as T;
     },
     connection: { async subscribeMessage<T>(handler: (event: T) => void) { callback = handler as (snapshot: Snapshot) => void; return () => { unsubscribed++; }; } } };
@@ -97,15 +103,17 @@ test("natural graphs place entered elevations at the exact curve thresholds, inc
   });
 });
 
-test("gradual acceleration previews its actual values and keeps plateau thresholds and accessible labels", async () => {
+test("S-curve previews its actual values and keeps plateau thresholds and accessible labels", async () => {
   const snapshot = fixture();
   const profile = newProfile("solar", "Natural");
-  profile.morning.brightness = { low_elevation: -6.125, high_elevation: -6.12, low: 20, high: 100, interpolation: "ease_in" };
-  profile.morning.temperature = { low_elevation: -90, high_elevation: 90, low: 6500, high: 2200, interpolation: "ease_in" };
+  profile.morning.brightness = { low_elevation: -6.125, high_elevation: -6.12, low: 20, high: 100, interpolation: "ease_in_out" };
+  profile.morning.temperature = { low_elevation: -90, high_elevation: 90, low: 6500, high: 2200, interpolation: "ease_in_out" };
+  profile.morning.brightness.interpolation = "ease_in";
   snapshot.config.profiles.solar = profile;
   const { panel } = await mount(true, snapshot);
   button(panel, "Réglages globaux").click();
   await settle(panel);
+  assert.deepEqual([...panel.shadowRoot!.querySelectorAll<HTMLSelectElement>('.profile select[aria-describedby]')].map((select) => select.value), ["ease_in_out", "ease_in_out"]);
   [...panel.shadowRoot!.querySelectorAll<SVGSVGElement>('svg[role="img"]')].forEach((graph, index) => {
     const points = graph.querySelector("polyline")!.getAttribute("points")!.split(" ").map((point) => point.split(",").map(Number));
     assert.ok(points.flat().every(Number.isFinite));
@@ -114,8 +122,12 @@ test("gradual acceleration previews its actual values and keeps plateau threshol
     assert.equal(points[0][1], points[1][1]);
     assert.equal(points.at(-2)![1], points.at(-1)![1]);
     const midpoint = points[Math.floor(points.length / 2)];
-    assert.ok(Math.abs(midpoint[1] - (index === 0 ? 126.25 : 68.75)) < 1e-8, "The midpoint represents 25% of the value change instead of the linear 50%");
-    assert.match(graph.getAttribute("aria-label")!, /Accélération progressive/);
+    assert.ok(Math.abs(midpoint[1] - 97.5) < 1e-8, "The midpoint is halfway through the value change");
+    const firstQuarter = points[9][1], lastQuarter = points[25][1];
+    const [startY, endY] = [points[1][1], points.at(-2)![1]];
+    assert.ok(Math.abs(firstQuarter - (startY + (endY - startY) * .15625)) < 1e-8);
+    assert.ok(Math.abs(lastQuarter - (startY + (endY - startY) * .84375)) < 1e-8);
+    assert.match(graph.getAttribute("aria-label")!, /Accélération et décélération/);
   });
 });
 
@@ -132,27 +144,27 @@ test("each natural curve type can be selected and saved independently while old 
   await settle(panel);
   const selectors = () => [...panel.shadowRoot!.querySelectorAll<HTMLSelectElement>('.profile select[aria-describedby]')];
   assert.deepEqual(selectors().map((select) => select.value), ["linear", "linear"]);
-  assert.deepEqual([...selectors()[0].options].map((option) => option.textContent), ["Linéaire", "Accélération progressive"]);
-  selectors()[0].value = "ease_in";
+  assert.deepEqual([...selectors()[0].options].map((option) => option.textContent), ["Linéaire", "Accélération et décélération"]);
+  selectors()[0].value = "ease_in_out";
   selectors()[0].dispatchEvent(new Event("change", { bubbles: true }));
   await settle(panel);
-  assert.deepEqual(selectors().map((select) => select.value), ["ease_in", "linear"]);
+  assert.deepEqual(selectors().map((select) => select.value), ["ease_in_out", "linear"]);
   assert.match(panel.shadowRoot!.getElementById(selectors()[0].getAttribute("aria-describedby")!)!.textContent!, /hauteur solaire basse/);
   button(panel, "Enregistrer les modifications").click();
   await settle(panel);
   const firstSave = calls.find((call) => call.type === "halo/save")!.config as Snapshot["config"];
-  assert.equal(firstSave.profiles.solar.morning.brightness.interpolation, "ease_in");
+  assert.equal(firstSave.profiles.solar.morning.brightness.interpolation, "ease_in_out");
   assert.equal(firstSave.profiles.solar.morning.temperature.interpolation, undefined);
 
   const linked = panel.shadowRoot!.querySelector<HTMLInputElement>('.profile input[type="checkbox"]')!;
   linked.checked = false;
   linked.dispatchEvent(new Event("change", { bubbles: true }));
   await settle(panel);
-  assert.deepEqual(selectors().map((select) => select.value), ["ease_in", "linear", "ease_in", "linear"]);
+  assert.deepEqual(selectors().map((select) => select.value), ["ease_in_out", "linear", "ease_in_out", "linear"]);
   selectors()[2].value = "linear";
   selectors()[2].dispatchEvent(new Event("change", { bubbles: true }));
   await settle(panel);
-  selectors()[3].value = "ease_in";
+  selectors()[3].value = "ease_in_out";
   selectors()[3].dispatchEvent(new Event("change", { bubbles: true }));
   await settle(panel);
   button(panel, "Enregistrer les modifications").click();
@@ -160,11 +172,11 @@ test("each natural curve type can be selected and saved independently while old 
   const lastSave = calls.filter((call) => call.type === "halo/save").at(-1)!.config as Snapshot["config"];
   const saved = lastSave.profiles.solar;
   assert.equal(saved.linked, false);
-  assert.deepEqual([saved.morning.brightness.interpolation, saved.morning.temperature.interpolation, saved.evening.brightness.interpolation, saved.evening.temperature.interpolation], ["ease_in", undefined, "linear", "ease_in"]);
-  assert.deepEqual(selectors().map((select) => select.value), ["ease_in", "linear", "linear", "ease_in"]);
+  assert.deepEqual([saved.morning.brightness.interpolation, saved.morning.temperature.interpolation, saved.evening.brightness.interpolation, saved.evening.temperature.interpolation], ["ease_in_out", undefined, "linear", "ease_in_out"]);
+  assert.deepEqual(selectors().map((select) => select.value), ["ease_in_out", "linear", "linear", "ease_in_out"]);
   panel.hass = { ...hass, locale: { language: "en" } };
   await settle(panel);
-  assert.deepEqual([...selectors()[0].options].map((option) => option.textContent), ["Linear", "Gradual acceleration"]);
+  assert.deepEqual([...selectors()[0].options].map((option) => option.textContent), ["Linear", "Gradual acceleration and deceleration"]);
 });
 
 test("panel follows HA user locale and keeps custom names without changing entity IDs", async () => {
@@ -191,6 +203,7 @@ test("non-admins can control and run scenes but see no configuration actions", a
   await settle(panel);
   assert.ok(calls.some((call) => call.type === "halo/command" && call.scene_id === "cinema"));
   assert.equal([...panel.shadowRoot!.querySelectorAll("button")].some((item) => item.textContent?.includes("Créer une scène")), false);
+  assert.equal([...panel.shadowRoot!.querySelectorAll("button")].some((item) => item.textContent?.includes("Importer depuis Home Assistant")), false);
 });
 
 test("configuring a room is explicit, preserves safe defaults and sends the draft revision", async () => {
@@ -225,7 +238,7 @@ test("new remote configuration does not overwrite unsaved changes and disables s
   assert.match(panel.shadowRoot!.textContent!, /n’existe plus/);
 });
 
-test("scene editing takes a server lock, previews compatible controls and cancels with its token", async () => {
+test("scene editing opens Home Assistant through its public action event after applying the initial preview and renewing its lock", async () => {
   const { panel, calls } = await mount();
   button(panel, "Lumières · 2").click();
   await settle(panel);
@@ -234,17 +247,23 @@ test("scene editing takes a server lock, previews compatible controls and cancel
   assert.ok(calls.some((call) => call.type === "halo/edit/begin" && call.room_id === "lounge"));
   assert.match(panel.shadowRoot!.textContent!, /Tu modifies les lampes réelles/);
   assert.equal(panel.shadowRoot!.querySelector<HaloEntityPicker>(".condition halo-entity-picker")!.value, "media_player.tv");
-  const lamps = [...panel.shadowRoot!.querySelectorAll(".lamp")];
+  const lamps = [...panel.shadowRoot!.querySelectorAll<HTMLButtonElement>(".scene-lamp")];
   assert.equal(lamps.length, 2);
-  assert.ok(lamps[0].textContent?.includes("Luminosité (%)"));
-  assert.equal(lamps[1].textContent?.includes("Luminosité (%)"), false);
-  const brightness = lamps[0].querySelector<HTMLInputElement>('input[type="number"]')!;
-  brightness.value = "42";
-  brightness.dispatchEvent(new Event("change", { bubbles: true }));
-  await new Promise((resolve) => setTimeout(resolve, 160));
-  const preview = [...calls].reverse().find((call) => call.type === "halo/edit/preview")!;
+  assert.match(lamps[0].textContent!, /Allumé · 50 % · Effet: Rainbow/);
+  assert.match(lamps[1].textContent!, /Éteint/);
+  assert.equal(panel.shadowRoot!.querySelector(".lamp, more-info-light, ha-more-info-dialog"), null);
+  const actions: CustomEvent[] = [];
+  panel.addEventListener("hass-action", (event) => actions.push(event as CustomEvent));
+  lamps[0].click();
+  await settle(panel);
+  const preview = calls.find((call) => call.type === "halo/edit/preview")!;
   assert.equal(preview.token, "editor-token");
-  assert.equal((preview.lights as Record<string, { brightness_pct: number }>)["light.colour"].brightness_pct, 42);
+  assert.equal(calls.filter((call) => call.type === "halo/edit/preview").length, 1);
+  assert.ok(calls.findIndex((call) => call.type === "halo/edit/touch") > calls.indexOf(preview));
+  assert.equal(actions.length, 1);
+  assert.equal(actions[0].bubbles, true);
+  assert.equal(actions[0].composed, true);
+  assert.deepEqual(actions[0].detail, { config: { entity: "light.colour", tap_action: { action: "more-info" } }, action: "tap" });
   button(panel, "Annuler").click();
   await settle(panel);
   assert.ok(calls.some((call) => call.type === "halo/edit/end" && call.save === false && call.token === "editor-token"));
@@ -257,21 +276,21 @@ test("unmount unsubscribes state events", async () => {
   assert.equal(context.unsubscribed, 1);
 });
 
-test("saving immediately after a lamp change flushes the final preview before ending the session", async () => {
-  const { panel, calls } = await mount();
+test("saving captures real native changes without sending a stale scene preview", async () => {
+  const { panel, calls, hass } = await mount();
   button(panel, "Lumières · 2").click(); await settle(panel);
   button(panel, "Régler dans la pièce").click(); await settle(panel);
-  const brightness = panel.shadowRoot!.querySelector<HTMLInputElement>('.lamp input[type="number"]')!;
-  brightness.value = "63";
-  brightness.dispatchEvent(new Event("change", { bubbles: true }));
-  await panel.updateComplete;
+  panel.shadowRoot!.querySelector<HTMLButtonElement>(".scene-lamp")!.click(); await settle(panel);
+  panel.hass = { ...hass, states: { "light.colour": { state: "on", attributes: { brightness: 161, effect: "Candle", color_mode: "rgbww", rgbww_color: [1, 2, 3, 4, 5] } } } };
+  await settle(panel);
+  assert.match(panel.shadowRoot!.querySelector(".scene-lamp")!.textContent!, /63 % · Effet: Candle/);
   button(panel, "Enregistrer la scène").click();
   await settle(panel);
   const previewIndex = calls.findIndex((call) => call.type === "halo/edit/preview");
   const endIndex = calls.findIndex((call) => call.type === "halo/edit/end");
   assert.ok(previewIndex >= 0 && endIndex > previewIndex);
-  const saved = calls[endIndex].scene as { lights: Record<string, { brightness_pct: number }> };
-  assert.equal(saved.lights["light.colour"].brightness_pct, 63);
+  assert.equal(calls.filter((call) => call.type === "halo/edit/preview").length, 1);
+  assert.equal(calls[endIndex].capture, true);
   assert.equal(calls[endIndex].revision, 7);
 });
 
@@ -285,6 +304,80 @@ test("cancelling clears pending preview work and does not send delayed lamp comm
   assert.equal(calls.slice(endIndex + 1).some((call) => call.type === "halo/edit/preview"), false);
 });
 
+test("a pending initial scene preview blocks native controls and saving until the preview is complete", async () => {
+  let release!: () => void;
+  const preview = new Promise<void>((resolve) => { release = resolve; });
+  const { panel, calls } = await mount(true, fixture(), { preview: () => preview });
+  const actions: Event[] = [];
+  panel.addEventListener("hass-action", (event) => actions.push(event));
+  button(panel, "Lumières · 2").click(); await settle(panel);
+  button(panel, "Régler dans la pièce").click(); await settle(panel);
+  const lamp = panel.shadowRoot!.querySelector<HTMLButtonElement>(".scene-lamp")!;
+  assert.equal(lamp.disabled, true);
+  assert.equal(button(panel, "Enregistrer la scène").disabled, true);
+  assert.match(panel.shadowRoot!.textContent!, /Application de l’aperçu/);
+  lamp.click();
+  assert.equal(actions.length, 0);
+  assert.equal(calls.some((call) => call.type === "halo/edit/end"), false);
+  release(); await settle(panel);
+  assert.equal(lamp.disabled, false);
+  lamp.click(); await settle(panel);
+  assert.equal(actions.length, 1);
+  button(panel, "Annuler").click(); await settle(panel);
+});
+
+test("an expired edit session never opens native controls after a failed lock renewal", async () => {
+  let rejectTouch!: (error: unknown) => void;
+  const touch = new Promise<void>((_, reject) => { rejectTouch = reject; });
+  const { panel } = await mount(true, fixture(), { touch: () => touch });
+  const actions: Event[] = [];
+  panel.addEventListener("hass-action", (event) => actions.push(event));
+  button(panel, "Lumières · 2").click(); await settle(panel);
+  button(panel, "Régler dans la pièce").click(); await settle(panel);
+  panel.shadowRoot!.querySelector<HTMLButtonElement>(".scene-lamp")!.click(); await settle(panel);
+  assert.equal(actions.length, 0);
+  rejectTouch({ code: "invalid_edit" }); await settle(panel);
+  assert.equal(actions.length, 0);
+  assert.equal(panel.shadowRoot!.querySelector(".editor"), null);
+});
+
+test("a failed initial preview remains cancellable and cannot be saved as though it had applied", async () => {
+  const { panel, calls } = await mount(true, fixture(), { preview: async () => { throw { code: "unknown_error" }; } });
+  button(panel, "Lumières · 2").click(); await settle(panel);
+  button(panel, "Régler dans la pièce").click(); await settle(panel);
+  assert.equal(button(panel, "Enregistrer la scène").disabled, true);
+  assert.equal(panel.shadowRoot!.querySelector<HTMLButtonElement>(".scene-lamp")!.disabled, true);
+  assert.equal(button(panel, "Annuler").disabled, false);
+  button(panel, "Annuler").click(); await settle(panel);
+  assert.ok(calls.some((call) => call.type === "halo/edit/end" && call.save === false));
+});
+
+test("new scenes preserve native light precision and effects without inventing states for unavailable lamps", async () => {
+  const snapshot = fixture();
+  const colour = snapshot.entities.find((entity) => entity.entity_id === "light.colour")!;
+  colour.attributes = { brightness: 127, color_mode: "rgbww", rgbww_color: [1, 2, 3, 4, 5], rgb_color: [80, 90, 100], effect: "Candle" };
+  snapshot.entities.find((entity) => entity.entity_id === "light.simple")!.state = "unavailable";
+  const { panel, calls, hass } = await mount(true, snapshot);
+  button(panel, "Lumières · 2").click(); await settle(panel);
+  button(panel, "Créer une scène").click(); await settle(panel);
+  const lamps = [...panel.shadowRoot!.querySelectorAll<HTMLButtonElement>(".scene-lamp")];
+  assert.equal(lamps.length, 2);
+  assert.equal(lamps[1].disabled, true);
+  assert.match(lamps[1].textContent!, /Indisponible/);
+  assert.doesNotMatch(lamps[1].textContent!, /Éteint/);
+  const name = panel.shadowRoot!.querySelector<HTMLInputElement>('.editor input[type="text"]')!;
+  name.value = "Effet"; name.dispatchEvent(new Event("change", { bubbles: true })); await settle(panel);
+  panel.hass = { ...hass, locale: { language: "en" } }; await settle(panel);
+  assert.match(lamps[0].getAttribute("aria-label")!, /Open Home Assistant light controls/);
+  assert.match(lamps[0].textContent!, /Effect: Candle/);
+  button(panel, "Save scene").click(); await settle(panel);
+  const end = calls.find((call) => call.type === "halo/edit/end")!;
+  assert.equal(end.capture, true);
+  assert.deepEqual(end.capture_entities, ["light.colour", "light.simple"]);
+  assert.equal(calls.some((call) => call.type === "halo/edit/preview"), false);
+  assert.deepEqual((end.scene as { lights: unknown }).lights, { "light.colour": { state: "on", brightness: 127, color_mode: "rgbww", rgbww_color: [1, 2, 3, 4, 5], effect: "Candle" } });
+});
+
 test("reattaching a panel opens a fresh subscription and abandons its old editor heartbeat", async () => {
   const context = await mount();
   button(context.panel, "Lumières · 2").click(); await settle(context.panel);
@@ -295,6 +388,18 @@ test("reattaching a panel opens a fresh subscription and abandons its old editor
   assert.equal(context.unsubscribed, 1);
   assert.equal(context.calls.filter((call) => call.type === "halo/get").length, 2);
   assert.equal(context.panel.shadowRoot!.querySelector(".editor"), null);
+});
+
+test("leaving while a scene lock is pending cannot start a late preview or heartbeat", async () => {
+  let release!: () => void;
+  const begin = new Promise<void>((resolve) => { release = resolve; });
+  const { panel, calls } = await mount(true, fixture(), { begin: () => begin });
+  button(panel, "Lumières · 2").click(); await settle(panel);
+  button(panel, "Régler dans la pièce").click(); await settle(panel);
+  panel.remove();
+  release();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(calls.some((call) => call.type === "halo/edit/preview" || call.type === "halo/edit/touch"), false);
 });
 
 test("live state snapshots do not erase text while the user is still typing", async () => {
@@ -463,7 +568,7 @@ test("profile and scene creation work on HTTP LAN without crypto.randomUUID", as
     name.value = "Test HTTP"; name.dispatchEvent(new Event("change", { bubbles: true })); await settle(panel);
     const filter = panel.shadowRoot!.querySelector<HTMLInputElement>('.editor input[type="search"]')!;
     filter.value = "simple"; filter.dispatchEvent(new Event("input", { bubbles: true })); await settle(panel);
-    assert.equal(panel.shadowRoot!.querySelectorAll(".lamp").length, 1);
+    assert.equal(panel.shadowRoot!.querySelectorAll(".scene-lamp").length, 1);
     button(panel, "Enregistrer la scène").click(); await settle(panel);
     const scene = calls.find((call) => call.type === "halo/edit/end")!.scene as { id: string; lights: Record<string, unknown> };
     assert.match(scene.id, /^[0-9a-f-]{36}$/);
@@ -491,4 +596,205 @@ test("large entity catalogs stay searchable and outside clicks cancel only the t
   panel.hass = { ...hass, locale: { language: "de" } }; await settle(panel);
   await searchEntity(control, "unknown name");
   assert.match(control.shadowRoot!.textContent!, /No matching entities/);
+});
+
+function importFixture() {
+  const snapshot = fixture();
+  snapshot.entities.push({ entity_id: "scene.reading", name: "Lecture existante", state: "unknown", attributes: { id: "reading / 42" } },
+    { entity_id: "scene.hue", name: "Ambiance Hue", state: "unknown", attributes: {} });
+  return snapshot;
+}
+
+const importedScene: Scene = { id: "copied-scene", name: "Lecture existante", can_turn_on: false, conditions: null,
+  lights: { "light.colour": { state: "on", brightness: 161, color_mode: "rgbw", rgbw_color: [1, 2, 3, 4], effect: "Candle" } } };
+
+async function openImport(panel: InstanceType<typeof HaloPanel>) {
+  button(panel, "Lumières · 2").click(); await settle(panel);
+  button(panel, "Importer depuis Home Assistant").click(); await settle(panel);
+}
+
+async function chooseScene(panel: InstanceType<typeof HaloPanel>, name = "Lecture existante") {
+  const control = picker(panel, "Scène Home Assistant");
+  await searchEntity(control, name);
+  control.shadowRoot!.querySelector<HTMLElement>('[role="option"]')!.click();
+  await settle(panel);
+}
+
+test("scene import reads configuration without controlling lights, previews retained lamps and saves an independent draft last", async () => {
+  const source = { id: "reading / 42", name: "Lecture existante", entities: { "light.colour": importedScene.lights["light.colour"], "light.extra": "off", "media_player.tv": "off" } };
+  const { panel, calls } = await mount(true, importFixture(), { api: async () => source, import: async () => ({ scene: importedScene, ignored_entities: 2 }) });
+  await openImport(panel);
+  assert.equal(panel.shadowRoot!.activeElement?.id, "import-title");
+  const control = picker(panel, "Scène Home Assistant");
+  assert.ok(control.entities.every((entity) => entity.entity_id.startsWith("scene.")));
+  await chooseScene(panel);
+  assert.doesNotMatch(control.shadowRoot!.textContent!, /Indisponible/);
+  assert.deepEqual(calls.find((call) => call.type === "api"), { type: "api", method: "GET", path: "config/scene/config/reading%20%2F%2042" });
+  assert.deepEqual(calls.find((call) => call.type === "halo/scene/import"), { type: "halo/scene/import", room_id: "lounge", config: source });
+  assert.match(panel.shadowRoot!.querySelector(".import-lights")!.textContent!, /Lampe couleur.*light.colour/);
+  assert.doesNotMatch(panel.shadowRoot!.querySelector(".import-lights")!.textContent!, /simple|extra|media_player/);
+  assert.match(panel.shadowRoot!.textContent!, /Entités ignorées: 2/);
+  assert.equal(panel.shadowRoot!.querySelector(".savebar"), null);
+  const name = panel.shadowRoot!.querySelector<HTMLInputElement>('.scene-import input[type="text"]')!;
+  name.value = "Lecture Halo"; name.dispatchEvent(new Event("input", { bubbles: true }));
+  button(panel, "Ajouter au brouillon de la pièce").click(); await settle(panel);
+  assert.equal(panel.shadowRoot!.querySelector(".scene-import"), null);
+  assert.match(panel.shadowRoot!.querySelector(".savebar")!.textContent!, /non enregistrées/);
+  assert.deepEqual([...panel.shadowRoot!.querySelectorAll(".scene-row strong")].map((item) => item.textContent), ["Cinéma perso", "Lecture Halo"]);
+  const runButtons = () => [...panel.shadowRoot!.querySelectorAll<HTMLButtonElement>(".scene-row button")].filter((item) => item.textContent === "Lancer");
+  assert.ok(runButtons().every((item) => item.disabled));
+  assert.equal(calls.some((call) => call.type === "halo/save" || String(call.type).startsWith("halo/edit") || call.type === "halo/command"), false);
+  button(panel, "Enregistrer les modifications").click(); await settle(panel);
+  const scenes = (calls.find((call) => call.type === "halo/save")!.config as Snapshot["config"]).rooms.lounge.scenes;
+  assert.deepEqual(scenes[1], { ...importedScene, name: "Lecture Halo" });
+  assert.ok(runButtons().every((item) => !item.disabled));
+  assert.equal(source.name, "Lecture existante");
+  assert.equal(importedScene.name, "Lecture existante");
+});
+
+test("cancelling and discarding imported scenes leave the original room intact", async () => {
+  const { panel, calls } = await mount(true, importFixture(), { api: async () => ({}), import: async () => ({ scene: importedScene, ignored_entities: 0 }) });
+  await openImport(panel); await chooseScene(panel);
+  button(panel, "Annuler").click(); await settle(panel);
+  assert.equal(panel.shadowRoot!.querySelector(".savebar"), null);
+  assert.equal(panel.shadowRoot!.querySelectorAll(".scene-row").length, 1);
+  assert.equal(panel.shadowRoot!.activeElement?.className, "import-scene");
+  button(panel, "Importer depuis Home Assistant").click(); await settle(panel); await chooseScene(panel);
+  button(panel, "Ajouter au brouillon de la pièce").click(); await settle(panel);
+  button(panel, "Abandonner les modifications").click(); await settle(panel);
+  assert.equal(panel.shadowRoot!.querySelectorAll(".scene-row").length, 1);
+  assert.equal(calls.some((call) => call.type === "halo/save" || call.type === "halo/command"), false);
+});
+
+test("a typed import name survives state refreshes and is confirmed without requiring a blur event", async () => {
+  const { panel, emit, calls } = await mount(true, importFixture(), { api: async () => ({}), import: async () => ({ scene: importedScene, ignored_entities: 0 }) });
+  await openImport(panel); await chooseScene(panel);
+  const name = panel.shadowRoot!.querySelector<HTMLInputElement>('.scene-import input[type="text"]')!;
+  name.focus();
+  name.value = "Lecture Halo saisie";
+  name.dispatchEvent(new Event("input", { bubbles: true }));
+  await settle(panel);
+  emit({ ...importFixture(), status: { lounge: { reason: "manual_pause", is_on: false, available: true } } });
+  await settle(panel);
+  assert.equal(name.value, "Lecture Halo saisie");
+  assert.equal(panel.shadowRoot!.activeElement, name);
+  button(panel, "Ajouter au brouillon de la pièce").click(); await settle(panel);
+  assert.deepEqual([...panel.shadowRoot!.querySelectorAll(".scene-row strong")].map((item) => item.textContent), ["Cinéma perso", "Lecture Halo saisie"]);
+  button(panel, "Enregistrer les modifications").click(); await settle(panel);
+  const scenes = (calls.find((call) => call.type === "halo/save")!.config as Snapshot["config"]).rooms.lounge.scenes;
+  assert.equal(scenes.at(-1)!.name, "Lecture Halo saisie");
+});
+
+test("unreadable scenes, empty intersections and invalid retained settings show explicit errors without a draft", async () => {
+  for (const [failure, expected] of [
+    [{ status_code: 404 }, /configuration de cette scène n’est pas accessible/],
+    [{ code: "no_matching_lights" }, /aucune lampe explicitement sélectionnée/],
+    [{ code: "invalid_config", message: "light.colour: invalid brightness" }, /light.colour: invalid brightness/],
+    [{ status_code: 403 }, /Seul un administrateur/],
+    [new Error("network"), /La scène n’a pas pu être lue/],
+  ] as const) {
+    const backendError = "code" in failure;
+    const { panel, calls } = await mount(true, importFixture(), {
+      api: async () => { if (!backendError) throw failure; return {}; },
+      import: async () => { throw failure; },
+    });
+    await openImport(panel);
+    await chooseScene(panel, "Ambiance Hue");
+    assert.match(panel.shadowRoot!.textContent!, /configuration de cette scène n’est pas accessible/);
+    assert.equal(calls.some((call) => call.type === "api"), false);
+    await chooseScene(panel);
+    assert.match(panel.shadowRoot!.textContent!, expected);
+    assert.equal(button(panel, "Ajouter au brouillon de la pièce").disabled, true);
+    assert.equal(panel.shadowRoot!.querySelector(".savebar"), null);
+    panel.remove();
+  }
+});
+
+test("an import cannot confirm against a changed room revision or after losing administrator rights", async () => {
+  for (const update of [{ revision: 8 }, { is_admin: false }]) {
+    const { panel, emit, calls } = await mount(true, importFixture(), { api: async () => ({}), import: async () => ({ scene: importedScene, ignored_entities: 0 }) });
+    await openImport(panel); await chooseScene(panel);
+    const confirm = button(panel, "Ajouter au brouillon de la pièce");
+    emit({ ...importFixture(), ...update }); await settle(panel);
+    if (update.revision) {
+      assert.equal(confirm.disabled, true);
+      assert.match(panel.shadowRoot!.textContent!, /configuration de la pièce a changé/);
+    } else assert.equal(panel.shadowRoot!.querySelector(".scene-import"), null);
+    confirm.click(); await settle(panel);
+    assert.equal(panel.shadowRoot!.querySelector(".savebar"), null);
+    assert.equal(calls.some((call) => call.type === "halo/save"), false);
+    panel.remove();
+  }
+});
+
+test("late import results are ignored after cancellation, navigation, replacement selection and disconnection", async () => {
+  for (const leave of ["cancel", "navigate", "select", "disconnect"] as const) {
+    let release!: (value: unknown) => void;
+    const response = new Promise<unknown>((resolve) => { release = resolve; });
+    const { panel, calls } = await mount(true, importFixture(), { api: () => response, import: async () => ({ scene: importedScene, ignored_entities: 0 }) });
+    await openImport(panel); await chooseScene(panel);
+    assert.match(panel.shadowRoot!.textContent!, /Lecture des réglages/);
+    if (leave === "cancel") button(panel, "Annuler").click();
+    if (leave === "navigate") button(panel, "Pièces").click();
+    if (leave === "select") await chooseScene(panel, "Ambiance Hue");
+    if (leave === "disconnect") panel.remove();
+    await settle(panel); release({}); await settle(panel);
+    assert.equal(calls.some((call) => call.type === "halo/scene/import"), false);
+    assert.equal(panel.shadowRoot!.querySelector(".savebar"), null);
+    if (leave === "select") assert.match(panel.shadowRoot!.textContent!, /configuration de cette scène n’est pas accessible/);
+    panel.remove();
+  }
+});
+
+test("existing partial scenes preview and capture only included lamps while additions and exclusions are explicit", async () => {
+  const snapshot = fixture();
+  snapshot.config.rooms.lounge.scenes = [structuredClone(importedScene)];
+  const { panel, calls } = await mount(true, snapshot);
+  const actions: Event[] = [];
+  panel.addEventListener("hass-action", (event) => actions.push(event));
+  button(panel, "Lumières · 2").click(); await settle(panel);
+  button(panel, "Régler dans la pièce").click(); await settle(panel);
+  assert.deepEqual(calls.find((call) => call.type === "halo/edit/preview")!.lights, importedScene.lights);
+  const checks = [...panel.shadowRoot!.querySelectorAll<HTMLInputElement>(".scene-inclusion input")];
+  assert.deepEqual(checks.map((input) => input.checked), [true, false]);
+  const lamps = [...panel.shadowRoot!.querySelectorAll<HTMLButtonElement>(".scene-lamp")];
+  assert.equal(lamps[1].disabled, true); lamps[1].click(); await settle(panel);
+  assert.equal(actions.length, 0);
+  checks[1].checked = true; checks[1].dispatchEvent(new Event("change", { bubbles: true })); await settle(panel);
+  assert.equal(lamps[1].disabled, false);
+  checks[0].checked = false; checks[0].dispatchEvent(new Event("change", { bubbles: true })); await settle(panel);
+  assert.equal(lamps[0].disabled, true);
+  button(panel, "Enregistrer la scène").click(); await settle(panel);
+  const end = calls.find((call) => call.type === "halo/edit/end")!;
+  assert.deepEqual(end.capture_entities, ["light.simple"]);
+  assert.deepEqual((end.scene as Scene).lights, {});
+  assert.equal(calls.filter((call) => call.type === "halo/edit/preview").length, 1);
+});
+
+test("a normalization response cannot revive an import after its room changes", async () => {
+  let release!: (value: { scene: Scene; ignored_entities: number }) => void;
+  const response = new Promise<{ scene: Scene; ignored_entities: number }>((resolve) => { release = resolve; });
+  const { panel, emit, calls } = await mount(true, importFixture(), { api: async () => ({}), import: () => response });
+  await openImport(panel); await chooseScene(panel);
+  assert.ok(calls.some((call) => call.type === "halo/scene/import"));
+  emit({ ...importFixture(), revision: 8 }); await settle(panel);
+  release({ scene: importedScene, ignored_entities: 0 }); await settle(panel);
+  assert.equal(button(panel, "Ajouter au brouillon de la pièce").disabled, true);
+  assert.equal(panel.shadowRoot!.querySelector(".import-lights"), null);
+  assert.match(panel.shadowRoot!.textContent!, /configuration de la pièce a changé/);
+  assert.equal(calls.some((call) => call.type === "halo/save" || call.type === "halo/command"), false);
+});
+
+test("resaving a partial scene retains remembered settings for its unavailable selected lamp", async () => {
+  const snapshot = fixture();
+  snapshot.config.rooms.lounge.scenes = [structuredClone(importedScene)];
+  snapshot.entities.find((entity) => entity.entity_id === "light.colour")!.state = "unavailable";
+  const { panel, calls } = await mount(true, snapshot);
+  button(panel, "Lumières · 2").click(); await settle(panel);
+  button(panel, "Régler dans la pièce").click(); await settle(panel);
+  assert.deepEqual([...panel.shadowRoot!.querySelectorAll<HTMLInputElement>(".scene-inclusion input")].map((input) => input.checked), [true, false]);
+  button(panel, "Enregistrer la scène").click(); await settle(panel);
+  const end = calls.find((call) => call.type === "halo/edit/end")!;
+  assert.deepEqual(end.capture_entities, ["light.colour"]);
+  assert.deepEqual((end.scene as Scene).lights, importedScene.lights);
 });

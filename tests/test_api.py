@@ -3,9 +3,11 @@
 import asyncio
 from copy import deepcopy
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import pytest
 from homeassistant.auth.const import GROUP_ID_USER
+from homeassistant.components.light import LightEntityFeature
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import device_registry as dr
@@ -160,7 +162,20 @@ async def test_permissions_separate_control_from_configuration(
         assert not visible["is_admin"]
         for command, fields in (
             ("halo/save", {"config": api.config, "revision": visible["revision"]}),
+            (
+                "halo/scene/import",
+                {"room_id": api.room_id, "config": {"name": "Native", "entities": {}}},
+            ),
             ("halo/edit/begin", {"room_id": api.room_id}),
+            (
+                "halo/edit/end",
+                {
+                    "room_id": api.room_id,
+                    "token": "not-owned",
+                    "save": True,
+                    "capture": True,
+                },
+            ),
         ):
             response = await request(client, command, **fields)
             assert not response["success"]
@@ -203,6 +218,18 @@ async def test_editor_owner_preview_and_cancel(
         )
         assert not stolen["success"]
         assert stolen["error"]["code"] == "invalid_edit"
+        captured = await request(
+            other,
+            "halo/edit/end",
+            room_id=api.room_id,
+            token=token,
+            save=True,
+            capture=True,
+            scene={"id": "stolen", "name": "Stolen", "lights": {}},
+            revision=1,
+        )
+        assert not captured["success"]
+        assert captured["error"]["code"] == "invalid_edit"
         assert hass.states.get(api.lamp).state == "on"
         preview = await request(
             api.client,
@@ -266,6 +293,335 @@ async def test_scene_save_and_manual_pause_survive_reload(
     assert after["status"][api.room_id]["pause_until"] == pause
     assert after["config"]["rooms"][api.room_id]["scenes"][0]["name"] == "Cinéma"
     assert not after["config"]["rooms"][api.room_id]["automation_enabled"]
+
+
+@pytest.mark.parametrize(
+    ("mode", "color"),
+    [
+        ("rgbw", {"rgbw_color": [13, 27, 82, 54]}),
+        ("rgbww", {"rgbww_color": [13, 27, 82, 54, 201]}),
+        ("white", {}),
+        ("onoff", {}),
+    ],
+)
+async def test_native_scene_capture_persists_real_state_and_replays_effect(
+    hass, api, mode, color
+):
+    initial = await configure(api)
+    editor = await request(api.client, "halo/edit/begin", room_id=api.room_id)
+    token = editor["result"]["token"]
+    # Simulate the state reported after changing the native HA light dialog.
+    actual = {
+        "brightness": 123,
+        "effect": "candle",
+        "color_mode": mode,
+        **color,
+        "supported_color_modes": ["rgb", "white"]
+        if mode in ("white", "onoff")
+        else [mode],
+        "supported_features": LightEntityFeature.EFFECT,
+        "effect_list": ["off", "candle"],
+        "friendly_name": "Physical lamp",
+        "hs_color": [42, 37],
+        "rgb_color": [255, 250, 200],
+    }
+    hass.states.async_set(api.lamp, "on", actual)
+    scene = {"id": "native", "name": "Native", "lights": {api.lamp: {"state": "off"}}}
+    stale = await request(
+        api.client,
+        "halo/edit/end",
+        room_id=api.room_id,
+        token=token,
+        save=True,
+        scene=scene,
+        capture=True,
+        revision=initial["revision"] - 1,
+    )
+    assert not stale["success"] and stale["error"]["code"] == "conflict"
+    assert api.entry.runtime_data.engines[api.room_id].status["editing"]
+    saved = await request(
+        api.client,
+        "halo/edit/end",
+        room_id=api.room_id,
+        token=token,
+        save=True,
+        scene=scene,
+        capture=True,
+        revision=initial["revision"],
+    )
+    assert saved["success"], saved
+    expected = {
+        "state": "on",
+        "brightness": 123,
+        "color_mode": mode,
+        "effect": "candle",
+        **color,
+    }
+    assert saved["result"]["config"]["rooms"][api.room_id]["scenes"][0]["lights"] == {
+        api.lamp: expected
+    }
+    assert await hass.config_entries.async_reload(api.entry.entry_id)
+    await hass.async_block_till_done()
+    hass.states.async_set(
+        api.lamp, "off", {**actual, "effect": "off", "brightness": 19}
+    )
+    applied = await request(
+        api.client,
+        "halo/command",
+        room_id=api.room_id,
+        command="scene",
+        scene_id="native",
+    )
+    assert applied["success"], applied
+    params = {"entity_id": api.lamp, "brightness": 123, "effect": "candle", **color}
+    if mode == "white":
+        params["white"] = 123
+    assert api.calls[-1].data == params
+
+
+async def test_capture_unavailable_members_retains_known_targets_without_inventing_off(
+    hass, api
+):
+    api.config["rooms"][api.room_id]["lights"] += [
+        "light.unavailable_lamp",
+        "light.known",
+        "light.unknown",
+    ]
+    hass.states.async_set(
+        "light.known",
+        "on",
+        {"brightness": 123, "supported_color_modes": ["brightness"]},
+    )
+    hass.states.async_set("light.unknown", "unknown")
+    initial = await configure(api)
+    editor = await request(api.client, "halo/edit/begin", room_id=api.room_id)
+    hass.states.async_set("light.known", "unavailable")
+    hass.states.async_set(api.lamp, "off", {"supported_color_modes": ["brightness"]})
+    remembered = {"state": "on", "brightness_pct": 21, "effect": "candle"}
+    result = await request(
+        api.client,
+        "halo/edit/end",
+        room_id=api.room_id,
+        token=editor["result"]["token"],
+        save=True,
+        capture=True,
+        revision=initial["revision"],
+        scene={
+            "id": "native",
+            "name": "Native",
+            "lights": {"light.unavailable_lamp": remembered},
+        },
+    )
+    assert result["success"], result
+    states = result["result"]["config"]["rooms"][api.room_id]["scenes"][0]["lights"]
+    assert states == {
+        api.lamp: {"state": "off"},
+        "light.unavailable_lamp": remembered,
+        "light.known": {"state": "on", "brightness": 123},
+    }
+
+
+async def test_import_returns_detached_partial_draft_without_writes_or_commands(
+    hass, api
+):
+    api.config["rooms"][api.room_id]["lights"] += ["light.unavailable_lamp"]
+    initial = await configure(api)
+    await hass.async_block_till_done()
+    source = {
+        "id": "source-scene",
+        "name": "Home cinema",
+        "entities": {
+            api.lamp: {"state": "on", "brightness": 153, "effect": "Candle"},
+            "light.unavailable_lamp": False,
+            "light.outside": {"state": "invalid"},
+            "switch.tv": {"state": "on"},
+        },
+    }
+    manager = api.entry.runtime_data
+    with patch.object(manager._store, "async_save") as save:
+        imported = await request(
+            api.client, "halo/scene/import", room_id=api.room_id, config=source
+        )
+        save.assert_not_called()
+    assert imported["success"], imported
+    assert imported["result"]["ignored_entities"] == 2
+    draft = imported["result"]["scene"]
+    assert draft["name"] == "Home cinema"
+    assert draft["id"] != source["id"]
+    assert draft["conditions"] is None and not draft["can_turn_on"]
+    assert draft["lights"] == {
+        api.lamp: {"state": "on", "brightness": 153, "effect": "Candle"},
+        "light.unavailable_lamp": {"state": "off"},
+    }
+    assert not api.calls
+    assert manager.config == initial["config"]
+    assert manager.revision == initial["revision"]
+    assert not manager.engines[api.room_id].status["editing"]
+
+
+@pytest.mark.parametrize(
+    ("entities", "error"),
+    [
+        ({"light.outside": "on"}, "no_matching_lights"),
+        ({}, "no_matching_lights"),
+        ({"LAMP": {"state": "on", "brightness": 500}}, "invalid_config"),
+        ([], "invalid_config"),
+    ],
+)
+async def test_import_rejects_invalid_or_unrelated_configuration(api, entities, error):
+    await configure(api)
+    if isinstance(entities, dict) and "LAMP" in entities:
+        entities = {api.lamp: entities["LAMP"]}
+    response = await request(
+        api.client,
+        "halo/scene/import",
+        room_id=api.room_id,
+        config={"name": "Native", "entities": entities},
+    )
+    assert not response["success"] and response["error"]["code"] == error
+    if isinstance(entities, dict) and api.lamp in entities:
+        assert api.lamp in response["error"]["message"]
+    assert not api.calls
+    assert api.entry.runtime_data.revision == 1
+    assert not api.entry.runtime_data.config["rooms"][api.room_id]["scenes"]
+
+
+async def test_import_unknown_room_is_rejected(api):
+    await configure(api)
+    response = await request(
+        api.client,
+        "halo/scene/import",
+        room_id=api.other_room_id,
+        config={"name": "Native", "entities": {api.lamp: "on"}},
+    )
+    assert not response["success"] and response["error"]["code"] == "not_found"
+
+
+async def test_saving_import_does_not_reapply_active_room_or_other_rooms(hass, api):
+    api.config["rooms"][api.room_id].update(
+        automation_enabled=True,
+        base={api.lamp: {"state": "on", "brightness": 190}},
+    )
+    hass.states.async_set(
+        "light.other_room", "on", {"supported_color_modes": ["onoff"]}
+    )
+    api.config["rooms"][api.other_room_id] = {
+        "lights": ["light.other_room"],
+        "automation_enabled": True,
+    }
+    initial = await configure(api)
+    await hass.async_block_till_done()
+    api.calls.clear()
+    before = hass.states.get(api.lamp)
+    imported = await request(
+        api.client,
+        "halo/scene/import",
+        room_id=api.room_id,
+        config={
+            "name": "Native",
+            "entities": {api.lamp: {"state": "on", "brightness": 90}},
+        },
+    )
+    draft = deepcopy(initial["config"])
+    draft["rooms"][api.room_id]["scenes"].append(imported["result"]["scene"])
+    saved = await request(
+        api.client, "halo/save", config=draft, revision=initial["revision"]
+    )
+    assert saved["success"], saved
+    await hass.async_block_till_done()
+    assert not api.calls
+    assert hass.states.get(api.lamp) == before
+    assert (
+        saved["result"]["config"]["rooms"][api.room_id]["scenes"]
+        == draft["rooms"][api.room_id]["scenes"]
+    )
+    # A real behavior change still reconfigures the affected room normally.
+    draft["rooms"][api.room_id]["base"][api.lamp]["brightness"] = 230
+    changed = await request(
+        api.client, "halo/save", config=draft, revision=saved["result"]["revision"]
+    )
+    assert changed["success"], changed
+    assert hass.states.get(api.lamp).attributes["brightness"] == 230
+    assert {call.data["entity_id"] for call in api.calls} == {api.lamp}
+
+
+async def test_partial_capture_excludes_lamps_from_live_and_fallback_states(hass, api):
+    hass.states.async_set(
+        "light.other", "on", {"brightness": 97, "supported_color_modes": ["brightness"]}
+    )
+    api.config["rooms"][api.room_id]["lights"] += [
+        "light.other",
+        "light.unavailable_lamp",
+    ]
+    initial = await configure(api)
+    editor = await request(api.client, "halo/edit/begin", room_id=api.room_id)
+    hass.states.async_set(api.lamp, "unavailable")
+    remembered = {"state": "on", "brightness": 180, "effect": "Candle"}
+    fields = {
+        "room_id": api.room_id,
+        "token": editor["result"]["token"],
+        "save": True,
+        "capture": True,
+        "capture_entities": [api.lamp],
+        "scene": {
+            "id": "partial",
+            "name": "Partial",
+            "lights": {
+                api.lamp: remembered,
+                "light.unavailable_lamp": {"state": "off"},
+            },
+        },
+    }
+    conflict = await request(
+        api.client, "halo/edit/end", **fields, revision=initial["revision"] - 1
+    )
+    assert not conflict["success"] and conflict["error"]["code"] == "conflict"
+    assert api.entry.runtime_data.engines[api.room_id].status["editing"]
+    saved = await request(
+        api.client, "halo/edit/end", **fields, revision=initial["revision"]
+    )
+    assert saved["success"], saved
+    assert saved["result"]["config"]["rooms"][api.room_id]["scenes"][0]["lights"] == {
+        api.lamp: remembered
+    }
+    assert hass.states.get("light.other").attributes["brightness"] == 97
+    assert not api.calls
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"capture_entities": ["light.outside"]},
+        {"capture_entities": ["LAMP", "LAMP"]},
+        {"capture_entities": ["LAMP"], "capture": False},
+        {"capture_entities": ["LAMP"], "save": False},
+    ],
+)
+async def test_capture_selection_validation_preserves_editor(api, fields):
+    initial = await configure(api)
+    editor = await request(api.client, "halo/edit/begin", room_id=api.room_id)
+    fields = deepcopy(fields)
+    fields["capture_entities"] = [
+        api.lamp if entity == "LAMP" else entity
+        for entity in fields["capture_entities"]
+    ]
+    result = await request(
+        api.client,
+        "halo/edit/end",
+        **{
+            "room_id": api.room_id,
+            "token": editor["result"]["token"],
+            "save": True,
+            "capture": True,
+            "revision": initial["revision"],
+            "scene": {"id": "invalid", "name": "Invalid", "lights": {}},
+            **fields,
+        },
+    )
+    assert not result["success"] and result["error"]["code"] == "invalid_config"
+    assert api.entry.runtime_data.engines[api.room_id].status["editing"]
+    assert api.entry.runtime_data.revision == initial["revision"]
+    assert not api.calls
 
 
 async def test_subscription_survives_entry_reload(

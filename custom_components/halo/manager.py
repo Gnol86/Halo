@@ -24,9 +24,23 @@ from .models import (
     validate_lamp_states,
     validate_scene,
 )
+from .scene_import import normalize_scene_import
 
 _LOGGER = logging.getLogger(__name__)
 _GROUP_MEMBER_TYPES = (list, tuple, set, frozenset)
+
+
+def _only_manual_scenes_added(previous: dict, current: dict) -> bool:
+    """Adding manual scene drafts does not change room decisions or listeners."""
+    old_scenes, new_scenes = previous["scenes"], current["scenes"]
+    return (
+        previous | {"scenes": new_scenes} == current
+        and new_scenes[: len(old_scenes)] == old_scenes
+        and all(
+            scene["conditions"] is None and not scene["can_turn_on"]
+            for scene in new_scenes[len(old_scenes) :]
+        )
+    )
 
 
 class HaloError(HomeAssistantError):
@@ -199,6 +213,22 @@ class HaloManager:
                 self._validate_references(normalized)
             except ValueError as err:
                 raise HaloError("invalid_config", str(err)) from err
+            globals_changed = any(
+                normalized[key] != self.config[key]
+                for key in normalized
+                if key != "rooms"
+            )
+            reconfigure = {
+                room_id
+                for room_id, room in normalized["rooms"].items()
+                if room_id in self.engines
+                and (
+                    globals_changed
+                    or not _only_manual_scenes_added(
+                        self.config["rooms"][room_id], room
+                    )
+                )
+            }
             removed = {
                 room_id: engine
                 for room_id, engine in self.engines.items()
@@ -231,7 +261,7 @@ class HaloManager:
             for room_id in normalized["rooms"]:
                 if room_id in added:
                     await self.engines[room_id].async_start()
-                else:
+                elif room_id in reconfigure:
                     await self.engines[room_id].async_reconfigure()
             self.async_notify()
 
@@ -290,6 +320,22 @@ class HaloManager:
             self._edits[room_id] = (token, owner)
             return token
 
+    @callback
+    def import_scene(self, room_id: str, config: dict) -> dict:
+        """Return an independent import draft, without writes or lamp commands."""
+        self._engine(room_id)
+        try:
+            result = normalize_scene_import(
+                config, self.config["rooms"][room_id]["lights"]
+            )
+        except ValueError as err:
+            raise HaloError("invalid_config", str(err)) from err
+        if not result["scene"]["lights"]:
+            raise HaloError(
+                "no_matching_lights", "The scene contains no selected room lights"
+            )
+        return result
+
     def _check_edit(self, room_id: str, token: str, owner: str) -> HaloRoomEngine:
         if self._edits.get(room_id) != (token, owner):
             raise HaloError("invalid_edit", "This connection does not own the editor")
@@ -322,28 +368,51 @@ class HaloManager:
         save: bool,
         scene: dict | None = None,
         revision: int | None = None,
+        capture: bool = False,
+        capture_entities: list[str] | None = None,
     ) -> None:
         async with self._config_lock:
             engine = self._check_edit(room_id, token, owner)
+            members = self.config["rooms"][room_id]["lights"]
+            if capture_entities is not None:
+                if not save or not capture:
+                    raise HaloError(
+                        "invalid_config", "capture_entities requires save and capture"
+                    )
+                if (
+                    not isinstance(capture_entities, list)
+                    or any(not isinstance(item, str) for item in capture_entities)
+                    or len(set(capture_entities)) != len(capture_entities)
+                    or not set(capture_entities).issubset(members)
+                ):
+                    raise HaloError(
+                        "invalid_config",
+                        "capture_entities must contain unique selected room lights",
+                    )
             if save:
                 self._check_revision(revision)
-                try:
-                    normalized = validate_scene(
-                        scene, self.config["rooms"][room_id]["lights"]
-                    )
-                    updated = deepcopy(self.config)
-                    scenes = updated["rooms"][room_id]["scenes"]
-                    for index, existing in enumerate(scenes):
-                        if existing["id"] == normalized["id"]:
-                            scenes[index] = normalized
-                            break
-                    else:
-                        scenes.append(normalized)
-                    updated = validate_config(updated)
-                except ValueError as err:
-                    raise HaloError("invalid_config", str(err)) from err
 
                 async def commit() -> None:
+                    try:
+                        normalized = validate_scene(scene, members)
+                        if capture:
+                            normalized["lights"] = validate_lamp_states(
+                                engine.capture_lights(
+                                    normalized["lights"], entities=capture_entities
+                                ),
+                                members,
+                            )
+                        updated = deepcopy(self.config)
+                        scenes = updated["rooms"][room_id]["scenes"]
+                        for index, existing in enumerate(scenes):
+                            if existing["id"] == normalized["id"]:
+                                scenes[index] = normalized
+                                break
+                        else:
+                            scenes.append(normalized)
+                        updated = validate_config(updated)
+                    except ValueError as err:
+                        raise HaloError("invalid_config", str(err)) from err
                     await self._commit_config(updated)
 
                 await engine.async_commit_edit(token, commit)
@@ -387,9 +456,26 @@ class HaloManager:
             for state in self.hass.states.async_all()
             if user.permissions.check_entity(state.entity_id, POLICY_READ)
         ]
+
+        def visible_members(members: Any) -> list[str]:
+            """Filter references in groups, scenes and other entities alike."""
+            if not isinstance(members, _GROUP_MEMBER_TYPES):
+                return []
+            visible = [
+                member
+                for member in members
+                if isinstance(member, str)
+                and user.permissions.check_entity(member, POLICY_READ)
+            ]
+            if isinstance(members, (set, frozenset)):
+                visible.sort()
+            return list(dict.fromkeys(visible))
+
         groups: dict[str, list[str]] = {}
         member_of: dict[str, list[str]] = {}
         for state in visible_states:
+            if state.domain not in ("light", "group"):
+                continue
             registered = registry.async_get(state.entity_id)
             members = state.attributes.get("entity_id")
             # Hue v1 only exposes the flag. Hue v2 additionally returns member
@@ -410,19 +496,7 @@ class HaloManager:
                 continue
             # Membership is metadata too: never disclose an unreadable entity
             # through another group's attributes or reverse membership list.
-            visible_members = (
-                [
-                    member
-                    for member in members
-                    if isinstance(member, str)
-                    and user.permissions.check_entity(member, POLICY_READ)
-                ]
-                if isinstance(members, _GROUP_MEMBER_TYPES)
-                else []
-            )
-            if isinstance(members, (set, frozenset)):
-                visible_members.sort()
-            groups[state.entity_id] = list(dict.fromkeys(visible_members))
+            groups[state.entity_id] = visible_members(members)
             for member in groups[state.entity_id]:
                 member_of.setdefault(member, []).append(state.entity_id)
         lights, entities = [], []
@@ -430,7 +504,7 @@ class HaloManager:
             entity_id = state.entity_id
             attributes = dict(state.attributes)
             if isinstance(attributes.get("entity_id"), _GROUP_MEMBER_TYPES):
-                attributes["entity_id"] = groups[entity_id].copy()
+                attributes["entity_id"] = visible_members(attributes["entity_id"])
             item = {
                 "entity_id": entity_id,
                 "name": state.name,

@@ -175,3 +175,42 @@ def test_color_and_service_data_validation():
             {"light.floor": {"state": "on", "entity_id": "light.outside"}},
             ["light.floor"],
         )
+
+
+@pytest.mark.parametrize(
+    "settings",
+    [
+        {"brightness": 123, "effect": "candle", "color_mode": "brightness"},
+        {"rgbw_color": [20, 30, 40, 50], "color_mode": "rgbw"},
+        {"rgbww_color": [20, 30, 40, 50, 60], "color_mode": "rgbww"},
+        {"brightness": 87, "color_mode": "white"},
+        {"white": 87},
+        {"effect": "off"},
+    ],
+)
+def test_native_light_settings_are_preserved(settings):
+    value = {"light.floor": {"state": "on", **settings}}
+    assert validate_lamp_states(value, ["light.floor"]) == value
+
+
+@pytest.mark.parametrize(
+    "settings",
+    [
+        {"effect": ["candle"]},
+        {"brightness": 256},
+        {"brightness": 123.5},
+        {"brightness": 123, "brightness_pct": 50},
+        {"rgbw_color": [1, 2, 3]},
+        {"rgbww_color": [1, 2, 3, 4, float("nan")]},
+        {"color_mode": "unknown"},
+        {"color_mode": "white", "rgb_color": [1, 2, 3]},
+        {"white": True},
+        {"effect_list": ["candle", "off"]},
+        {"rgbw_color": [1, 2, 3, 4], "rgb_color": [1, 2, 3]},
+    ],
+)
+def test_native_light_validation_rejects_ambiguous_or_read_only_data(settings):
+    with pytest.raises(ValueError):
+        validate_lamp_states(
+            {"light.floor": {"state": "on", **settings}}, ["light.floor"]
+        )

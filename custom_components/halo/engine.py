@@ -22,7 +22,12 @@ from homeassistant.util import dt as dt_util
 
 from .conditions import UNAVAILABLE, condition_entities, evaluate_condition, number
 from .models import ROOM_DEFAULTS
-from .natural import lamp_parameters, natural_values, supports_brightness
+from .natural import (
+    capture_lamp_state,
+    lamp_parameters,
+    natural_values,
+    supports_brightness,
+)
 
 _LOGGER = logging.getLogger(__name__)
 _LIGHT_ATTRIBUTES = (
@@ -34,6 +39,7 @@ _LIGHT_ATTRIBUTES = (
     "hs_color",
     "xy_color",
     "color_mode",
+    "effect",
 )
 _EDIT_TTL = 120
 
@@ -226,8 +232,14 @@ class HaloRoomEngine:
             return False
         if fading_off:
             target = {**target, "brightness_pct": 0}
-        color_fields = set(_LIGHT_ATTRIBUTES) - {"brightness", "color_mode"}
-        primary_color = next((key for key in color_fields if key in target), None)
+        if "white" in target:
+            target = {**target, "brightness": target["white"]}
+        color_fields = set(_LIGHT_ATTRIBUTES) - {"brightness", "color_mode", "effect"}
+        primary_color = (
+            "white"
+            if "white" in target
+            else next((key for key in color_fields if key in target), None)
+        )
         changed = [
             key
             for key in _LIGHT_ATTRIBUTES
@@ -235,6 +247,15 @@ class HaloRoomEngine:
         ]
         for key in changed:
             if key == "color_mode":
+                continue
+            if (
+                key in color_fields
+                and "effect" in target
+                and new.attributes.get("effect") == target["effect"]
+                and new.attributes.get("color_mode") in ("onoff", "brightness")
+            ):
+                # An effect can replace native color control with on/off or
+                # brightness only, clearing the formerly exposed colors.
                 continue
             if primary_color and key in color_fields and key != primary_color:
                 # HA exposes derived HS/XY/RGB values alongside native white or
@@ -252,7 +273,10 @@ class HaloRoomEngine:
                     return False
             elif key in target:
                 value, goal = new.attributes.get(key), target[key]
-                if isinstance(goal, (int, float)):
+                if isinstance(goal, str):
+                    if value != goal:
+                        return False
+                elif isinstance(goal, (int, float)):
                     previous = number(old.attributes.get(key))
                     value = number(value)
                     if (
@@ -520,6 +544,10 @@ class HaloRoomEngine:
                         "xy_color",
                         "rgbw_color",
                         "rgbww_color",
+                        "color_mode",
+                        "brightness",
+                        "white",
+                        "effect",
                     )
                 }
                 targets[entity_id].update(values)
@@ -680,20 +708,7 @@ class HaloRoomEngine:
                 await self._restore_edit()
                 self._edit = None
             self._require_no_editor()
-            snapshot = {}
-            for entity_id in self.room["lights"]:
-                if not (state := self._available_state(entity_id)):
-                    continue
-                item: dict[str, Any] = {"state": state.state}
-                if (
-                    brightness := number(state.attributes.get("brightness"))
-                ) is not None:
-                    item["brightness_pct"] = brightness * 100 / 255
-                mode = state.attributes.get("color_mode")
-                key = "color_temp_kelvin" if mode == "color_temp" else f"{mode}_color"
-                if key in state.attributes and state.attributes[key] is not None:
-                    item[key] = deepcopy(state.attributes[key])
-                snapshot[entity_id] = item
+            snapshot = self.capture_lights()
             token = token_urlsafe(32)
             self._edit = {
                 "token": token,
@@ -703,6 +718,27 @@ class HaloRoomEngine:
             }
             await self._evaluate("edit")
             return token
+
+    def capture_lights(
+        self, fallback: dict | None = None, *, entities: list[str] | None = None
+    ) -> dict[str, dict[str, Any]]:
+        """Capture real room lights while retaining known unavailable targets only.
+
+        The manager invokes this synchronously inside the editor's commit lock.
+        No availability failure is converted into an invented off state.
+        """
+        previous = self._edit["snapshot"] if self._edit else {}
+        previous = previous | (fallback or {})
+        result = {}
+        for entity_id in self.room["lights"]:
+            if entities is not None and entity_id not in entities:
+                continue
+            if state := self._available_state(entity_id):
+                if state.state in ("on", "off"):
+                    result[entity_id] = capture_lamp_state(state)
+            elif entity_id in previous:
+                result[entity_id] = deepcopy(previous[entity_id])
+        return result
 
     def _check_editor(self, token: str) -> None:
         if (

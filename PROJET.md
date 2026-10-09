@@ -81,6 +81,8 @@ Cela comprend les groupes Philips Hue v1 et v2 : un marqueur de groupe ou les m�
 
 Tous les sélecteurs d’entités proposent une recherche immédiate par nom ou identifiant, insensible à la casse et aux accents. Cela couvre notamment la présence, la luminosité, le soleil et les conditions de scènes. Les listes de lampes de la pièce, des associations naturelles, de l’ambiance de base et des scènes sont également filtrables. Abandonner une recherche ne modifie pas la sélection enregistrée.
 
+**Demande de sélecteurs natifs partout : étudiée, non implémentée.** Aucun mécanisme public de chargement du sélecteur natif dans un panneau personnalisé n’a été identifié dans les documents et sources examinés. Les voies documentées concernent les formulaires natifs et l’éditeur de configuration des cartes. Pour respecter la contrainte de ne pas introduire de solution fragile, les sélecteurs Halo actuels sont conservés ; aucun chargement indirect de Lovelace ni import de fichier interne compilé n’est ajouté. [Diagnostic et alternatives](docs/ARCHITECTURE.md#sélecteurs-dentités-natifs).
+
 - Une lampe appartient à une seule pièce Halo.
 - Dans cette pièce, elle appartient au maximum à une association de profil naturel.
 - Les lumières générées par Halo sont exclues des sélections, afin d’éviter les boucles de commande.
@@ -172,13 +174,15 @@ Chaque profil définit deux courbes indépendantes :
 Chaque courbe propose un **type de courbe** :
 
 - **Linéaire**, sélectionné par défaut : la valeur évolue à rythme constant par degré de hauteur solaire.
-- **Accélération progressive** : la valeur évolue lentement depuis la hauteur solaire basse, puis de plus en plus vite vers la hauteur haute. Cette progression suit une courbe quadratique.
+- **Accélération et décélération progressives** : la valeur démarre doucement, accélère au milieu puis ralentit à l’approche de la hauteur haute. La courbe en S rejoint les deux plateaux sans rupture de pente. Ce comportement remplace l’accélération quadratique initiale, conformément au retour sur le graphique.
 
 Le choix est indépendant pour la luminosité et la température du blanc. Il concerne la relation entre hauteur solaire et valeur cible, pas la durée d’une transition de lampe. Au soleil descendant, la même courbe se parcourt dans l’autre sens. Les valeurs restent aux limites au-delà des deux hauteurs configurées. Les hauteurs solaires conservent leur précision décimale. Les paramètres incohérents empêchant le calcul doivent être signalés lors de la configuration. Les profils déjà enregistrés sans type de courbe conservent leur comportement linéaire.
 
 La case **« Lier le matin et le soir »** est cochée par défaut. Elle partage les courbes entre soleil montant et descendant. Décochée, elle permet de régler les deux périodes distinctement. L’éditeur présente un aperçu graphique des courbes.
 
 Le type de courbe suit ce même fonctionnement : partagé lorsque matin et soir sont liés, configurable séparément pour chaque période lorsqu’ils sont dissociés. L’aperçu représente immédiatement le type sélectionné et les valeurs calculées par le moteur.
+
+Les profils déjà réglés sur l’ancienne accélération progressive adoptent cette correction en S ; les profils linéaires et ceux sans type explicite restent linéaires. La normalisation se fait en mémoire et ne déclenche pas à elle seule une écriture ; une sauvegarde ultérieure de configuration ou d’état d’exécution conserve le nouvel identifiant.
 
 Les graduations horizontales de cet aperçu correspondent aux deux hauteurs solaires configurées, à leur position exacte sur la courbe, et non aux extrémités des marges du graphique. Les plateaux et les valeurs décimales restent visibles.
 
@@ -209,9 +213,19 @@ Si le soleil devient indisponible, les ajustements naturels sont suspendus ; auc
 
 ### Création et conditions
 
-Les scènes sont créées et enregistrées dans Halo. Elles décrivent l’état souhaité des lumières sélectionnées dans leur pièce, avec des contrôles adaptés aux capacités de chaque lampe : marche/arrêt, variation, température du blanc ou couleur.
+Les scènes sont créées et enregistrées dans Halo. Elles décrivent l’état souhaité des lumières sélectionnées dans leur pièce : marche/arrêt, variation, température du blanc, couleur et effet lorsque la lampe l’expose à Home Assistant.
 
 L’éditeur de conditions propose les états d’entités, seuils numériques, horaires et conditions solaires, combinables avec **ET**, **OU** et **NON**, sans YAML obligatoire.
+
+### Import depuis Home Assistant
+
+**Implémenté ; vérifié dans Home Assistant 2026.10.0 isolé avec des lampes simulées.** Un administrateur peut importer la configuration d’une scène Home Assistant dans une pièce Halo. Une recherche permet de choisir la scène ; le panneau présente les lampes retenues, le nombre d’entités ignorées et un nom modifiable avant confirmation. La copie est ajoutée en dernière position au brouillon de la pièce, sans condition et sans autorisation d’allumage automatique, puis enregistrée ou abandonnée avec la barre habituelle. Son lancement est disponible après enregistrement.
+
+Seuls les identifiants de lampes explicitement sélectionnées dans la pièce sont repris. Les groupes ne sont pas développés et aucune correspondance avec leurs membres n’est déduite. Une scène sans lampe commune est refusée. Les lampes absentes de la scène restent inchangées à son lancement ; elles ne sont pas ajoutées automatiquement lorsqu’on rouvre l’éditeur.
+
+L’import conserve les réglages reproductibles enregistrés dans la source, effets compris. Il ne commande aucune lampe, ne modifie jamais la scène source et ne crée aucune synchronisation ultérieure. La scène Halo possède son propre identifiant.
+
+Le périmètre est celui de l’API de configuration utilisée par l’éditeur Home Assistant : scènes dans `scenes.yaml` avec un identifiant, notamment celles créées depuis son interface. Les scènes temporaires, le YAML placé ailleurs et les scènes directement fournies par d’autres intégrations sont signalés comme non importables lorsque leurs réglages ne sont pas accessibles. Cette API du cœur n’est pas un contrat public garanti stable ; sa compatibilité doit être vérifiée avec la version Home Assistant prise en charge.
 
 ### Ordre de priorité
 
@@ -249,6 +263,12 @@ Chaque scène est également exposée comme entité `scene` Home Assistant. Son 
 ## 10. Édition des scènes en direct
 
 L’utilisateur règle les lampes réelles depuis le dashboard et voit le résultat dans sa pièce. Seules les lampes sélectionnées dans cette pièce sont proposées.
+
+**Implémenté ; vérifié dans Home Assistant local avec des lampes simulées :** chaque lampe apparaît dans une liste Halo recherchable ; un clic ouvre la véritable fenêtre de contrôle Home Assistant, comme dans son éditeur de scènes. L’ouverture utilise l’action publique `more-info` via `hass-action`. Halo n’importe pas les composants privés de cet éditeur et ne copie pas leurs contrôles. HACS assure la distribution, pas la fourniture de ces composants. Les essais sur les équipements du logement restent à effectuer.
+
+À l’enregistrement, le serveur capture les états réels des lampes : état, luminosité native, mode de couleur et valeur correspondante (y compris RGBW/RGBWW et blanc simple), ainsi que l’effet actif. Les représentations de couleur dérivées ne sont pas envoyées simultanément. La garantie porte sur les réglages reproductibles remontés par l’entité `light` ; les informations de capacité, les impulsions temporaires et les fonctions propriétaires non remontées ne constituent pas des paramètres de scène. Une lampe éteinte est restaurée sans rallumage temporaire. Une lampe indisponible conserve son réglage mémorisé s’il existe ; aucune extinction artificielle n’est enregistrée.
+
+L’éditeur propose une inclusion explicite par lampe. Pour une scène existante, seules ses lampes sont incluses au départ ; une nouvelle scène manuelle inclut initialement toutes les lampes de la pièce. Seules les lampes incluses sont capturées à l’enregistrement. Une lampe exclue ne reçoit aucune commande de la scène.
 
 - Toute automatisation de la pièce est temporairement suspendue, y compris l’extinction sur absence ou luminosité.
 - L’état initial est mémorisé.
@@ -373,13 +393,22 @@ Ces valeurs remplacent les choix initiaux (absence 120 secondes, pause 15 minute
 | A33 | Afficher les transitions avec des titres de longueurs différentes, globalement et par pièce. | Champs alignés dans chaque rangée, y compris après un changement de largeur. |
 | A34 | Afficher des groupes Philips Hue v1/v2, dont un groupe sans membres exposés. | Nature du groupe reconnue ; seuls les membres connus et autorisés sont affichés. |
 | A35 | Choisir le type de chaque courbe, enregistrer et recharger ; ouvrir un ancien profil sans type. | Choix indépendants conservés, ancien profil linéaire, valeur inconnue rejetée par le serveur. |
-| A36 | Comparer linéaire et accélération progressive aux seuils et à mi-parcours, sur des courbes croissantes ou décroissantes. | Valeurs limites inchangées ; à mi-parcours solaire, 50 % du chemin entre les valeurs en linéaire contre 25 % en accélération progressive ; aperçu et moteur concordants. |
+| A36 | Comparer linéaire et progression en S aux seuils, aux quarts et à mi-parcours, sur des courbes croissantes ou décroissantes. | Valeurs limites inchangées ; progression en S de 15,625 %, 50 % puis 84,375 % aux quarts du parcours solaire, avec ralentissement aux deux extrémités ; aperçu et moteur concordants. |
+| A37 | Cliquer sur une lampe pendant l’édition de scène et choisir un effet dans Home Assistant. | Véritable fenêtre native ouverte par l’action publique ; état et effet remontés visibles dans Halo ; automatisation suspendue. |
+| A38 | Enregistrer puis recharger et relancer une scène avec effet, couleurs RGBW/RGBWW ou blanc simple. | Capture serveur des valeurs actives ; effet et canaux blancs conservés ; aucune couleur dérivée concurrente envoyée. |
+| A39 | Annuler ou laisser expirer une édition native ; rendre une lampe indisponible pendant la sauvegarde. | État initial reproductible restauré, effets compris ; lampe éteinte sans rallumage temporaire ; réglages connus préservés en cas d’indisponibilité. |
+| A40 | Importer une scène Home Assistant comportant deux lampes de la pièce, une lampe extérieure et un autre domaine. | Deux lampes retenues, deux entités ignorées ; nom modifiable et copie indépendante, sans activation de la source ni commande pendant l’import et sa sauvegarde. |
+| A41 | Lancer une scène importée, puis la rouvrir et l’enregistrer sans changer les inclusions. | Seules les lampes incluses sont commandées et capturées ; les autres restent inchangées et ne sont pas ajoutées à la scène. |
+| A42 | Importer des états simples, des booléens YAML, des effets et plusieurs représentations de couleur. | Valeurs normalisées selon le mode actif ou la priorité native ; effets et canaux blancs conservés ; aucun attribut descriptif envoyé aux lampes. |
+| A43 | Importer sans correspondance, avec une source inaccessible ou invalide ; annuler ou provoquer un conflit de sauvegarde. | Erreur explicite sans commande ni copie enregistrée ; droits serveur respectés et brouillon préservé. |
 
 Pour chaque scénario réalisé, consigner son résultat, la version examinée et le périmètre : test automatisé, essai d’interface ou essai sur des lumières réelles. Une fonctionnalité implémentée n’est pas automatiquement validée dans Home Assistant.
 
 ## 15. Suivi, décisions et publication
 
 Chaque évolution met à jour dans la même tâche la spécification, le statut d’implémentation et les preuves de vérification. Les idées nouvelles restent explicitement proposées jusqu’à leur adoption. Les règles d’interface sont reportées dans `DESIGN.md` et les capacités livrées dans le README.
+
+Le choix des contrôles natifs de scène repose sur les [mécanismes officiels vérifiés et leurs limites](docs/ARCHITECTURE.md#contrôles-natifs-des-lampes-dans-les-scènes). Aucun détournement de composant interne n’est retenu.
 
 | Date | Décision | Conséquence |
 | --- | --- | --- |

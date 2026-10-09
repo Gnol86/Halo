@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createId, dimmable, interpolate, moveItem, newProfile, newRoom, optionalNumber } from "../src/model";
+import { createId, curveInterpolation, dimmable, interpolate, moveItem, newProfile, newRoom, optionalNumber } from "../src/model";
 import { en, fr, language, translate } from "../src/translations";
 import type { Curve } from "../src/types";
 
@@ -43,17 +43,29 @@ test("curve preview preserves fractional elevation, interpolates and clamps", ()
   }
 });
 
-test("gradual acceleration follows solar elevation quadratically for increasing, decreasing and constant values", () => {
+test("S-curves ease both ends and stay symmetric for increasing, decreasing and constant values", () => {
   for (const [low, high] of [[20, 100], [6500, 2200], [42, 42]]) {
-    const curve: Curve = { low_elevation: -6.25, high_elevation: 45.25, low, high, interpolation: "ease_in" };
+    const curve: Curve = { low_elevation: -6.25, high_elevation: 45.25, low, high, interpolation: "ease_in_out" };
     const midpoint = (curve.low_elevation + curve.high_elevation) / 2;
-    assert.equal(interpolate(curve, midpoint), low + (high - low) / 4);
+    const span = curve.high_elevation - curve.low_elevation;
+    for (const [progress, eased] of [[0, 0], [.25, .15625], [.5, .5], [.75, .84375], [1, 1]]) {
+      const elevation = curve.low_elevation + span * progress;
+      assert.equal(interpolate(curve, elevation), low + (high - low) * eased);
+      assert.equal(interpolate({ ...curve, interpolation: "ease_in" }, elevation), interpolate(curve, elevation));
+    }
     assert.equal(interpolate(curve, -90), low);
     assert.equal(interpolate(curve, curve.low_elevation), low);
     assert.equal(interpolate(curve, curve.high_elevation), high);
     assert.equal(interpolate(curve, 90), high);
     assert.equal(interpolate({ ...curve, interpolation: "linear" }, midpoint), low + (high - low) / 2);
   }
+});
+
+test("legacy acceleration resolves to the S-curve without mutating stored input", () => {
+  const curve: Curve = { low_elevation: 0, high_elevation: 10, low: 0, high: 100, interpolation: "ease_in" };
+  assert.equal(curveInterpolation(curve), "ease_in_out");
+  assert.equal(curve.interpolation, "ease_in");
+  assert.equal(curveInterpolation({ ...curve, interpolation: undefined }), "linear");
 });
 
 test("transition blank differs from an explicit immediate transition", () => {

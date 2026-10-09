@@ -97,6 +97,42 @@ async def test_runtime_does_not_write_unchanged_snapshots(hass):
         save.assert_not_called()
 
 
+async def test_scene_captures_real_state_after_acquiring_editor_lock(hass):
+    _, area, manager = await configured(hass)
+    token = await manager.async_begin_edit(area.id, "owner")
+    engine = manager.engines[area.id]
+    await engine._lock.acquire()
+    try:
+        save = hass.async_create_task(
+            manager.async_end_edit(
+                area.id,
+                token,
+                "owner",
+                True,
+                {"id": "native", "name": "Native", "lights": {}},
+                manager.revision,
+                capture=True,
+            )
+        )
+        await asyncio.sleep(0)
+        assert not save.done()
+        hass.states.async_set(
+            "light.bulb",
+            "on",
+            {
+                "brightness": 201,
+                "color_mode": "brightness",
+                "supported_color_modes": ["brightness"],
+            },
+        )
+    finally:
+        engine._lock.release()
+    await save
+    assert manager.config["rooms"][area.id]["scenes"][0]["lights"] == {
+        "light.bulb": {"state": "on", "brightness": 201, "color_mode": "brightness"}
+    }
+
+
 async def test_snapshot_during_write_is_consistent(hass, hass_admin_user):
     _, _, manager = await configured(hass)
     new_area = ar.async_get(hass).async_create("Bedroom")
@@ -225,6 +261,39 @@ async def test_light_catalogue_identifies_groups_and_direct_membership(
         "light.bulb",
         "light.other",
     ]
+
+
+@pytest.mark.parametrize("member_type", [list, tuple, set, frozenset])
+async def test_scene_references_are_filtered_without_creating_group_membership(
+    hass, member_type
+):
+    _, _, manager = await configured(hass)
+    members = member_type(["light.bulb", "light.secret"])
+    hass.states.async_set("light.secret", "off")
+    hass.states.async_set("scene.native", "unknown", {"entity_id": members})
+    hass.states.async_set("script.scene_like", "off", {"entity_id": members})
+    hass.states.async_set("group.room", "off", {"entity_id": members})
+    user = MockUser().add_to_hass(hass)
+    user.mock_policy(
+        {
+            "entities": {
+                "entity_ids": {
+                    "light.bulb": True,
+                    "scene.native": True,
+                    "script.scene_like": True,
+                    "group.room": True,
+                }
+            }
+        }
+    )
+    snapshot = manager.snapshot(user)
+    assert len(snapshot["lights"]) == 1
+    assert snapshot["lights"][0]["member_of"] == ["group.room"]
+    entities = {entity["entity_id"]: entity for entity in snapshot["entities"]}
+    for entity_id in ("scene.native", "script.scene_like", "group.room"):
+        assert entities[entity_id]["attributes"]["entity_id"] == ["light.bulb"]
+        assert hass.states.get(entity_id).attributes["entity_id"] == members
+    assert "light.secret" not in repr(snapshot)
 
 
 @pytest.mark.parametrize("member_type", [list, tuple, set, frozenset])

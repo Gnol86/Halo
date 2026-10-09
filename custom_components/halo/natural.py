@@ -5,6 +5,7 @@ from __future__ import annotations
 from math import isfinite
 from typing import Any
 
+from homeassistant.components.light import LightEntityFeature
 from homeassistant.core import State
 from homeassistant.util import color
 
@@ -22,8 +23,9 @@ def interpolate(curve: dict[str, Any], elevation: float) -> float:
         0.0, min(1.0, (elevation - low_elevation) / (high_elevation - low_elevation))
     )
     interpolation = curve.get("interpolation", "linear")
-    if interpolation == "ease_in":
-        fraction *= fraction
+    if interpolation in ("ease_in", "ease_in_out"):
+        # Keep old profiles compatible while correcting both ends of the curve.
+        fraction = fraction * fraction * (3 - 2 * fraction)
     elif interpolation != "linear":
         raise ValueError("Unknown curve interpolation")
     return low + (high - low) * fraction
@@ -74,11 +76,25 @@ def lamp_parameters(state: State, desired: dict[str, Any]) -> dict[str, Any]:
     """Filter and adapt requested attributes before calling light.turn_on."""
     modes = set(state.attributes.get("supported_color_modes", ()))
     result: dict[str, Any] = {}
-    if supports_brightness(state) and "brightness_pct" in desired:
-        result["brightness_pct"] = max(
-            0.0, min(100.0, float(desired["brightness_pct"]))
-        )
-    if "color_temp_kelvin" in desired:
+    if supports_brightness(state):
+        if "brightness" in desired:
+            result["brightness"] = max(0, min(255, int(desired["brightness"])))
+        elif "brightness_pct" in desired:
+            result["brightness_pct"] = max(
+                0.0, min(100.0, float(desired["brightness_pct"]))
+            )
+    if "effect" in desired and (
+        state.attributes.get("supported_features", 0) & LightEntityFeature.EFFECT
+    ):
+        result["effect"] = desired["effect"]
+    if "white" in modes and (
+        "white" in desired or desired.get("color_mode") == "white"
+    ):
+        if "white" in desired or "brightness" in desired:
+            result["white"] = desired.get("white", desired.get("brightness"))
+        elif "brightness_pct" in desired:
+            result["white"] = round(desired["brightness_pct"] * 255 / 100)
+    elif "color_temp_kelvin" in desired:
         kelvin = float(desired["color_temp_kelvin"])
         if "color_temp" in modes:
             minimum = state.attributes.get("min_color_temp_kelvin")
@@ -112,4 +128,41 @@ def lamp_parameters(state: State, desired: dict[str, Any]) -> dict[str, Any]:
             result.update(
                 _rgb_command(color.color_xy_to_RGB(*desired["xy_color"]), modes)
             )
+    return result
+
+
+def capture_lamp_state(state: State) -> dict[str, Any]:
+    """Retain reproducible light attributes, including the active native color."""
+    result: dict[str, Any] = {"state": state.state}
+    for key in ("brightness", "effect"):
+        if (value := state.attributes.get(key)) is not None:
+            result[key] = value
+    mode = state.attributes.get("color_mode")
+    color_attributes = {
+        "color_temp": "color_temp_kelvin",
+        "hs": "hs_color",
+        "rgb": "rgb_color",
+        "rgbw": "rgbw_color",
+        "rgbww": "rgbww_color",
+        "xy": "xy_color",
+    }
+    if mode in (*color_attributes, "white", "brightness", "onoff"):
+        result["color_mode"] = mode
+        key = color_attributes.get(mode)
+        if key and (value := state.attributes.get(key)) is not None:
+            result[key] = list(value) if isinstance(value, (list, tuple)) else value
+    else:
+        # Older integrations may omit color_mode. Prefer native white channels
+        # over their approximate RGB/HS/XY attributes when choosing a fallback.
+        for key in (
+            "color_temp_kelvin",
+            "rgbww_color",
+            "rgbw_color",
+            "rgb_color",
+            "hs_color",
+            "xy_color",
+        ):
+            if (value := state.attributes.get(key)) is not None:
+                result[key] = list(value) if isinstance(value, (list, tuple)) else value
+                break
     return result

@@ -2,11 +2,17 @@ export type Transition = "turn_on" | "lux_on" | "natural" | "scene" | "turn_off"
 export type Transitions = Record<Transition, number | null | "inherit">;
 export interface LampState {
   state: "on" | "off";
+  brightness?: number;
   brightness_pct?: number;
+  color_mode?: string;
   color_temp_kelvin?: number;
   rgb_color?: number[];
+  rgbw_color?: number[];
+  rgbww_color?: number[];
   hs_color?: number[];
   xy_color?: number[];
+  white?: number;
+  effect?: string;
 }
 export type Condition =
   | { type: "and" | "or"; conditions: Condition[] }
@@ -22,8 +28,9 @@ export interface Scene {
   conditions: Condition | null;
   lights: Record<string, LampState>;
 }
-export type CurveInterpolation = "linear" | "ease_in";
-export interface Curve { low_elevation: number; high_elevation: number; low: number; high: number; interpolation?: CurveInterpolation }
+export type CurveInterpolation = "linear" | "ease_in_out";
+// ease_in is accepted when reading a profile saved before the S-curve correction.
+export interface Curve { low_elevation: number; high_elevation: number; low: number; high: number; interpolation?: CurveInterpolation | "ease_in" }
 export interface Curves { brightness: Curve; temperature: Curve }
 export interface Profile { id: string; name: string; linked: boolean; morning: Curves; evening: Curves }
 export interface Association { profile_id: string; lights: string[]; brightness_offset: number }
@@ -86,5 +93,6 @@ export interface Hass {
   locale?: { language?: string };
   states?: Record<string, { state: string; attributes: Record<string, unknown> }>;
   callWS<T>(message: Record<string, unknown>): Promise<T>;
+  callApi<T>(method: "GET", path: string): Promise<T>;
   connection: { subscribeMessage<T>(callback: (event: T) => void, message: Record<string, unknown>): Promise<() => void> };
 }

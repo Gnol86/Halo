@@ -51,7 +51,48 @@ Le bundle dans `custom_components/halo/frontend/` doit rester synchronisé avec 
 
 Avant une release utilisable, effectuer également un essai dans une instance Home Assistant de test : installation manuelle, rendu du panneau et du lotus en thèmes clair et sombre, textes français et anglais, pilotage des lampes réelles, redémarrage et suppression. Les tests Python ne valident pas le rendu intégré de l’interface.
 
+## Import de scènes Home Assistant — 9 octobre 2026
+
+L’import utilise la lecture REST du cœur employée par l’éditeur natif, puis la normalisation administrateur `halo/scene/import`. Il crée une copie indépendante dans le brouillon de la pièce. Les lampes non incluses restent inchangées au lancement ; les cases d’inclusion et `capture_entities` préservent cette sélection à la réédition.
+
+- **219 tests Python et 43 tests frontend réussis**, synchronisation uv, installation npm, Ruff et TypeScript conformes. Couverture du filtrage exact, droits, booléens YAML, états éteints, effets, couleurs natives et RGBW/RGBWW, indisponibilités, sélection partielle, concurrence, réponses tardives, annulation et conflits. L’ajout et la sauvegarde de scènes manuelles seuls ne forcent pas de commande, même avec les automatismes activés.
+- Parcours dans une **instance Home Assistant 2026.10.0 isolée**, frontend officiel **20260930.2**, cinq lampes simulées : la source comporte deux lampes de la pièce, une extérieure et une autre entité. L’aperçu affiche **deux lampes retenues et deux entités ignorées**. Renommer la copie en « Lecture Halo », confirmer puis enregistrer laisse tous les compteurs de commandes à zéro. Le fichier source reste inchangé.
+- Le lancement de la copie puis sa réouverture et son enregistrement n’envoient des commandes qu’aux deux lampes retenues. Le stockage conserve `Candle`, la luminosité `191` et la température `2700 K` pour la première, la luminosité `112` et RGBW `[200, 60, 10, 44]` pour la seconde. Les deux autres lampes de la pièce et celle extérieure restent inchangées, compteurs à zéro. Les cases d’inclusion reflètent exactement les deux membres.
+- Source sans identifiant et absence de lampe commune : messages explicites et confirmation désactivée dans le panneau. Source introuvable : HTTP 404 vérifié via l’API. Une copie non enregistrée est ajoutée en dernière position, avec son nom saisi, puis supprimée par l’abandon du brouillon ; son lancement reste désactivé jusqu’à la sauvegarde.
+- Après redémarrage de l’instance isolée, la configuration et la copie enregistrée restent identiques. La vérification a également corrigé une confusion entre les références `entity_id` des scènes natives et les groupes de lampes ; les permissions de lecture restent appliquées.
+- Formulaire examiné en français à la taille habituelle et à **375 × 812** / **768 × 1024** : champs et actions accessibles par défilement, sans débordement horizontal observé. Les cas anglais/français et la parité des catalogues sont couverts par les tests frontend. Captures et preuves API conservées dans le répertoire local ignoré `tmp/`.
+- Bundle reconstruit sous Node.js 24 et reproduction à l’identique vérifiée. `PROJET.md`, `DESIGN.md`, `README.md` et les contrats techniques actualisés.
+- Instance et onglet de test fermés, port local vérifié fermé. Le harness retourne encore `139` après son arrêt, sans nouveau traceback Halo ; sa fermeture normale n’est donc pas confirmée.
+
+La compatibilité vérifiée concerne les scènes lisibles dans `scenes.yaml` avec un identifiant. Cette API du cœur n’est pas un contrat public stable. Aucun déploiement dans le logement ni commande aux équipements réels ; leur validation reste à faire.
+
+## Courbes en S et étude des sélecteurs natifs — 9 octobre 2026
+
+Le retour sur l’accélération progressive remplace la courbe quadratique initiale par `t²(3 − 2t)` : départ doux, accélération au milieu, décélération à l’arrivée. Le mode canonique est `ease_in_out`. Les anciens `ease_in` sont normalisés, y compris les branches du soir masquées ; la normalisation n’écrit pas directement dans le stockage. Une persistance ultérieure de configuration ou de runtime peut conserver le nouvel identifiant.
+
+- **172 tests Python et 34 tests frontend réussis**, Ruff et TypeScript conformes. Parité des calculs, quarts/milieu/bornes, valeurs croissantes ou décroissantes, compatibilité historique et indépendance des transitions vérifiées.
+- Aperçu isolé en navigateur avec données simulées : sélection « Accélération et décélération » pour luminosité et température, deux courbes en S raccordées aux plateaux, seuils décimaux conservés et choix maintenus après sauvegarde. Cet essai des courbes n’utilise pas l’instance domestique.
+- Bundle reconstruit et cohérence documentaire vérifiée. Les tests de l’édition native des scènes restent inclus dans les résultats ci-dessus.
+- Sélecteurs d’entités natifs : recherche documentaire et lecture des sources officielles réalisées. Aucun mécanisme public de chargement dans le panneau identifié ; remplacement **non implémenté**, conformément à la contrainte de ne pas introduire de chargement fragile. Voir le [diagnostic détaillé](ARCHITECTURE.md#sélecteurs-dentités-natifs).
+
+## Édition native des scènes et effets — 9 octobre 2026
+
+Le panneau ouvre la vraie fenêtre de contrôle d’une lampe avec l’action publique `hass-action` / `more-info`. La liste reste dans Halo. Aucune copie de composant privé ni interception des commandes du frontend n’est utilisée. Les sources officielles étudiées et la distinction avec la distribution HACS sont consignées dans [ARCHITECTURE.md](ARCHITECTURE.md#contrôles-natifs-des-lampes-dans-les-scènes).
+
+- **168 tests Python réussis**, avec une limite de 45 secondes par test ; synchronisation uv, Ruff et formatage conformes. Capture au moment du commit sous verrou, droits et propriétaire, révision, conservation après rechargement et rappel, effets, luminosité native, RGBW/RGBWW, blanc simple, annulation/expiration et indisponibilités couverts.
+- **33 tests frontend réussis**, TypeScript conforme. Événement public, attente de l’aperçu initial, sauvegarde avec capture serveur sans aperçu périmé, état/effet réel, traductions, expiration et fermeture pendant l’ouverture de session couverts.
+- Essai dans une **instance Home Assistant 2026.10.0 isolée sur la boucle locale**, avec son **frontend officiel 20260930.2** et quatre entités `LightEntity` simulées. Arrivée directe sur `/halo`, sans ouverture préalable de Lovelace ; clic ouvrant la fenêtre native, sélection de l’effet `Candle`, retour visible dans Halo et sauvegarde vérifiés. Le stockage contient la luminosité native `153`, l’effet `Candle`, la température `3200 K`, les canaux RGBW/RGBWW des autres lampes et le mode blanc simple.
+- Une nouvelle édition remplace temporairement `Candle` par `Rainbow` ; **Annuler** restaure `Candle / 153 / 3200 K`. L’API confirme ensuite `editing=false`, automatismes toujours désactivés et aucune erreur de pièce.
+- Après une commande officielle de test passant la lampe à l’effet `None` et à la luminosité `80`, **Lancer** dans Halo restaure `Candle / 153 / 3200 K`, les valeurs RGBW/RGBWW et le mode blanc. Aucune erreur Halo ajoutée aux journaux pendant ce parcours.
+- Le démarrage du harness a d’abord échoué sur les descriptions d’actions HA (`get_services`, dépendance `hassil` absente). Les dépendances officielles nécessaires ont été ajoutées dans un dossier temporaire isolé, sans changer le runtime ni les fichiers de dépendances du projet. Le parcours décrit ci-dessus utilise les composants officiels, sans simuler la fenêtre native.
+- Bundle reconstruit sous Node.js 24 et reproduction à l’identique vérifiée ; documentation produit, design, README et contrat API synchronisés. Le simulateur HTML signale explicitement qu’il ne fournit pas la fenêtre Home Assistant.
+- Instance de test arrêtée, port fermé et onglet temporaire fermé. Le processus du harness a retourné le code `139` après `SIGTERM`, sans nouveau diagnostic dans le journal ; l’arrêt effectif est confirmé, sa fermeture normale ne l’est pas.
+
+Pas de déploiement dans le logement ni de commande aux lampes réelles. La conservation concerne les réglages reproductibles remontés par chaque intégration `light`, pas ses fonctions propriétaires absentes de l’état Home Assistant.
+
 ## Types de courbes naturelles — 9 octobre 2026
+
+Historique de la première version, remplacée depuis par la correction en S décrite plus haut.
 
 Chaque courbe de luminosité et de température dispose d’un choix entre linéaire et accélération progressive quadratique. Le moteur et l’aperçu utilisent la même progression selon la hauteur solaire ; les transitions en secondes restent indépendantes. Les anciens profils sans choix explicite restent linéaires.
 

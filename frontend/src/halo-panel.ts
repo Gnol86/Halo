@@ -1,18 +1,19 @@
 import { LitElement, html, nothing, svg, type PropertyValues, type TemplateResult } from "lit";
 import { live } from "lit/directives/live.js";
-import { categories, createId, colorMode, dimmable, interpolate, moveItem, newCondition, newProfile, newRoom, optionalNumber } from "./model";
+import { categories, createId, colorMode, dimmable, curveInterpolation, interpolate, moveItem, newCondition, newProfile, newRoom, optionalNumber } from "./model";
 import { en, language, translate, type TranslationKey } from "./translations";
 import { styles } from "./styles";
 import { HaloEntityPicker, matchesEntity } from "./entity-picker";
 import type { Condition, Config, Curve, CurveInterpolation, Hass, LampState, Light, Profile, Room, Scene, Snapshot, Transition, Transitions } from "./types";
 
-type Editor = { roomId: string; token: string; scene: Scene; revision: number };
+type Editor = { roomId: string; token: string; scene: Scene; included: Set<string>; revision: number; ready: boolean };
+type SceneImport = { roomId: string; revision: number; entityId: string | null; loading: boolean; request: number; error: string; scene?: Scene; ignored?: number };
 type FieldOptions = { min?: number; max?: number; step?: number | "any"; required?: boolean; type?: string; unit?: string };
 
 export class HaloPanel extends LitElement {
   static properties = { hass: { attribute: false }, narrow: { type: Boolean }, snapshot: { state: true },
     draft: { state: true }, page: { state: true }, dirty: { state: true }, busy: { state: true },
-    error: { state: true }, notice: { state: true }, editor: { state: true }, search: { state: true } };
+    error: { state: true }, notice: { state: true }, editor: { state: true }, importer: { state: true }, search: { state: true } };
   static styles = styles;
   declare hass: Hass;
   narrow = false;
@@ -27,11 +28,11 @@ export class HaloPanel extends LitElement {
   private search = "";
   private lightSearches = new Map<string, string>();
   private editor?: Editor;
+  private importer?: SceneImport;
   private unsubscribe?: () => void;
   private connection?: Hass["connection"];
   private connectionGeneration = 0;
   private heartbeat?: ReturnType<typeof setInterval>;
-  private previewTimer?: ReturnType<typeof setTimeout>;
   private previewQueue: Promise<void> = Promise.resolve();
   private dragIndex?: number;
   private removeConfirmation?: string;
@@ -65,10 +66,12 @@ export class HaloPanel extends LitElement {
     this.connection = undefined;
     this.clearEditorTimers();
     this.editor = undefined;
+    this.importer = undefined;
   }
 
   private async connect() {
     const generation = ++this.connectionGeneration;
+    this.importer = undefined;
     this.unsubscribe?.();
     this.unsubscribe = undefined;
     this.connection = this.hass.connection;
@@ -157,7 +160,7 @@ export class HaloPanel extends LitElement {
     finally { this.busy = false; }
   }
 
-  private navigate(page: string) { this.page = page; this.search = ""; this.lightSearches.clear(); this.removeConfirmation = undefined; }
+  private navigate(page: string) { this.importer = undefined; this.page = page; this.search = ""; this.lightSearches.clear(); this.removeConfirmation = undefined; }
   private areaName(id: string) { return this.snapshot?.areas.find((area) => area.id === id)?.name ?? id; }
   private light(id: string): Light {
     return this.snapshot?.lights.find((light) => light.entity_id === id) ?? {
@@ -182,7 +185,9 @@ export class HaloPanel extends LitElement {
   }
 
   private entityField(label: TranslationKey, value: string | null, change: (value: string | null) => void, domain?: string, required = false) {
-    const entities = (this.snapshot?.entities ?? []).filter((entity) => !domain || entity.entity_id.startsWith(`${domain}.`));
+    const entities = (this.snapshot?.entities ?? []).filter((entity) => !domain || entity.entity_id.startsWith(`${domain}.`)).map((entity) =>
+      // A scene reports "unknown" until its first activation; its configuration can still be read.
+      domain === "scene" && entity.state === "unknown" ? { ...entity, state: undefined } : entity);
     return html`<halo-entity-picker .label=${this.t(label)} .locale=${this.locale} .entities=${entities} .value=${value} .required=${required}
       @entity-changed=${(event: CustomEvent<{ value: string | null }>) => change(event.detail.value)}></halo-entity-picker>`;
   }
@@ -215,7 +220,7 @@ export class HaloPanel extends LitElement {
             ${this.admin ? html`<button aria-current=${this.page === "global" ? "page" : nothing} ?disabled=${this.editing} @click=${() => this.navigate("global")}>${this.t("global")}</button>` : nothing}
           </nav>
           ${!this.admin ? html`<p class="help">${this.t("adminOnly")}</p>` : nothing}
-          ${this.editor ? this.renderEditor(this.editor) : this.page === "global" && this.admin ? this.renderGlobal() : this.page === "rooms" ? this.renderRooms() : this.renderRoom()}
+          ${this.editor ? this.renderEditor(this.editor) : this.importer && this.admin ? this.renderImport(this.importer) : this.page === "global" && this.admin ? this.renderGlobal() : this.page === "rooms" ? this.renderRooms() : this.renderRoom()}
         `}
       </main></div>
       ${this.dirty ? html`<div class="savebar" role="status"><span class="grow">${this.hasConflict ? this.t("conflict") : this.t("unsaved")}</span>
@@ -369,81 +374,189 @@ export class HaloPanel extends LitElement {
         @dragover=${(event: DragEvent) => { if (this.admin) event.preventDefault(); }}
         @drop=${(event: DragEvent) => { event.preventDefault(); if (this.admin && this.dragIndex != null) this.modifyRoom((current) => { current.scenes = moveItem(current.scenes, this.dragIndex!, index); }); this.dragIndex = undefined; }}>
         <span class="badge" aria-label=${this.t("priority")}>${index + 1}</span><strong class="grow">${scene.name}</strong><div class="actions">
-          <button ?disabled=${this.busy} @click=${() => this.command(room.id, "scene", { scene_id: scene.id })}>${this.t("run")}</button>
+          <button ?disabled=${this.busy || this.dirty} @click=${() => this.command(room.id, "scene", { scene_id: scene.id })}>${this.t("run")}</button>
           ${this.admin ? html`<button ?disabled=${this.busy || this.dirty} @click=${() => this.startEditor(room, scene)}>${this.t("editScene")}</button>
             <button aria-label=${`${this.t("up")} ${scene.name}`} ?disabled=${index === 0} @click=${() => this.modifyRoom((current) => { current.scenes = moveItem(current.scenes, index, index - 1); })}>↑</button>
             <button aria-label=${`${this.t("down")} ${scene.name}`} ?disabled=${index === room.scenes.length - 1} @click=${() => this.modifyRoom((current) => { current.scenes = moveItem(current.scenes, index, index + 1); })}>↓</button>
             <button aria-label=${`${this.t("remove")} ${scene.name}`} @click=${() => this.modifyRoom((current) => { current.scenes.splice(index, 1); })}>${this.t("remove")}</button>` : nothing}
         </div></div>`)}
-      ${this.admin ? html`<button ?disabled=${this.busy || this.dirty || room.lights.length === 0} @click=${() => this.startEditor(room)}>${this.t("createScene")}</button>
+      ${this.admin ? html`<div class="actions"><button ?disabled=${this.busy || this.dirty || room.lights.length === 0} @click=${() => this.startEditor(room)}>${this.t("createScene")}</button>
+        <button class="import-scene" ?disabled=${this.busy || this.dirty || room.lights.length === 0 || !this.snapshot?.config.rooms[room.id]} @click=${() => this.startImport(room)}>${this.t("importScene")}</button></div>
         ${this.dirty ? html`<p class="help">${this.t("editFirstSave")}</p>` : nothing}` : nothing}</section>`;
   }
 
-  private actualLampState(id: string): LampState {
-    const entity = this.hass.states?.[id] ?? this.snapshot?.entities.find((item) => item.entity_id === id);
+  private startImport(room: Room) {
+    if (!this.admin || this.busy || this.dirty || this.editor || !this.snapshot?.config.rooms[room.id] || !room.lights.length) return;
+    this.error = "";
+    this.notice = "";
+    this.importer = { roomId: room.id, revision: this.revision, entityId: null, loading: false, request: 0, error: "" };
+    void this.updateComplete.then(() => this.renderRoot.querySelector<HTMLElement>("#import-title")?.focus());
+  }
+
+  private closeImport() {
+    this.importer = undefined;
+    void this.updateComplete.then(() => this.renderRoot.querySelector<HTMLButtonElement>(".import-scene")?.focus());
+  }
+
+  private importChanged(importer: SceneImport) {
+    return !this.admin || this.dirty || importer.revision !== this.snapshot?.revision || !this.draft?.rooms[importer.roomId];
+  }
+
+  private async loadImport(importer: SceneImport, entityId: string | null) {
+    if (this.importer !== importer || !this.admin) return;
+    importer.entityId = entityId;
+    importer.scene = undefined;
+    importer.ignored = undefined;
+    importer.error = "";
+    importer.loading = false;
+    const request = ++importer.request;
+    const generation = this.connectionGeneration;
+    const current = () => this.importer === importer && request === importer.request && generation === this.connectionGeneration && this.isConnected;
+    if (!entityId) { this.requestUpdate(); return; }
+    const entity = this.hass.states?.[entityId] ?? this.snapshot?.entities.find((item) => item.entity_id === entityId);
+    const id = entity?.attributes.id;
+    if (!entityId.startsWith("scene.") || typeof id !== "string" || !id.trim()) {
+      importer.error = this.t("importUnavailable"); this.requestUpdate(); return;
+    }
+    if (this.importChanged(importer)) { this.requestUpdate(); return; }
+    importer.loading = true;
+    this.requestUpdate();
+    try {
+      const config = await this.hass.callApi<unknown>("GET", `config/scene/config/${encodeURIComponent(id)}`);
+      if (!current() || this.importChanged(importer)) return;
+      const result = await this.hass.callWS<{ scene: Scene; ignored_entities: number }>({ type: "halo/scene/import", room_id: importer.roomId, config });
+      if (!current() || this.importChanged(importer)) return;
+      importer.scene = structuredClone(result.scene);
+      importer.ignored = result.ignored_entities;
+    } catch (error) {
+      if (current()) {
+        const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
+        const status = typeof error === "object" && error !== null && "status_code" in error ? error.status_code : undefined;
+        const detail = typeof error === "object" && error !== null && "message" in error && typeof error.message === "string" ? error.message : "";
+        importer.error = code === "invalid_config" ? `${this.t("importInvalid")}${detail ? ` ${detail}` : ""}`
+          : this.t(code in en ? code as TranslationKey : status === 401 || status === 403 ? "unauthorized" : status === 404 ? "importUnavailable" : "importFailed");
+      }
+    } finally {
+      if (current()) { importer.loading = false; this.requestUpdate(); }
+    }
+  }
+
+  private confirmImport(importer: SceneImport) {
+    if (this.importer !== importer || importer.loading || !importer.scene || this.importChanged(importer) || !this.validateFields()) return;
+    const scene = structuredClone(importer.scene);
+    scene.name = scene.name.trim();
+    if (!scene.name) { importer.error = this.t("validation"); this.requestUpdate(); return; }
+    this.modify((config) => { config.rooms[importer.roomId].scenes.push(scene); });
+    this.closeImport();
+  }
+
+  private renderImport(importer: SceneImport) {
+    const conflict = this.importChanged(importer);
+    return html`<section class="scene-import" aria-labelledby="import-title"><h2 id="import-title" tabindex="-1">${this.areaName(importer.roomId)} · ${this.t("importScene")}</h2>
+      <p class="help">${this.t("importHelp")}</p>
+      ${this.entityField("sourceScene", importer.entityId, (value) => { void this.loadImport(importer, value); }, "scene", true)}
+      ${importer.loading ? html`<p role="status">${this.t("importLoading")}</p>` : nothing}
+      ${conflict ? html`<p class="notice error" role="alert">${this.t("importConflict")}</p>` : nothing}
+      ${importer.error ? html`<p class="notice error" role="alert">${importer.error}</p>` : nothing}
+      ${importer.scene ? html`<label>${this.t("sceneName")}<input type="text" required .value=${importer.scene.name}
+          @input=${(event: Event) => {
+            if (importer.scene) importer.scene.name = (event.target as HTMLInputElement).value;
+            this.requestUpdate();
+          }}></label>
+        <h3>${this.t("importRetained")}</h3><ul class="import-lights">${Object.keys(importer.scene.lights).map((id) => html`<li>${this.light(id).name}<small>${id}</small></li>`)}</ul>
+        <p role="status">${this.t("importIgnored")}: ${importer.ignored}</p><p class="help">${this.t("importPartial")}</p>` : nothing}
+      <div class="actions"><button @click=${this.closeImport}>${this.t("cancel")}</button>
+        <button class="primary" ?disabled=${conflict || importer.loading || !importer.scene} @click=${() => this.confirmImport(importer)}>${this.t("confirmImport")}</button></div>
+    </section>`;
+  }
+
+  private liveLamp(id: string) {
+    return this.hass.states?.[id] ?? this.snapshot?.entities.find((item) => item.entity_id === id);
+  }
+
+  private actualLampState(id: string): LampState | undefined {
+    const entity = this.liveLamp(id);
+    if (!entity || !["on", "off"].includes(entity.state)) return undefined;
     const attributes = entity?.attributes ?? {};
-    const state: LampState = { state: entity?.state === "on" ? "on" : "off" };
-    const light = this.light(id);
-    if (typeof attributes.brightness === "number" && dimmable(light)) state.brightness_pct = Math.max(1, Math.round(attributes.brightness / 255 * 100));
-    if (attributes.color_mode === "color_temp" && typeof attributes.color_temp_kelvin === "number") state.color_temp_kelvin = attributes.color_temp_kelvin;
-    else { const mode = colorMode(light); if (mode && Array.isArray(attributes[mode])) state[mode] = [...attributes[mode] as number[]]; }
+    const state: LampState = { state: entity.state as "on" | "off" };
+    if (typeof attributes.brightness === "number") state.brightness = attributes.brightness;
+    if (typeof attributes.effect === "string") state.effect = attributes.effect;
+    if (typeof attributes.color_mode === "string" && ["onoff", "brightness", "color_temp", "hs", "rgb", "rgbw", "rgbww", "xy", "white"].includes(attributes.color_mode)) state.color_mode = attributes.color_mode;
+    if (state.color_mode === "color_temp" && typeof attributes.color_temp_kelvin === "number") state.color_temp_kelvin = attributes.color_temp_kelvin;
+    const mode = `${state.color_mode}_color`;
+    if (["rgb_color", "rgbw_color", "rgbww_color", "hs_color", "xy_color"].includes(mode) && Array.isArray(attributes[mode])) {
+      state[mode as "rgb_color" | "rgbw_color" | "rgbww_color" | "hs_color" | "xy_color"] = [...attributes[mode] as number[]];
+    }
+    if (state.color_mode === "white" && typeof attributes.brightness === "number") state.white = attributes.brightness;
     return state;
   }
 
   private async startEditor(room: Room, existing?: Scene) {
     if (this.dirty || this.busy || !this.admin) return;
+    const generation = this.connectionGeneration;
     this.busy = true;
     this.error = "";
     try {
       const { token } = await this.hass.callWS<{ token: string }>({ type: "halo/edit/begin", room_id: room.id });
+      if (!this.isConnected || generation !== this.connectionGeneration) return;
       const scene = existing ? structuredClone(existing) : { id: createId(), name: "", can_turn_on: false, conditions: null, lights: {} };
-      for (const id of room.lights) scene.lights[id] ??= this.actualLampState(id);
+      for (const id of existing ? [] : room.lights) {
+        const actual = this.actualLampState(id);
+        if (actual) scene.lights[id] ??= actual;
+      }
       this.lightSearches.delete("scene");
-      this.editor = { token, roomId: room.id, scene, revision: this.snapshot!.revision };
+      const editor = { token, roomId: room.id, scene, included: new Set(existing ? Object.keys(existing.lights) : room.lights), revision: this.snapshot!.revision, ready: !existing };
+      this.editor = editor;
       this.heartbeat = setInterval(() => {
         const editor = this.editor;
         if (editor) void this.hass.callWS({ type: "halo/edit/touch", room_id: editor.roomId, token: editor.token }).catch((error) => this.showError(error));
       }, 20_000);
-      if (existing) this.queuePreview();
+      // Apply the stored scene once before handing control to Home Assistant.
+      // No later preview may overwrite changes made in the native dialog.
+      this.previewQueue = existing
+        ? this.hass.callWS<void>({ type: "halo/edit/preview", room_id: room.id, token, lights: structuredClone(scene.lights) })
+        : Promise.resolve();
+      await this.previewQueue;
+      if (this.editor === editor) editor.ready = true;
     } catch (error) { this.showError(error); }
     finally { this.busy = false; }
   }
 
-  private clearEditorTimers() { clearInterval(this.heartbeat); clearTimeout(this.previewTimer); this.heartbeat = undefined; this.previewTimer = undefined; }
-  private updateEditor(callback: (scene: Scene) => void, preview = false) {
+  private clearEditorTimers() { clearInterval(this.heartbeat); this.heartbeat = undefined; }
+  private updateEditor(callback: (scene: Scene) => void) {
     if (!this.editor) return;
     callback(this.editor.scene);
     this.requestUpdate();
-    if (preview) this.queuePreview();
   }
 
-  private queuePreview() {
-    clearTimeout(this.previewTimer);
-    this.previewTimer = setTimeout(() => { this.previewTimer = undefined; this.flushPreview(); }, 120);
-  }
-
-  private flushPreview() {
+  private async openNativeLight(id: string) {
     const editor = this.editor;
-    if (!editor) return;
-    const lights = structuredClone(editor.scene.lights);
-    this.previewQueue = this.previewQueue.then(async () => {
-      if (this.editor?.token !== editor.token) return;
-      await this.hass.callWS({ type: "halo/edit/preview", room_id: editor.roomId, token: editor.token, lights });
-    }).catch((error) => this.showError(error));
+    if (!editor?.ready || !editor.included.has(id) || this.busy || !this.admin || !this.actualLampState(id)) return;
+    this.busy = true;
+    this.error = "";
+    try {
+      await this.previewQueue;
+      await this.hass.callWS({ type: "halo/edit/touch", room_id: editor.roomId, token: editor.token });
+      if (this.editor !== editor || !this.isConnected || !this.actualLampState(id)) return;
+      // Public frontend action API; Home Assistant owns and loads its dialog.
+      this.dispatchEvent(new CustomEvent("hass-action", {
+        bubbles: true, composed: true,
+        detail: { config: { entity: id, tap_action: { action: "more-info" } }, action: "tap" },
+      }));
+    } catch (error) { this.showError(error); }
+    finally { this.busy = false; }
   }
 
   private async endEditor(save: boolean) {
     const editor = this.editor;
-    if (!editor || this.busy || (save && !this.validateFields())) return;
+    if (!editor || this.busy || (save && (!editor.ready || !this.validateFields()))) return;
     this.busy = true;
     this.error = "";
-    clearTimeout(this.previewTimer);
-    if (save && this.previewTimer) this.flushPreview();
-    this.previewTimer = undefined;
     try {
-      await this.previewQueue;
+      // Cancellation must still release a session whose initial preview failed.
+      await this.previewQueue.catch(() => undefined);
       const result = await this.hass.callWS<Snapshot | undefined>({ type: "halo/edit/end", room_id: editor.roomId, token: editor.token, save,
-        ...(save ? { scene: editor.scene, revision: editor.revision } : {}) });
+        ...(save ? { scene: { ...editor.scene, lights: Object.fromEntries(Object.entries(editor.scene.lights).filter(([id]) => editor.included.has(id))) }, revision: editor.revision, capture: true, capture_entities: [...editor.included] } : {}) });
       this.clearEditorTimers();
       this.editor = undefined;
       this.receive(result?.config ? result : await this.hass.callWS<Snapshot>({ type: "halo/get" }));
@@ -458,13 +571,35 @@ export class HaloPanel extends LitElement {
 
   private renderEditor(editor: Editor) {
     const scene = editor.scene;
+    const lights = this.draft?.rooms[editor.roomId]?.lights ?? Object.keys(scene.lights);
     return html`<section class="editor"><h2>${this.areaName(editor.roomId)} · ${this.t("preview")}</h2><div class="notice">${this.t("liveHelp")}</div>
       ${this.textField("sceneName", scene.name, (value) => this.updateEditor((current) => { current.name = value; }), { required: true })}
       ${this.check("canTurnOn", scene.can_turn_on, (value) => this.updateEditor((current) => { current.can_turn_on = value; }))}<p class="help">${this.t("canTurnOnHelp")}</p>
       <h3>${this.t("conditions")}</h3>${this.renderCondition(scene.conditions, (condition) => this.updateEditor((current) => { current.conditions = condition; }))}
-      <h3>${this.t("lights")}</h3>${this.lightSearch("scene")}${this.filteredLights(Object.keys(scene.lights), "scene").map((id) => this.lampEditor(id, scene.lights[id], (value) => this.updateEditor((current) => { if (value) current.lights[id] = value; }, true), false))}
-      <div class="actions"><button ?disabled=${this.busy} @click=${() => this.endEditor(false)}>${this.t("cancel")}</button><button class="primary" ?disabled=${this.busy} @click=${() => this.endEditor(true)}>${this.t("saveScene")}</button></div>
+      <h3>${this.t("lights")}</h3><p class="help">${this.t("nativeSceneHelp")}</p><p class="help">${this.t("sceneIncludedHelp")}</p>
+      ${!editor.ready && this.busy ? html`<p role="status">${this.t("previewPending")}</p>` : nothing}
+      ${this.lightSearch("scene")}<ul class="scene-lights">${this.filteredLights(lights, "scene").map((id) => this.renderNativeLight(id, editor))}</ul>
+      <div class="actions"><button ?disabled=${this.busy} @click=${() => this.endEditor(false)}>${this.t("cancel")}</button><button class="primary" ?disabled=${this.busy || !editor.ready} @click=${() => this.endEditor(true)}>${this.t("saveScene")}</button></div>
     </section>`;
+  }
+
+  private renderNativeLight(id: string, editor: Editor) {
+    const entity = this.liveLamp(id);
+    const available = entity?.state === "on" || entity?.state === "off";
+    const attributes = entity?.attributes ?? {};
+    const brightness = available && entity.state === "on" && typeof attributes.brightness === "number"
+      ? `${Math.round(attributes.brightness / 255 * 100)} %` : undefined;
+    const effect = available && typeof attributes.effect === "string" ? attributes.effect : undefined;
+    return html`<li><label class="check scene-inclusion"><input type="checkbox" .checked=${live(editor.included.has(id))} ?disabled=${this.busy || !editor.ready}
+      @change=${(event: Event) => {
+        if ((event.target as HTMLInputElement).checked) editor.included.add(id);
+        else editor.included.delete(id);
+        this.requestUpdate();
+      }}>${this.t("sceneInclude")}: ${this.light(id).name}</label><button class="scene-lamp" ?disabled=${this.busy || !editor.ready || !available || !editor.included.has(id)}
+      @click=${() => this.openNativeLight(id)} aria-label=${`${this.t("nativeLightControl")}: ${this.light(id).name}`}>
+      <span class="grow"><strong>${this.light(id).name}</strong><small>${id}</small>
+        <span>${available ? this.t(entity.state as "on" | "off") : this.t("unavailable")}${brightness ? ` · ${brightness}` : ""}${effect ? ` · ${this.t("effect")}: ${effect}` : ""}</span>
+      </span><span aria-hidden="true">›</span></button></li>`;
   }
 
   private renderCondition(condition: Condition | null, change: (condition: Condition | null) => void, nested = false): TemplateResult {
@@ -518,20 +653,20 @@ export class HaloPanel extends LitElement {
       ${(profile.linked ? ["morning"] as const : ["morning", "evening"] as const).map((period) => html`<h3>${this.t(period)}</h3><div class="grid">
         ${(["brightness", "temperature"] as const).map((kind) => {
           const curve = profile[period][kind];
-          const interpolation = curve.interpolation ?? "linear";
+          const interpolation = curveInterpolation(curve);
           const helpId = `curve-help-${profile.id}-${period}-${kind}`;
           const update = (key: Exclude<keyof Curve, "interpolation">, value: number | null) => this.modify((config) => { config.profiles[profile.id][period][kind][key] = value ?? 0; });
           return html`<div><h4>${this.t(kind === "brightness" ? "brightnessCurve" : "temperatureCurve")}</h4>
             <label>${this.t("curveType")}<select aria-describedby=${helpId} data-selected=${interpolation} .value=${live(interpolation)} @change=${(event: Event) => this.modify((config) => {
               config.profiles[profile.id][period][kind].interpolation = (event.target as HTMLSelectElement).value as CurveInterpolation;
-            })}><option value="linear" ?selected=${interpolation === "linear"}>${this.t("linearCurve")}</option><option value="ease_in" ?selected=${interpolation === "ease_in"}>${this.t("easeInCurve")}</option></select></label>
+            })}><option value="linear" ?selected=${interpolation === "linear"}>${this.t("linearCurve")}</option><option value="ease_in_out" ?selected=${interpolation === "ease_in_out"}>${this.t("easeInOutCurve")}</option></select></label>
             <div class="field-grid">
             ${this.numberField("lowElevation", curve.low_elevation, (value) => update("low_elevation", value), { min: -90, max: 90, required: true })}
             ${this.numberField("highElevation", curve.high_elevation, (value) => update("high_elevation", value), { min: -90, max: 90, required: true })}
             ${this.numberField("lowValue", curve.low, (value) => update("low", value), { min: kind === "brightness" ? 0 : 1000, max: kind === "brightness" ? 100 : 40000, required: true, unit: kind === "brightness" ? "%" : "K" })}
             ${this.numberField("highValue", curve.high, (value) => update("high", value), { min: kind === "brightness" ? 0 : 1000, max: kind === "brightness" ? 100 : 40000, required: true, unit: kind === "brightness" ? "%" : "K" })}
           </div>${curve.low_elevation >= curve.high_elevation ? html`<p class="danger" role="alert">${this.t("badCurve")}</p>` : this.curveGraph(curve, kind === "brightness" ? "%" : "K")}
-          <p class="help" id=${helpId}>${this.t(interpolation === "ease_in" ? "easeInCurveHelp" : "linearCurveHelp")}</p></div>`;
+          <p class="help" id=${helpId}>${this.t(interpolation === "ease_in_out" ? "easeInOutCurveHelp" : "linearCurveHelp")}</p></div>`;
         })}</div>`)}
       <button class="danger" ?disabled=${inUse} @click=${() => this.modify((config) => { delete config.profiles[profile.id]; })}>${this.t("remove")}</button>
       ${inUse ? html`<p class="help">${this.t("profileInUse")}</p>` : nothing}</div>`;
@@ -542,11 +677,11 @@ export class HaloPanel extends LitElement {
     const xMin = Math.max(-90, curve.low_elevation - margin), xMax = Math.min(90, curve.high_elevation + margin);
     const min = Math.min(curve.low, curve.high), max = Math.max(curve.low, curve.high), span = max - min || 1;
     const xPosition = (elevation: number) => 42 + (elevation - xMin) / (xMax - xMin) * 256;
-    const elevations = curve.interpolation === "ease_in"
+    const elevations = curveInterpolation(curve) === "ease_in_out"
       ? [xMin, ...Array.from({ length: 33 }, (_, index) => index === 32 ? curve.high_elevation : curve.low_elevation + (curve.high_elevation - curve.low_elevation) * index / 32), xMax]
       : [xMin, curve.low_elevation, curve.high_elevation, xMax];
     const points = elevations.map((elevation) => `${xPosition(elevation)},${155 - (interpolate(curve, elevation) - min) / span * 115}`).join(" ");
-    return svg`<svg viewBox="0 0 330 190" role="img" aria-label="${this.t("curve")}: ${this.t(curve.interpolation === "ease_in" ? "easeInCurve" : "linearCurve")}, ${curve.low}–${curve.high} ${unit}, ${curve.low_elevation}–${curve.high_elevation}°">
+    return svg`<svg viewBox="0 0 330 190" role="img" aria-label="${this.t("curve")}: ${this.t(curveInterpolation(curve) === "ease_in_out" ? "easeInOutCurve" : "linearCurve")}, ${curve.low}–${curve.high} ${unit}, ${curve.low_elevation}–${curve.high_elevation}°">
       <path d="M42 20 V155 H305" fill="none" stroke="currentColor" opacity=".4"></path><polyline points=${points} fill="none" stroke="currentColor" stroke-width="3"></polyline>
       ${max !== min ? svg`<text x="2" y="42">${max}${unit}</text>` : nothing}<text x="2" y="155">${min}${unit}</text>
       ${[curve.low_elevation, curve.high_elevation].map((elevation) => svg`<line x1=${xPosition(elevation)} x2=${xPosition(elevation)} y1="155" y2="160" stroke="currentColor"></line><text x=${xPosition(elevation)} y="178" text-anchor="middle">${elevation}°</text>`)}</svg>`;
