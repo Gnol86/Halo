@@ -134,7 +134,7 @@ Des parcours ciblés ont aussi été vérifiés dans **Home Assistant 2026.10.0 
 
 Les releases GitHub demandées le 9 octobre 2026 distribuent ce même panneau compilé dans l’intégration. Elles n’ajoutent ni écran de mise à jour ni carte à installer dans Halo : le téléchargement et la mise à jour restent pris en charge par HACS, avec ses propres composants et le thème Home Assistant. Leur publication ne modifie pas les règles de design ni le niveau de validation matérielle indiqué ici. Le [statut de distribution](docs/HACS.md) distingue les releases du référencement au catalogue par défaut.
 
-La **version 0.1.1 est en préparation** pour distribuer trois corrections implémentées : retrait des lignes répétitives sous les sélecteurs, alignement des champs malgré les libellés multilignes et disparition de la confirmation de sauvegarde après 4 secondes. Les [notes de version](releases/0.1.1.md) décrivent ce lot ; ses vérifications locales ne constituent ni une publication confirmée ni un déploiement domestique.
+La **[release v0.1.1](https://github.com/Gnol86/Halo/releases/tag/v0.1.1), publiée le 9 octobre 2026**, distribue trois corrections implémentées : retrait des lignes répétitives sous les sélecteurs, alignement des champs malgré les libellés multilignes et disparition de la confirmation de sauvegarde après 4 secondes. Les [notes de version](releases/0.1.1.md) décrivent ce lot. Le workflow et l’archive sont vérifiés ; la publication ne constitue pas un déploiement domestique ni une validation matérielle.
 
 ### Identité existante
 

@@ -1,12 +1,14 @@
 # Développer Halo
 
-## Préparation de la release 0.1.1 — 9 octobre 2026
+## Publication de la release 0.1.1 — 9 octobre 2026
 
 Cette version regroupe les corrections de sélecteurs, d’alignement des champs et de confirmation temporaire décrites ci-dessous. Les versions du manifeste, de `pyproject.toml` et de `uv.lock` sont synchronisées à `0.1.1` ; aucune dépendance ni compatibilité minimale n’est modifiée.
 
 - Synchronisation uv figée, Ruff et formatage conformes ; **324 tests Python réussis**.
 - **55 tests frontend réussis**, TypeScript conforme et bundle reproductible, vérifiés après la dernière modification du panneau.
-- Publication demandée par Arnaud ; le tag et le workflow doivent encore être confirmés. L’installation domestique et le référencement au catalogue HACS ne font pas partie de cette livraison.
+- Commit `c21173e` poussé sur `main` et tag annoté `v0.1.1` publié sur ce commit. Le [workflow Release](https://github.com/Gnol86/Halo/actions/runs/37961233161) a réussi ses six jobs : métadonnées, Python, frontend, Hassfest, HACS et publication. Le [workflow Validate sur main](https://github.com/Gnol86/Halo/actions/runs/37961232522) a également réussi.
+- [Release v0.1.1](https://github.com/Gnol86/Halo/releases/tag/v0.1.1) publiée à **16:45:03 UTC**, sans statut de brouillon ni de préversion ; l’API GitHub la confirme comme dernière release normale. Les **25 fichiers distribuables** de son archive GitHub concordent avec le dépôt, dont le manifeste `0.1.1` et le panneau compilé.
+- L’installation domestique et le référencement au catalogue HACS ne font pas partie de cette livraison.
 
 ## Confirmation de sauvegarde temporaire — 9 octobre 2026
 

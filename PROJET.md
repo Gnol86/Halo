@@ -29,7 +29,7 @@ Limite vérifiée le 9 octobre 2026 : HACS 2.0.5 ne charge pas les icônes embar
 | Transitions globales et par pièce | Implémenté ; paramètres et concurrence testés, comportement matériel à vérifier. |
 | Localisation complète et sélection de langue du panneau | Catalogues anglais/français et sélection de langue implémentés ; tests locaux. |
 | Direction du dashboard | Actée et implémentée : pilotage prioritaire, liste de pièces et détail, sous-vues compactes et thème Home Assistant sans palette propre. |
-| Releases GitHub | [Première release `v0.1.0`](https://github.com/Gnol86/Halo/releases/tag/v0.1.0) publiée le 9 octobre 2026 ; workflow réussi avec Hassfest et HACS, archive contrôlée. Version `0.1.1` en préparation pour les corrections d’interface décrites ci-dessous. Installation dans HACS et validation matérielle distinctes, preuves dans la documentation de développement. |
+| Releases GitHub | [Première release `v0.1.0`](https://github.com/Gnol86/Halo/releases/tag/v0.1.0), puis [v0.1.1](https://github.com/Gnol86/Halo/releases/tag/v0.1.1) publiées le 9 octobre 2026 ; workflows réussis avec Hassfest et HACS, archives contrôlées. `v0.1.1` est la dernière release normale vérifiée à cette date et contient les corrections d’interface décrites ci-dessous. Installation dans HACS et validation matérielle distinctes, preuves dans la documentation de développement. |
 | Référencement au catalogue HACS par défaut | Jalon final, après développement et validation. Les installations comme dépôt personnalisé sont distinctes. |
 
 ## 2. Installation et panneau Halo
@@ -96,7 +96,7 @@ Tous les sélecteurs d’entités proposent une recherche immédiate par nom ou 
 
 La sélection reste lisible dans le champ, sans ligne répétitive « Sélectionnée : … » ou « Aucune entité » en dessous. Les informations utiles d’indisponibilité et de recherche, les libellés accessibles et la validation sont conservés. Les contrôles disposés sur une même rangée restent alignés malgré les différences de longueur des libellés, notamment dans les réglages de présence.
 
-Ces simplifications et la confirmation de sauvegarde limitée à 4 secondes sont implémentées et regroupées dans la **version 0.1.1 en préparation**. La publication et l’installation domestique restent distinctes des vérifications locales ; les [notes de version](releases/0.1.1.md) décrivent ce lot.
+Ces simplifications et la confirmation de sauvegarde limitée à 4 secondes sont distribuées dans la **[release v0.1.1](https://github.com/Gnol86/Halo/releases/tag/v0.1.1), publiée le 9 octobre 2026**. Son workflow et son archive sont vérifiés ; l’installation domestique et la validation matérielle restent distinctes. Les [notes de version](releases/0.1.1.md) décrivent ce lot.
 
 **Demande de sélecteurs natifs partout : étudiée, non implémentée.** Aucun mécanisme public de chargement du sélecteur natif dans un panneau personnalisé n’a été identifié dans les documents et sources examinés. Les voies documentées concernent les formulaires natifs et l’éditeur de configuration des cartes. Pour respecter la contrainte de ne pas introduire de solution fragile, les sélecteurs Halo actuels sont conservés ; aucun chargement indirect de Lovelace ni import de fichier interne compilé n’est ajouté. [Diagnostic et alternatives](docs/ARCHITECTURE.md#sélecteurs-dentités-natifs).
 
