@@ -212,7 +212,7 @@ const entities=[
   {entity_id:"scene.reading",name:"Lecture du soir",state:"unknown",attributes:{id:"reading"}},
   {entity_id:"scene.hue_ambience",name:"Ambiance Hue",state:"unknown",attributes:{}},
 ];
-let snapshot={revision:1,is_admin:true,config:{sun_entity_id:"sun.sun",transitions,profiles:{
+let snapshot={revision:1,is_admin:true,config:{sun_entity_id:"sun.sun",presence_return_window:30,transitions,profiles:{
   warm:{id:"warm",name:"Blanc chaleureux",linked:true,morning,evening:structuredClone(morning)},
   daylight:{id:"daylight",name:"Lumière du jour",linked:true,morning:curves(35,100,2700,6500,"linear"),evening:curves(35,100,2700,6500,"linear")},
   rhythm:{id:"rhythm",name:"Réveil et soirée",linked:false,morning:curves(15,95,2400,5500),evening:curves(8,70,2000,4000)},

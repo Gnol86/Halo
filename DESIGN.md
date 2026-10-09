@@ -312,9 +312,21 @@ La pause manuelle couvre toute la pièce. Elle concerne les modifications de cou
 
 - Une durée modifiable, initialement **120 minutes**.
 - L’autorisation des extinctions automatiques sur absence et sur forte luminosité pendant la pause, **configurable par pièce et activée par défaut**.
-- Une explication de la reprise : expiration du délai, retour après une absence confirmée ou commande de reprise.
+- Une explication de la reprise : expiration du délai, retour après une absence continue atteignant le maximum entre délai d’absence local et protection globale, ou commande de reprise.
 
 L’affichage distingue cette pause de la désactivation générale de l’automatisation et de la suspension temporaire liée à l’édition d’une scène. Une extinction manuelle ne doit pas faire disparaître immédiatement l’indication de pause.
+
+### Protection globale contre les pertes de présence
+
+**Rallumage rapide et protection de la pause manuelle implémentés et testés localement, sans validation matérielle ni déploiement domestique pour cet ajout.** Les **Réglages globaux** présentent la section **« Protection contre les pertes de présence »** (`Protection against presence dropouts`) et son champ numérique **« Délai de protection de présence (secondes) »** (`Presence protection delay (seconds)`), initialement à **30**. Le champ est obligatoire, accepte les valeurs finies de **0 à 604 800** et utilise les contrôles, couleurs, focus et erreurs du thème Home Assistant.
+
+Une aide dépliable **« Fonctionnement »** conserve la compacité et distingue trois points :
+
+- Après une extinction automatique pour absence, un retour avant l’expiration de cette durée ignore ponctuellement le capteur lumineux et utilise la transition d’allumage habituel. Ce rallumage concerne uniquement les pièces sans extinction sur forte luminosité et respecte une pause encore active.
+- Dans toutes les pièces, le retour ne termine une pause manuelle qu’après une absence continue atteignant à la fois ce délai global et le délai d’absence local. L’indisponibilité du détecteur interrompt cette continuité ; l’expiration propre de pause et la commande de reprise restent distinctes.
+- **0** désactive le rallumage rapide et le minimum supplémentaire de protection de la pause, sans supprimer le délai d’absence local ni modifier celui de l’extinction automatique.
+
+Ce champ suit les droits administrateur, le brouillon transversal, la validation avant navigation et la barre d’enregistrement existants. Les valeurs déjà enregistrées restent visibles ; une ancienne configuration sans ce champ affiche **30 secondes**. Le contenu de l’aide et les erreurs sont disponibles en anglais et en français ; aucune nouvelle palette ni composant privé Home Assistant n’est nécessaire.
 
 ### Profils de lumière naturelle
 
@@ -460,6 +472,7 @@ La table historique « Règles à définir » est remplacée par les décisions 
 - Clic sur une lampe ouvrant la vraie fenêtre Home Assistant ; effet actif visible au retour, capture des états lors de l’enregistrement et restauration après annulation.
 - Édition réelle, enregistrement, annulation, déconnexion et accès concurrent.
 - Transitions héritées, propres à la pièce, absentes, égales à zéro ou non prises en charge.
+- Protection globale contre les pertes de présence : défaut de 30 secondes, bornes et valeur zéro ; aide distinguant rallumage et protection de pause, délai d’absence local conservé, brouillon et valeurs sauvegardées préservés, traductions anglaises/françaises.
 - Français, anglais, repli anglais et préservation des noms personnalisés.
 
 ### Suivi des futures règles

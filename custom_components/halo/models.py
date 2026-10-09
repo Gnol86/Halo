@@ -6,6 +6,7 @@ from copy import deepcopy
 from typing import Any
 
 TRANSITIONS = ("turn_on", "lux_on", "natural", "scene", "turn_off")
+DEFAULT_PRESENCE_RETURN_WINDOW = 30
 TRANSITION_DEFAULTS = {
     "turn_on": 0,
     "lux_on": 10,
@@ -38,6 +39,7 @@ def default_config() -> dict[str, Any]:
     """Return a fresh configuration, never sharing mutable defaults."""
     return {
         "sun_entity_id": "sun.sun",
+        "presence_return_window": DEFAULT_PRESENCE_RETURN_WINDOW,
         "transitions": TRANSITION_DEFAULTS.copy(),
         "profiles": {},
         "rooms": {},
@@ -264,6 +266,7 @@ def validate_config(value: Any) -> dict[str, Any]:
     config = default_config() | deepcopy(_mapping(value, "configuration"))
     if set(config) - set(default_config()):
         raise ValueError("Unknown configuration section")
+    _number(config["presence_return_window"], "presence_return_window", 0, 604800)
     if config["sun_entity_id"] is not None:
         _entity(config["sun_entity_id"], "sun")
     config["transitions"] = _transitions(config["transitions"], room=False)

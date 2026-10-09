@@ -51,6 +51,30 @@ Le bundle dans `custom_components/halo/frontend/` doit rester synchronisé avec 
 
 Avant une release utilisable, effectuer également un essai dans une instance Home Assistant de test : installation manuelle, rendu du panneau et du lotus en thèmes clair et sombre, textes français et anglais, pilotage des lampes réelles, redémarrage et suppression. Les tests Python ne valident pas le rendu intégré de l’interface.
 
+## Protection de la pause manuelle contre les pertes de présence — 9 octobre 2026
+
+Le même réglage global `presence_return_window` sert aussi à confirmer une absence avant la fin de pause manuelle au retour. La durée minimale est le maximum du délai d’absence de la pièce et de cette protection globale ; zéro conserve le seul délai de la pièce. Cette règle s’applique à toutes les pièces, indépendamment de l’extinction sur luminosité. Elle ne change ni la temporisation d’extinction ni l’expiration propre de la pause ou le bouton de reprise.
+
+- `uv sync --frozen`, Ruff (analyse et format) et **309 tests Python réussis**. Les **33 nouveaux scénarios** couvrent le défaut de 30 secondes, zéro, les bornes exactes, les délais locaux plus longs, les deux politiques d’extinction pendant la pause et les deux réglages d’extinction sur luminosité.
+- Présence personnalisée, mises à jour d’attributs, indisponibilité interrompant l’absence continue, scène manuelle conservée après une courte absence, expiration normale, reprise et rechargement sont testés. Un ancien marqueur `absence_confirmed` ne suffit plus à effacer une pause : la durée observée est recontrôlée.
+- Un service d’extinction bloqué vérifie qu’un retour reçu après une seconde conserve la pause même si le moteur attend plus de 30 secondes pour reprendre : l’heure du premier retour, et non celle de libération du verrou ou d’un changement entre états « présents », sert à la décision. Plusieurs pertes brèves pendant cette attente ne sont pas additionnées.
+- Sous Node.js 24 : `npm ci`, TypeScript, **55 tests frontend réussis** et bundle reconstruit à l’identique. SHA-256 : `63edac26052f1c1c1acc174a9df222bb143d6aa61311b4561ecbc749695ff47c`. Le champ est désormais intitulé « Délai de protection de présence (secondes) » ; l’aide française/anglaise dépliable précise les deux usages et leurs périmètres.
+
+Vérifications automatisées locales avec capteurs et lampes simulés ; aucun nouvel essai visuel intégré, essai matériel ou déploiement domestique pour cette extension. Les documents produit, design, README et architecture reflètent ce comportement.
+
+## Rallumage rapide après une perte de présence — 9 octobre 2026
+
+Le réglage global `presence_return_window` vaut initialement 30 secondes, y compris pour une configuration ancienne sans ce champ ; zéro désactive la protection. Dans les pièces sans extinction sur forte luminosité, un véritable retour de présence pendant cette fenêtre après une extinction pour absence force l’ambiance applicable avec la transition `turn_on`, sans attendre le capteur lumineux. La fenêtre est temporaire, consommée une seule fois et annulée par les interventions manuelles, l’édition, la désactivation ou une reconfiguration.
+
+- `uv sync --frozen`, analyse et formatage Ruff conformes ; **276 tests Python réussis** dans l’environnement Home Assistant 2026.10.0, avec lampes et capteurs simulés.
+- Les nouveaux scénarios couvrent la limite stricte, zéro, les états de présence personnalisés et indisponibles, le départ de la fenêtre à la première commande d’extinction pour absence plutôt qu’au début de l’absence, les pauses, les scènes et profils naturels, l’hystérésis conservée et l’absence de second allumage après publication lumineuse tardive.
+- Le retour pendant un fondu est simulé avec des lampes se déclarant encore allumées ; un service d’extinction bloqué vérifie l’invalidation des autres extinctions en attente et la priorité d’une nouvelle commande manuelle. Les annulations et l’absence de restauration après redémarrage sont également couvertes.
+- Les tests API vérifient le défaut historique, les valeurs explicites dont zéro et les décimales, la sauvegarde/relecture/recharge, le conflit de révision et le rejet atomique d’une valeur invalide, sans commande aux lampes.
+- Sous Node.js 24 : `npm ci`, TypeScript et **55 tests frontend réussis**. Le champ obligatoire accepte de 0 à 604 800 secondes ; validation des valeurs non finies, traductions anglaises/françaises, brouillon, sauvegarde, abandon et droits administrateur sont couverts.
+- Bundle reconstruit deux fois à l’identique : SHA-256 `0ab87972202db015f17770bc3850abcfa1c0942bc669af34009d9d0ec56dcfcf`. Documents produit, design, README et architecture synchronisés.
+
+Ces vérifications automatisées locales ne constituent pas un nouvel essai visuel dans Home Assistant ni une validation matérielle. Aucun déploiement domestique ou commande aux équipements réels n’a été effectué pour cet ajout.
+
 ## Capteur d’état par pièce — 9 octobre 2026
 
 Chaque appareil de pièce comprend maintenant un capteur `Status` / `État`. Il expose `off`, `manual`, `natural` avec traductions natives ou le nom de la scène active ; les attributs `mode`, `scene_id` et `scene_name` permettent d’identifier une scène indépendamment de son nom. Les lampes réellement éteintes et leur indisponibilité priment sur le mode d’éclairage. Cet ajout ne modifie pas les décisions du moteur ni les commandes aux lampes.

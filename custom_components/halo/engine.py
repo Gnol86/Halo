@@ -21,7 +21,7 @@ from homeassistant.helpers.event import (
 from homeassistant.util import dt as dt_util
 
 from .conditions import UNAVAILABLE, condition_entities, evaluate_condition, number
-from .models import ROOM_DEFAULTS
+from .models import DEFAULT_PRESENCE_RETURN_WINDOW, ROOM_DEFAULTS
 from .natural import (
     capture_lamp_state,
     lamp_parameters,
@@ -72,6 +72,11 @@ class HaloRoomEngine:
         self._expected: dict[str, dict[str, Any]] = {}
         self._last_commands: dict[str, dict[str, Any]] = {}
         self._edit: dict[str, Any] | None = None
+        # Ephemeral: a restart must never recreate a recent return of presence.
+        self._absence_off_started_at: float | None = None
+        self._absence_off_handled = False
+        self._pending_presence_return: int | None = None
+        self._presence_returned_at: float | None = None
 
     @property
     def room(self) -> dict[str, Any]:
@@ -186,6 +191,8 @@ class HaloRoomEngine:
         """Cancel every listener and deadline; no light commands during unload."""
         self._stopped = True
         self._generation += 1
+        self._cancel_presence_return()
+        self._presence_returned_at = None
         for unsubscribe in self._unsubscribers:
             unsubscribe()
         self._unsubscribers.clear()
@@ -200,6 +207,8 @@ class HaloRoomEngine:
         if self._stopped:
             return
         self._generation += 1
+        self._cancel_presence_return()
+        self._presence_returned_at = None
         for unsubscribe in self._unsubscribers:
             unsubscribe()
         self._unsubscribers.clear()
@@ -235,13 +244,66 @@ class HaloRoomEngine:
                 return
         elif entity_id == self.room.get("presence_entity_id"):
             trigger = "presence"
+            before, after = self._presence_value(old), self._presence_value(new)
+            if after is not True:
+                self._presence_returned_at = None
+            elif before is False and new is not None:
+                self._presence_returned_at = new.last_changed.timestamp()
+            if after is None:
+                # An unavailable detector cannot prove continuous absence,
+                # even if its recovery is queued behind a slow light service.
+                self._runtime.pop("absent_since", None)
+            if before != after:
+                if after is False:
+                    # Track every new absence at the event boundary, including
+                    # repeated dropouts while a light command holds the lock.
+                    self._runtime["absent_since"] = new.last_changed.timestamp()
+                    self._cancel_presence_return()
+                    self._absence_off_handled = False
+                elif before is False and after is True and self._can_return():
+                    # Cancel the rest of an off sequence before waiting for its
+                    # service call/lock. Other queued evaluations can consume
+                    # this same one-shot intent, always using turn_on.
+                    self._generation += 1
+                    self._pending_presence_return = self._generation
+                    self._absence_off_started_at = None
+                else:
+                    self._cancel_presence_return()
         elif entity_id == self.room.get("lux_entity_id"):
             trigger = "lux"
         else:
             trigger = "condition"
         if trigger == "manual" and not self._edit:
             self._generation += 1
+            self._cancel_presence_return()
         self.hass.async_create_task(self._async_wakeup(trigger))
+
+    def _presence_value(self, state: State | None) -> bool | None:
+        if state is None or state.state in UNAVAILABLE:
+            return None
+        return state.state in self.room.get("presence_states", ["on"])
+
+    def _cancel_presence_return(self) -> None:
+        """Discard eligibility without reopening it in the same absence cycle."""
+        self._absence_off_started_at = None
+        self._pending_presence_return = None
+        self._absence_off_handled = True
+
+    def _can_return(self) -> bool:
+        """A real return can bypass stale lux only after our recent absence-off."""
+        duration = self.manager.config.get(
+            "presence_return_window", DEFAULT_PRESENCE_RETURN_WINDOW
+        )
+        return bool(
+            not self._stopped
+            and not self._edit
+            and self.room.get("automation_enabled", False)
+            and not self.room.get("lux_off", False)
+            and self._absence_off_started_at is not None
+            and 0
+            <= dt_util.utcnow().timestamp() - self._absence_off_started_at
+            < duration
+        )
 
     def _own_change(self, entity_id: str, old: State | None, new: State | None) -> bool:
         if not new:
@@ -347,6 +409,7 @@ class HaloRoomEngine:
             await self._evaluate(trigger)
 
     def _pause(self) -> None:
+        self._cancel_presence_return()
         self._runtime.pop("manual_scene_id", None)
         self._runtime["pause_until"] = dt_util.utcnow().timestamp() + self.room.get(
             "manual_pause", ROOM_DEFAULTS["manual_pause"]
@@ -358,18 +421,32 @@ class HaloRoomEngine:
         self._presence = (
             state.state in self.room.get("presence_states", ["on"]) if state else None
         )
+        # Older runtimes stored a boolean based only on the off delay. Recheck
+        # the actual duration instead, including the shared presence protection.
+        self._runtime.pop("absence_confirmed", None)
         if self._presence is False:
             since = self._runtime.setdefault("absent_since", now)
             self._absence_deadline = since + self.room.get(
                 "absence_delay", ROOM_DEFAULTS["absence_delay"]
             )
-            if now >= self._absence_deadline:
-                self._runtime["absence_confirmed"] = True
         else:
             self._absence_deadline = None
-            self._runtime.pop("absent_since", None)
-            if self._presence:
-                if self._runtime.pop("absence_confirmed", False):
+            since = self._runtime.pop("absent_since", None)
+            if self._presence and since is not None and state is not None:
+                confirmation_delay = max(
+                    self.room.get("absence_delay", ROOM_DEFAULTS["absence_delay"]),
+                    self.manager.config.get(
+                        "presence_return_window", DEFAULT_PRESENCE_RETURN_WINDOW
+                    ),
+                )
+                # Use the return event's time: waiting for an in-flight service
+                # must not turn a brief sensor dropout into a confirmed absence.
+                returned_at = (
+                    self._presence_returned_at
+                    if self._presence_returned_at is not None
+                    else state.last_changed.timestamp()
+                )
+                if returned_at >= since + confirmation_delay:
                     self._runtime.pop("pause_until", None)
         lux_id = self.room.get("lux_entity_id")
         lux_state = self._available_state(lux_id)
@@ -435,6 +512,13 @@ class HaloRoomEngine:
     async def _decide(
         self, now: float, scene: dict[str, Any] | None, trigger: str
     ) -> None:
+        presence_return = (
+            self._pending_presence_return is not None
+            and self._pending_presence_return == self._generation
+            and self._presence is True
+            and not self.room.get("lux_off", False)
+        )
+        self._pending_presence_return = None
         if self._edit:
             self._reason = "editing"
             return
@@ -451,7 +535,7 @@ class HaloRoomEngine:
             if self.room.get("allow_off_during_pause", True) and (
                 absence_due or lux_due
             ):
-                await self._all_off()
+                await self._all_off(absence=absence_due)
             return
         if not self.available:
             self._reason = "unavailable"
@@ -459,12 +543,18 @@ class HaloRoomEngine:
         autonomous_scene = scene is not None and scene.get("can_turn_on", False)
         if not autonomous_scene and (absence_due or lux_due):
             self._reason = "absence" if absence_due else "bright"
-            await self._all_off()
+            await self._all_off(absence=absence_due)
             self._applied_scene = None
             return
         changed_scene = self._scene_id != self._applied_scene
-        force = trigger in {"start", "reconfigure", "resume", "mode", "availability"}
-        can_start = (
+        force = presence_return or trigger in {
+            "start",
+            "reconfigure",
+            "resume",
+            "mode",
+            "availability",
+        }
+        can_start = presence_return or (
             self._presence is True
             and self._dark is True
             and trigger
@@ -482,8 +572,13 @@ class HaloRoomEngine:
         if scene and (autonomous_scene or was_on or can_start):
             self._reason = "scene"
             if changed_scene or force or (not was_on and can_start):
-                transition = "scene"
-                if not was_on and can_start and trigger in {"presence", "lux"}:
+                transition = "turn_on" if presence_return else "scene"
+                if (
+                    not presence_return
+                    and not was_on
+                    and can_start
+                    and trigger in {"presence", "lux"}
+                ):
                     transition = "lux_on" if trigger == "lux" else "turn_on"
                 await self._apply(scene.get("lights", {}), transition, force=True)
             self._applied_scene = scene["id"]
@@ -493,14 +588,21 @@ class HaloRoomEngine:
             self._reason = "base"
             if changed_scene or force or (not was_on and can_start):
                 transition = (
-                    "scene"
+                    "turn_on"
+                    if presence_return
+                    else "scene"
                     if changed_scene
                     else "lux_on"
                     if trigger == "lux"
                     else "turn_on"
                 )
                 targets = self._ambience()
-                if was_on and not changed_scene and trigger != "resume":
+                if (
+                    was_on
+                    and not changed_scene
+                    and trigger != "resume"
+                    and not presence_return
+                ):
                     # Editing a shared profile or recovering a sensor is an
                     # adjustment, not a request to relight every room member.
                     targets = {
@@ -594,11 +696,14 @@ class HaloRoomEngine:
             else value
         )
 
-    async def _all_off(self, context: Context | None = None) -> None:
+    async def _all_off(
+        self, context: Context | None = None, *, absence: bool = False
+    ) -> None:
         await self._apply(
             {entity_id: {"state": "off"} for entity_id in self.room["lights"]},
             "turn_off",
             context=context,
+            absence=absence,
         )
 
     async def _apply(
@@ -608,6 +713,7 @@ class HaloRoomEngine:
         *,
         force: bool = False,
         context: Context | None = None,
+        absence: bool = False,
     ) -> None:
         generation = self._generation
         transition = self._transition(category) if category else None
@@ -637,6 +743,21 @@ class HaloRoomEngine:
                 until, dt_util.utcnow().timestamp() + 60
             )
             self._expected[entity_id] = {"target": target, "until": until}
+            if (
+                absence
+                and not turn_on
+                and state.state == "on"
+                and not self._absence_off_handled
+                and not self.room.get("lux_off", False)
+                and self.manager.config.get(
+                    "presence_return_window", DEFAULT_PRESENCE_RETURN_WINDOW
+                )
+                > 0
+            ):
+                # Arm at dispatch, including while a slow service is in flight.
+                # Only the first actual command of this absence opens a window.
+                self._absence_off_started_at = dt_util.utcnow().timestamp()
+                self._absence_off_handled = True
             try:
                 await self.hass.services.async_call(
                     "light",
@@ -673,6 +794,7 @@ class HaloRoomEngine:
 
     async def async_turn_on(self, context: Context | None = None) -> None:
         self._generation += 1
+        self._cancel_presence_return()
         async with self._lock:
             self._require_no_editor()
             scene = self._selected_scene()
@@ -689,6 +811,7 @@ class HaloRoomEngine:
 
     async def async_turn_off(self, context: Context | None = None) -> None:
         self._generation += 1
+        self._cancel_presence_return()
         async with self._lock:
             self._require_no_editor()
             self._pause()
@@ -705,6 +828,7 @@ class HaloRoomEngine:
         if scene is None:
             raise ValueError("scene_not_found")
         self._generation += 1
+        self._cancel_presence_return()
         async with self._lock:
             self._require_no_editor()
             self._pause()
@@ -718,12 +842,14 @@ class HaloRoomEngine:
         if mode not in ("automation", "natural"):
             raise ValueError("invalid_mode")
         self._generation += 1
+        self._cancel_presence_return()
         async with self._lock:
             self.room[f"{mode}_enabled"] = enabled
             await self._evaluate("mode" if mode == "automation" else "natural_mode")
 
     async def async_resume(self, context: Context | None = None) -> None:
         self._generation += 1
+        self._cancel_presence_return()
         async with self._lock:
             self._require_no_editor()
             self.room["automation_enabled"] = True
@@ -736,6 +862,7 @@ class HaloRoomEngine:
 
     async def async_begin_edit(self, owner: str) -> str:
         self._generation += 1
+        self._cancel_presence_return()
         async with self._lock:
             if self._edit and self._edit["until"] <= dt_util.utcnow().timestamp():
                 await self._restore_edit()

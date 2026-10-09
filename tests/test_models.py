@@ -49,6 +49,27 @@ def test_new_global_transition_defaults_are_independent():
     assert default_config()["transitions"] == expected
 
 
+def test_presence_return_default_normalizes_older_configs():
+    old = {"rooms": {"living": {"lights": ["light.floor"]}}}
+    assert default_config()["presence_return_window"] == 30
+    assert validate_config(old)["presence_return_window"] == 30
+    assert "presence_return_window" not in old
+
+
+@pytest.mark.parametrize("value", [0, 30, 45.5, 604800])
+def test_presence_return_window_preserves_explicit_values(value):
+    config = configuration() | {"presence_return_window": value}
+    assert validate_config(config)["presence_return_window"] == value
+
+
+@pytest.mark.parametrize(
+    "value", [-1, 604800.1, float("inf"), float("nan"), True, "30", None]
+)
+def test_presence_return_window_rejects_invalid_values(value):
+    with pytest.raises(ValueError, match="presence_return_window"):
+        validate_config(configuration() | {"presence_return_window": value})
+
+
 def test_normalization_preserves_existing_durations_and_explicit_omissions():
     config = configuration()
     transitions = {

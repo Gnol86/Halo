@@ -763,6 +763,10 @@ export class HaloPanel extends LitElement {
     const sun = this.snapshot!.entities.find((entity) => entity.entity_id === config.sun_entity_id);
     return html`<div class="global-settings"><h2 class="view-title" tabindex="-1">${this.t("global")}</h2><section class="settings-group"><h3>${this.t("sun")}</h3>${this.entityField("sunEntity", config.sun_entity_id, (value) => this.modify((draft) => { draft.sun_entity_id = value; }), "sun")}
       ${config.sun_entity_id && (!sun || typeof sun.attributes.elevation !== "number" || ["unknown", "unavailable"].includes(sun.state)) ? html`<div class="notice">${this.t("noSun")}</div>` : nothing}</section>
+      <section class="settings-group"><h3>${this.t("presenceReturn")}</h3>
+        ${this.numberField("presenceReturnWindow", config.presence_return_window, (value) => { if (value !== null) this.modify((draft) => { draft.presence_return_window = value; }); }, { min: 0, max: 604800, required: true })}
+        <details class="help-details"><summary><ha-icon icon="mdi:information-outline"></ha-icon>${this.t("howItWorks")}</summary>
+          <p class="help">${this.t("presenceReturnHelp")}</p><p class="help">${this.t("presenceReturnPauseHelp")}</p><p class="help">${this.t("presenceReturnZeroHelp")}</p></details></section>
       <section class="settings-group"><h3>${this.t("transitions")}</h3>${this.renderTransitions(config.transitions, (category, value) => this.modify((draft) => { draft.transitions[category] = value; }))}</section></div>`;
   }
 

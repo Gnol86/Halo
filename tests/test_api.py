@@ -691,3 +691,43 @@ async def test_room_rename_preserves_identity_and_removal_cleans_up(
     assert devices.async_get(device.id) is None
     assert not er.async_entries_for_config_entry(entities, api.entry.entry_id)
     assert all(hass.states.get(entity_id) is None for entity_id in before)
+
+
+@pytest.mark.parametrize("duration", [0, 45.5])
+async def test_presence_return_setting_roundtrip_and_stale_save(hass, api, duration):
+    """Existing config gains the default; explicit settings survive real reloads."""
+    await configure(api)
+    snapshot = (await request(api.client, "halo/get"))["result"]
+    assert snapshot["config"]["presence_return_window"] == 30
+    config = deepcopy(snapshot["config"])
+    config["presence_return_window"] = duration
+    response = await request(
+        api.client, "halo/save", config=config, revision=snapshot["revision"]
+    )
+    assert response["success"], response
+    stale = await request(
+        api.client,
+        "halo/save",
+        config=snapshot["config"],
+        revision=snapshot["revision"],
+    )
+    assert not stale["success"] and stale["error"]["code"] == "conflict"
+    assert await hass.config_entries.async_reload(api.entry.entry_id)
+    await hass.async_block_till_done()
+    saved = (await request(api.client, "halo/get"))["result"]
+    assert saved["config"]["presence_return_window"] == duration
+    assert not api.calls
+
+
+async def test_presence_return_setting_rejected_atomically(api):
+    await configure(api)
+    snapshot = (await request(api.client, "halo/get"))["result"]
+    invalid = deepcopy(snapshot["config"])
+    invalid["presence_return_window"] = -1
+    response = await request(
+        api.client, "halo/save", config=invalid, revision=snapshot["revision"]
+    )
+    assert not response["success"] and response["error"]["code"] == "invalid_config"
+    current = (await request(api.client, "halo/get"))["result"]
+    assert current["revision"] == snapshot["revision"]
+    assert current["config"] == snapshot["config"]

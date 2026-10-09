@@ -22,6 +22,8 @@ Limite vérifiée le 9 octobre 2026 : HACS 2.0.5 ne charge pas les icônes embar
 | Panneau, configuration des pièces et appareils | Refonte compacte implémentée ; tests de navigation et de brouillons, essais ciblés dans Home Assistant isolé et aperçus adaptatifs. |
 | Capteur d’état de chaque pièce | Implémenté ; tests locaux du moteur et des plateformes Home Assistant avec lampes simulées ; validation sur les équipements du logement à réaliser. |
 | Présence, luminosité, pause manuelle et reprise | Implémenté ; tests avec capteurs et lampes simulés. |
+| Rallumage rapide après absence | Implémenté et testé localement ; validation matérielle et déploiement domestique non réalisés pour cet ajout. |
+| Protection de la pause contre les pertes brèves de présence | Implémenté et testé localement ; validation matérielle et déploiement domestique non réalisés pour cet ajout. |
 | Ambiance de base et profils naturels | Implémenté ; calculs et adaptation aux capacités testés localement. |
 | Scènes, conditions, priorités et édition en direct | Implémenté ; tests locaux des priorités, sessions et restaurations. |
 | Transitions globales et par pièce | Implémenté ; paramètres et concurrence testés, comportement matériel à vérifier. |
@@ -44,7 +46,7 @@ Le panneau propose trois entrées : **Pièces**, **Profils de lumière naturelle
 - Les pièces récupérées depuis Home Assistant sont regroupées dans une liste recherchable, avec état, nombre de lumières et commande d’allumage/extinction. Les pièces non configurées restent identifiables et accessibles pour leur configuration. La liste place les pièces configurées dans le brouillon courant avant les autres, conserve l’ordre fourni par Home Assistant dans chaque catégorie et maintient ce classement pendant la recherche.
 - Sur grand écran, la liste reste visible à gauche du détail sélectionné ; sur mobile, la liste et le détail se succèdent avec un retour explicite. L’accueil invite à choisir une pièce.
 - Le détail donne d’abord accès à l’état réel, aux commandes et aux modes de la pièce. Ses cinq onglets sont **Pilotage** (scènes), **Lumières** (affectation), **Automatisation** (présence, luminosité, pause), **Ambiances** (associations naturelles et ambiance de base) et **Réglages** (transitions locales et suppression). Les utilisateurs ordinaires conservent le pilotage ; les réglages restent administrateurs.
-- Les profils naturels disposent d’une liste et d’un seul éditeur affiché à la fois. L’entité soleil et les transitions par défaut restent dans les réglages globaux.
+- Les profils naturels disposent d’une liste et d’un seul éditeur affiché à la fois. L’entité soleil, la durée de protection contre les pertes de présence et les transitions par défaut restent dans les réglages globaux.
 - L’état explicite de chaque pièce indique la scène sélectionnée, la lumière naturelle, la pause manuelle, l’absence, la luminosité suffisante ou une donnée indisponible.
 
 Cette organisation compacte remplace la page de longs formulaires simultanés, conformément aux choix du 9 octobre 2026 : pilotage prioritaire, liste/détail et construction directe dans le panneau fonctionnel. Toutes les options métier sont conservées. Les aides détaillées, associations naturelles, réglages individuels de l’ambiance de base et conditions de scène peuvent être dépliés au besoin. Les scènes gardent leurs actions de lancement et de réglage visibles ; déplacement et suppression sont regroupés dans un menu par ligne.
@@ -141,6 +143,18 @@ Chaque pièce peut sélectionner une entité de présence : détecteur de mouvem
 
 Ces décisions sont soumises au mode automatique, aux pauses et à la priorité des scènes décrites plus bas.
 
+### Rallumage rapide après une perte de présence
+
+**Implémenté et testé localement ; validation matérielle et déploiement domestique non réalisés pour cet ajout.** Une fenêtre globale, initialement de **30 secondes**, évite qu’une mesure lumineuse encore élevée après l’extinction retarde le retour des lumières. Elle ne concerne que les pièces dont l’extinction sur forte luminosité est désactivée. Une durée de **0 seconde** désactive cette protection.
+
+La fenêtre commence au début d’une extinction commandée par Halo **pour absence**, si au moins une lampe est encore allumée. Les réévaluations ne la prolongent pas. Un véritable passage **absent → présent**, selon les états configurés, strictement avant son expiration déclenche un seul rallumage sans attendre la mesure lumineuse. Une mise à jour d’attributs ou un passage d’un état inconnu/indisponible vers « présent » ne constitue pas ce retour. La mesure et la mémoire d’hystérésis ne sont pas remplacées par une valeur artificielle.
+
+Halo utilise l’ambiance normalement applicable : scène prioritaire, sinon ambiance de base et profils naturels. La transition est toujours celle de l’**allumage habituel**, avec l’éventuelle valeur propre à la pièce, jamais celle de baisse de luminosité. Le rallumage est envoyé même pendant le fondu d’extinction, si les lampes annoncent encore un état allumé ; les extinctions encore en attente sont invalidées. La publication lumineuse ultérieure ne provoque pas un second allumage progressif.
+
+Cette fenêtre ne s’ouvre pas après une extinction manuelle, une extinction de scène ou une extinction sur luminosité. Elle respecte le mode automatique, les pauses et la suspension d’édition. Une pause encore active empêche ce rallumage : le retour ne la termine que si l’absence continue a atteint la durée minimale décrite dans la section suivante. Une nouvelle intervention manuelle conserve sa priorité et annule la fenêtre, comme l’édition, la désactivation ou une reconfiguration. La fenêtre est consommée après reprise et reste uniquement en mémoire : un redémarrage ne la restaure pas.
+
+Le réglage global `presence_return_window` est un nombre fini obligatoire entre **0 et 604 800 secondes**. Les anciennes configurations sans ce champ reçoivent **30 secondes** ; toute valeur explicitement enregistrée, notamment zéro, est conservée.
+
 ### Luminosité et hystérésis
 
 Le capteur de luminosité est facultatif. Lorsqu’il est configuré, l’utilisateur renseigne un seuil fixe et une hystérésis. Le dashboard affiche les seuils effectifs bas et haut ; entre ces seuils, la décision précédente est conservée. Dans l’implémentation, le seuil bas est le seuil renseigné et le seuil haut est ce seuil augmenté de l’hystérésis : la pièce est sombre sous le seuil bas et suffisamment lumineuse à partir du seuil haut.
@@ -173,6 +187,12 @@ La pause se termine au premier des événements suivants :
 1. Expiration du délai configurable de pause manuelle.
 2. Retour dans la pièce après une absence confirmée.
 3. Action sur le bouton de reprise.
+
+**Protection contre les pertes brèves de présence : implémentée et testée localement, sans validation matérielle ni déploiement domestique pour cet ajout.** La même durée globale `presence_return_window`, initialement de **30 secondes**, fixe un minimum d’absence continue avant qu’un retour puisse terminer une pause manuelle. La durée requise est la plus grande entre le délai d’absence propre à la pièce et cette durée globale : **`max(absence_delay, presence_return_window)`**. La pause est réinitialisée au **retour de présence**, jamais simplement parce que cette durée est écoulée pendant l’absence.
+
+Cette protection de la pause concerne **toutes les pièces**, indépendamment du choix d’extinction sur forte luminosité. Un état de présence inconnu ou indisponible interrompt la continuité de l’absence ; il ne compte pas dans sa durée. Un retour trop tôt conserve la pause, y compris le nom d’une scène lancée explicitement. L’expiration propre de la pause et le bouton de reprise gardent leur fonctionnement habituel.
+
+Avec une durée globale de **0**, seule cette durée minimale supplémentaire disparaît ; le délai d’absence de la pièce reste applicable. Ce réglage ne retarde pas l’extinction automatique, qui conserve son délai d’absence. La fenêtre de rallumage rapide garde son propre point de départ à l’envoi de l’extinction et reste soumise à une pause encore active ; aucune restauration automatique d’une ambiance manuelle n’est ajoutée.
 
 Une extinction manuelle déclenche la pause ; elle ne l’annule pas immédiatement. Les commandes et les retours d’état produits par Halo, y compris pendant une transition, ne doivent pas être interprétés comme une intervention manuelle.
 
@@ -371,6 +391,7 @@ Ces valeurs sont les valeurs par défaut retenues et appliquées dans la premiè
 | Extinction sur forte luminosité | Désactivée. |
 | Extinction automatique pendant la pause manuelle | Autorisée ; configurable par pièce. |
 | Délai d’absence | 0 seconde, modifiable. |
+| Protection globale contre les pertes de présence | 30 secondes, modifiable ; 0 désactive le rallumage rapide et le minimum supplémentaire de protection de la pause, sans changer le délai d’absence. |
 | Durée de pause manuelle | 120 minutes, modifiable. |
 | Confirmation de forte luminosité avant extinction | 30 secondes, modifiable. |
 | Seuil lumineux | À renseigner lorsqu’un capteur est configuré. |
@@ -378,7 +399,7 @@ Ces valeurs sont les valeurs par défaut retenues et appliquées dans la premiè
 | Langue de référence et de repli | Anglais. |
 | Autre langue fournie | Français, pour `fr` et ses variantes. |
 
-Ces valeurs remplacent les choix initiaux (absence 120 secondes, pause 15 minutes et transitions globales vides), à la demande du 9 octobre 2026. Elles s’appliquent aux nouvelles configurations ; les réglages déjà enregistrés, y compris `0` et les transitions vides (`null`), sont conservés. Les pièces continuent d’hériter des transitions globales par défaut. Le champ vide reste un choix explicite valide pour omettre une transition.
+Ces valeurs remplacent les choix initiaux (absence 120 secondes, pause 15 minutes et transitions globales vides), à la demande du 9 octobre 2026. Elles s’appliquent aux nouvelles configurations ; les réglages déjà enregistrés, y compris `0` et les transitions vides (`null`), sont conservés. Les pièces continuent d’hériter des transitions globales par défaut. Le champ vide reste un choix explicite valide pour omettre une transition. La durée globale de protection contre les pertes de présence est aussi ajoutée à 30 secondes aux anciennes configurations qui ne contiennent pas encore ce champ.
 
 ## 14. Scénarios d’acceptation
 
@@ -436,6 +457,11 @@ Pour la refonte du 9 octobre 2026, les **52 tests frontend** (43 du panneau, 9 d
 | A46 | Parcourir les onglets au clavier puis importer ou éditer une scène. | Flèches, Début et Fin déplacent l’onglet actif et le focus ; navigation bloquée pendant l’édition réelle ; retour au pilotage et focus approprié. |
 | A47 | Changer le thème Home Assistant, agrandir la police et activer la réduction des mouvements. | Couleurs, typographie et contrôles suivent le thème ; aucune palette Halo imposée ; contenu accessible et animations supprimées lorsque demandé. |
 | A48 | Observer le capteur d’état pendant un allumage naturel, une scène conditionnelle ou explicite, une intervention manuelle, une édition, une extinction et une indisponibilité ; renommer et recharger la pièce. | État conforme aux priorités ci-dessus, nom de scène conservé avec préfixe pour les noms réservés, attributs stables, traductions anglaises/françaises des états fixes, mises à jour sans panneau ouvert et identité conservée. |
+| A49 | Éteindre pour absence, puis revenir avant la fin de la fenêtre alors que la luminosité est encore haute, y compris pendant le fondu et avec plusieurs extinctions en attente. | Rallumage unique avec l’ambiance applicable et la transition d’allumage habituel ; anciennes intentions d’extinction invalidées, sans attendre ni falsifier le capteur lumineux. |
+| A50 | Tester zéro, l’expiration exacte, une absence longue, une première entrée lumineuse, les états personnalisés et le retour de disponibilité ; intervenir manuellement, éditer, désactiver ou reconfigurer. | Protection uniquement dans sa fenêtre et pour un vrai retour après extinction pour absence ; aucun contournement des pauses, de l’édition ou des pièces autorisant l’extinction sur luminosité ; fenêtre annulée dans les cas prévus et non restaurée au redémarrage. |
+| A51 | Modifier la fenêtre globale, saisir une valeur invalide, sauvegarder/recharger et ouvrir une ancienne configuration. | Valeur finie de 0 à 604 800 secondes exigée ; droits, brouillon et révisions respectés ; valeur explicite conservée, défaut de 30 secondes si champ absent ; libellés et aide anglais/français. |
+| A52 | Pendant une pause manuelle, revenir avant, à et après `max(absence_delay, presence_return_window)`, avec puis sans extinction sur forte luminosité. | Retour trop tôt sans réinitialisation ; retour après une absence continue suffisante terminant la pause, sans réinitialisation pendant l’absence elle-même ; expiration propre et bouton de reprise inchangés. |
+| A53 | Régler la protection globale à zéro, interrompre une absence par une indisponibilité et combiner pause avec extinction pour absence puis retour rapide. | Délai d’absence local conservé à zéro global ; indisponibilité interrompant la continuité ; extinction au délai local habituel ; une pause encore active bloque le rallumage rapide sans restaurer artificiellement l’ambiance manuelle. |
 
 Pour chaque scénario réalisé, consigner son résultat, la version examinée et le périmètre : test automatisé, essai d’interface ou essai sur des lumières réelles. Une fonctionnalité implémentée n’est pas automatiquement validée dans Home Assistant.
 
@@ -457,5 +483,7 @@ Le choix des contrôles natifs de scène repose sur les [mécanismes officiels v
 | 9 octobre 2026 | Lancer le développement du cahier des charges. | Première implémentation du moteur, des entités et du panneau ; validation locale et essais matériels distingués. |
 | 9 octobre 2026 | Préciser les groupes, rendre les entités recherchables, suivre les unités des capteurs et ajuster les valeurs initiales après les premiers retours du panneau. | Nouvelles règles décrites ci-dessus ; conservation des réglages existants et création de profils/scènes compatible HTTP local. |
 | 9 octobre 2026 | Refaire le panneau avec pilotage prioritaire, liste/détail et développement direct, en suivant le thème Home Assistant. | Refonte compacte implémentée et vérifiée localement, sans suppression d’option métier ; cinq onglets par pièce et profils dans une vue dédiée. Aucun déploiement domestique ni publication HACS n’en découle. |
+| 9 octobre 2026 | Ajouter une fenêtre globale de rallumage après une extinction pour absence, initialement de 30 secondes. | Un retour rapide ignore ponctuellement la luminosité et utilise la transition de présence, uniquement lorsque l’extinction sur luminosité est désactivée ; zéro désactive la protection. |
+| 9 octobre 2026 | Réutiliser la durée globale pour protéger le mode manuel des pertes brèves de présence. | Le retour ne termine la pause qu’après une absence continue d’au moins le maximum entre délai local et durée globale, pour toutes les pièces ; ni l’extinction automatique ni l’expiration propre de pause ne sont retardées. |
 
 Le développement et les essais précèdent toute publication. La release et la demande d’inclusion HACS suivent ensuite la [procédure documentée](docs/HACS.md). Aucun référencement n’est déclenché par la rédaction de ce cahier des charges.

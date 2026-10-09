@@ -17,7 +17,7 @@ function fixture(admin = true): Snapshot {
   room.scenes = [{ id: "cinema", name: "Cinéma perso", conditions: { type: "state", entity_id: "media_player.tv", state: "on" }, can_turn_on: false,
     lights: { "light.colour": { state: "on", brightness_pct: 20 }, "light.simple": { state: "off" } } }];
   return { revision: 7, is_admin: admin, areas: [{ id: "lounge", name: "Salon personnalisé" }, { id: "kitchen", name: "Cuisine" }],
-    config: { sun_entity_id: "sun.sun", profiles: {}, rooms: { lounge: room }, transitions: { turn_on: null, lux_on: null, natural: null, scene: null, turn_off: null } },
+    config: { sun_entity_id: "sun.sun", presence_return_window: 30, profiles: {}, rooms: { lounge: room }, transitions: { turn_on: null, lux_on: null, natural: null, scene: null, turn_off: null } },
     status: { lounge: { reason: "manual_pause", is_on: true, available: true, pause_until: "2026-10-09T22:00:00Z" } },
     lights: [{ entity_id: "light.colour", name: "Lampe couleur", area_id: "lounge", available: true, supported_color_modes: ["rgb"], supported_features: 32 },
       { entity_id: "light.simple", name: "Lampe simple", area_id: "lounge", available: true, supported_color_modes: ["onoff"], supported_features: 0 },
@@ -296,6 +296,64 @@ test("room drafts survive subsection, room and top navigation before saving once
   assert.equal(saves.length, 1);
   assert.equal((saves[0].config as Snapshot["config"]).rooms.lounge.absence_delay, 27);
   assert.equal((saves[0].config as Snapshot["config"]).rooms.kitchen, undefined);
+});
+
+test("the global presence return window saves zero and fractional durations through the shared draft", async () => {
+  const { panel, calls, hass } = await mount();
+  button(panel, "Réglages globaux").click(); await settle(panel);
+  const label = "Délai de protection de présence (secondes)";
+  assert.equal(inputByLabel(panel, label).value, "30");
+  assert.match(panel.shadowRoot!.textContent!, /uniquement les pièces où l’extinction sur forte luminosité est désactivée/);
+  assert.match(panel.shadowRoot!.textContent!, /Dans toutes les pièces, le retour ne termine une pause manuelle qu’après une absence continue/);
+  assert.match(panel.shadowRoot!.textContent!, /ce délai de protection et que le délai d’absence de la pièce/);
+  assert.match(panel.shadowRoot!.textContent!, /Zéro désactive le rallumage rapide et conserve uniquement le délai d’absence/);
+  for (const value of ["0", "45.5", "604800"]) {
+    const field = inputByLabel(panel, label);
+    field.value = value; field.dispatchEvent(new Event("input", { bubbles: true })); await settle(panel);
+    assert.equal(field.checkValidity(), true);
+    button(panel, "Pièces").click(); await settle(panel);
+    button(panel, "Réglages globaux").click(); await settle(panel);
+    assert.equal(inputByLabel(panel, label).value, value, "Navigation preserves the unsaved value");
+    button(panel, "Enregistrer les modifications").click(); await settle(panel);
+    const saved = calls.filter((call) => call.type === "halo/save").at(-1)!;
+    assert.equal((saved.config as Snapshot["config"]).presence_return_window, Number(value));
+    assert.equal(panel.shadowRoot!.querySelector(".savebar"), null);
+  }
+  panel.hass = { ...hass, locale: { language: "en" } }; await settle(panel);
+  assert.equal(inputByLabel(panel, "Presence protection delay (seconds)").value, "604800");
+  assert.match(panel.shadowRoot!.textContent!, /In every room, returning only ends a manual pause after a continuous absence/);
+  assert.match(panel.shadowRoot!.textContent!, /Zero disables quick turn-on and uses only the room’s absence delay/);
+});
+
+test("the global presence return window rejects missing, negative, excessive and non-finite values", async () => {
+  const { panel, calls } = await mount();
+  button(panel, "Réglages globaux").click(); await settle(panel);
+  const label = "Délai de protection de présence (secondes)";
+  for (const value of ["", "-1", "604800.1", "1e309"]) {
+    const field = inputByLabel(panel, label);
+    field.value = value; field.dispatchEvent(new Event("input", { bubbles: true })); await settle(panel);
+    assert.equal(field.checkValidity(), false, `${value} must be rejected`);
+    for (const target of [button(panel, "Enregistrer les modifications"), button(panel, "Pièces")]) {
+      target.click(); await settle(panel);
+      assert.ok(panel.shadowRoot!.querySelector(".global-settings"));
+      assert.equal(panel.shadowRoot!.activeElement, field);
+    }
+    assert.equal(calls.some((call) => call.type === "halo/save"), false);
+    button(panel, "Abandonner les modifications").click(); await settle(panel);
+    assert.equal(inputByLabel(panel, label).value, "30");
+    assert.equal(panel.shadowRoot!.querySelector(".savebar"), null);
+  }
+});
+
+test("the global presence return window disappears when administrator rights are lost", async () => {
+  const { panel, emit, calls } = await mount();
+  button(panel, "Réglages globaux").click(); await settle(panel);
+  assert.ok(inputByLabel(panel, "Délai de protection de présence"));
+  emit(fixture(false)); await settle(panel);
+  assert.equal(panel.shadowRoot!.querySelector(".global-settings"), null);
+  assert.ok(!panel.shadowRoot!.textContent!.includes("Délai de protection de présence"));
+  assert.ok(![...panel.shadowRoot!.querySelectorAll("button")].some((item) => item.textContent?.trim() === "Réglages globaux"));
+  assert.equal(calls.some((call) => call.type === "halo/save"), false);
 });
 
 test("an invalid room field stays visible and focused instead of being lost by any navigation", async () => {

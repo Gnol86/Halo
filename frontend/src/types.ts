@@ -54,7 +54,7 @@ export interface Room {
   associations: Association[];
   scenes: Scene[];
 }
-export interface Config { sun_entity_id: string | null; transitions: Transitions; profiles: Record<string, Profile>; rooms: Record<string, Room> }
+export interface Config { sun_entity_id: string | null; presence_return_window: number; transitions: Transitions; profiles: Record<string, Profile>; rooms: Record<string, Room> }
 export interface Light {
   entity_id: string;
   name: string;

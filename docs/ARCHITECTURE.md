@@ -24,7 +24,9 @@ Le capteur utilise le contrat officiel de [l’entité Sensor](https://developer
 
 ## Configuration
 
-La configuration regroupe `sun_entity_id`, `transitions`, `profiles` et `rooms`. Les profils sont indexés par identifiant stable. Les pièces sont indexées par identifiant de zone Home Assistant. Les scènes sont une liste ordonnée dans chaque pièce.
+La configuration regroupe `sun_entity_id`, `presence_return_window`, `transitions`, `profiles` et `rooms`. Les profils sont indexés par identifiant stable. Les pièces sont indexées par identifiant de zone Home Assistant. Les scènes sont une liste ordonnée dans chaque pièce.
+
+Le champ global `presence_return_window` exprime en secondes la durée commune de protection contre les pertes de présence : nombre fini de 0 à 604 800, avec défaut de 30 pour une nouvelle configuration ou un ancien document qui ne contient pas le champ. Il fixe la fenêtre de rallumage rapide après extinction et le minimum supplémentaire d’absence continue avant qu’un retour termine la pause. Zéro désactive le rallumage rapide et ce minimum supplémentaire, sans supprimer le délai d’absence local ; une valeur explicitement enregistrée est conservée. Le champ utilise les commandes de configuration et le stockage version 1 existants, avec validation serveur, droits administrateur et contrôle de révision ; aucune nouvelle commande API n’est nécessaire. L’interface exige une valeur renseignée.
 
 Chaque courbe naturelle contient `low_elevation`, `high_elevation`, `low`, `high` et `interpolation`. Les modes proposés sont `linear` et `ease_in_out`. L’ancien identifiant `ease_in` est accepté et normalisé vers `ease_in_out`, y compris pour les courbes du soir masquées, pour appliquer la correction demandée aux profils existants. Pour les courbes actives, l’absence du champ est normalisée en `linear`, sans changement du stockage version 1 ; une valeur inconnue est rejetée. La normalisation seule n’écrit pas, mais une persistance ultérieure de configuration ou de runtime enregistre la valeur canonique. Les autres paramètres du soir ne sont utilisés et validés que lorsque les périodes sont dissociées. Le choix se fait par courbe de luminosité/température et par branche matin/soir, avec le comportement existant de liaison des branches.
 
@@ -45,6 +47,22 @@ Les conditions sont des arbres de types `state`, `numeric`, `time`, `sun`, `and`
 Chaque moteur écoute ses lampes, ses capteurs, le soleil et les entités de ses conditions. Les échéances utilisent des temporisations dédiées ; un passage toutes les 30 secondes couvre notamment les conditions horaires. La fermeture du panneau n’interrompt pas le moteur.
 
 Les commandes portent un contexte Home Assistant propre à Halo, relié au contexte utilisateur lorsque disponible. Le moteur suit aussi les valeurs attendues pendant une transition pour les équipements qui ne restituent pas ce contexte. Ce dernier comportement exige encore des essais sur les intégrations de lampes réelles.
+
+### Fenêtre de rallumage après absence
+
+**Implémenté et testé localement ; validation matérielle et déploiement domestique non réalisés pour cet ajout.** Pour une pièce où `lux_off` est faux, le moteur mémorise en mémoire le début de l’extinction pour absence s’il reste une lampe allumée. Les réévaluations répétées ne repoussent pas cet instant. La fenêtre n’est ni persistée dans `runtime`, ni restaurée après redémarrage.
+
+Un événement de présence doit passer d’un état connu absent à un état présent configuré, strictement avant l’expiration. Un changement d’attributs ou un rétablissement depuis `unknown`/`unavailable` ne suffit pas. La reprise contourne le contrôle lumineux pour cet allumage seulement, sans modifier la mesure ni l’hystérésis. Elle réapplique l’ambiance applicable avec `turn_on`, même si une scène est sélectionnée ou si un fondu d’extinction laisse les lampes temporairement allumées. Les intentions d’extinction encore en attente deviennent caduques ; un événement lumineux ultérieur ne déclenche pas un nouvel allumage avec `lux_on`.
+
+La fenêtre est consommée lors de la reprise. Extinction manuelle, extinction par une scène et extinction sur luminosité ne l’ouvrent pas. Intervention manuelle, session d’édition, désactivation et reconfiguration l’annulent. Les protections d’automatisation, d’édition et de pause restent prioritaires ; le retour ne termine la pause que selon la durée minimale d’absence continue décrite ci-dessous. Une nouvelle commande manuelle doit aussi pouvoir invalider le rallumage en attente.
+
+### Retour de présence pendant une pause manuelle
+
+**Implémenté et testé localement ; validation matérielle et déploiement domestique non réalisés pour cet ajout.** La fin de pause au retour nécessite une absence continue d’au moins `max(absence_delay, presence_return_window)` secondes. Ce contrôle s’applique à toutes les pièces, quel que soit `lux_off`. L’expiration de ce délai pendant l’absence ne termine pas la pause ; seul le retour présent le fait, en dehors de l’expiration propre de pause ou d’une reprise explicite, qui restent inchangées.
+
+Les états personnalisés du détecteur déterminent présence et absence. `unknown` ou `unavailable` rompt la continuité et ne prolonge pas artificiellement une absence connue. Zéro comme valeur globale retire seulement le minimum supplémentaire : `absence_delay` reste exigé pour le retour. L’extinction automatique utilise toujours son délai local et la fenêtre de rallumage reste comptée depuis l’envoi de cette extinction. Si un retour intervient alors que la pause est encore protégée, cette pause conserve sa priorité ; aucun instantané d’ambiance manuelle n’est ajouté ou réappliqué par ce mécanisme.
+
+### Session d’édition
 
 Une session d’édition possède un jeton aléatoire, une seule connexion propriétaire et un instantané initial. Le panneau renouvelle sa session ; l’expiration intervient après 120 secondes sans renouvellement. Enregistrement et restauration sont traités côté serveur. Une autre connexion ne peut pas utiliser le jeton pour commander les lampes.
 
