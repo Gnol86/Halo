@@ -134,6 +134,8 @@ Des parcours ciblés ont aussi été vérifiés dans **Home Assistant 2026.10.0 
 
 Les releases GitHub demandées le 9 octobre 2026 distribuent ce même panneau compilé dans l’intégration. Elles n’ajoutent ni écran de mise à jour ni carte à installer dans Halo : le téléchargement et la mise à jour restent pris en charge par HACS, avec ses propres composants et le thème Home Assistant. Leur publication ne modifie pas les règles de design ni le niveau de validation matérielle indiqué ici. Le [statut de distribution](docs/HACS.md) distingue les releases du référencement au catalogue par défaut.
 
+La **version 0.1.1 est en préparation** pour distribuer trois corrections implémentées : retrait des lignes répétitives sous les sélecteurs, alignement des champs malgré les libellés multilignes et disparition de la confirmation de sauvegarde après 4 secondes. Les [notes de version](releases/0.1.1.md) décrivent ce lot ; ses vérifications locales ne constituent ni une publication confirmée ni un déploiement domestique.
+
 ### Identité existante
 
 - **Nom :** Halo.
@@ -253,6 +255,8 @@ La navigation globale reprend les couleurs de l’en-tête et souligne la page c
 
 Les champs et listes natives reprennent les variables Home Assistant de fond, texte, contour normal et contour de survol. Le champ invalide prend la couleur d’erreur. Les sélecteurs Halo fournissent un champ de recherche, une liste de résultats, un état sélectionné et un état de résultat actif ; leur survol, focus et comportement clavier restent explicites. Les aides détaillées utilisent des sections dépliables nommées par leur sujet.
 
+Les contrôles d’une même rangée de grille restent alignés lorsque les libellés prennent une ou plusieurs lignes. Cette règle couvre notamment le sélecteur de présence, les états signifiant présent et le délai d’absence. L’alignement suit la largeur disponible et les retours à la ligne, sans raccourcir les libellés ni supprimer les unités.
+
 ### Accès, navigation et brouillon
 
 L’ajout de l’unique instance Halo crée automatiquement le panneau, sans carte séparée ni YAML. Les droits sont contrôlés côté serveur ; masquer un contrôle ne suffit pas. Le moteur reste actif sans panneau ouvert, hors libération de la session temporaire d’édition décrite plus bas.
@@ -260,6 +264,8 @@ L’ajout de l’unique instance Halo crée automatiquement le panneau, sans car
 Les changements de pièce, d’onglet ou de profil conservent le brouillon transversal. Une saisie invalide bloque la navigation, ouvre le détail qui la contient si nécessaire et reçoit le focus. La validation serveur reste la garantie finale. Abandonner restaure aussi les champs contenant une saisie invalide ; un conflit de révision garde le brouillon visible et interdit une sauvegarde aveugle.
 
 La barre persistante signale les modifications non enregistrées et propose l’enregistrement ou l’abandon. Avec un brouillon sur une pièce déjà enregistrée, l’allumage et l’extinction restent accessibles ; les modes et la reprise demandent d’enregistrer ou d’abandonner. Pour une nouvelle pièce, les commandes attendent sa première sauvegarde. Le texte d’aide distingue ces deux situations.
+
+La notification de succès **« Modifications enregistrées. »** (`Changes saved.`) reste visible **4 secondes**, puis disparaît sans action. Chaque sauvegarde réussie relance ce délai ; la fermeture du panneau libère la temporisation. Ce comportement concerne seulement la confirmation de sauvegarde, pas les erreurs ni les alertes.
 
 L’édition réelle bloque la navigation jusqu’à sa fin. Après import ou édition, le panneau revient au pilotage avec un focus cohérent : nouvelle scène importée, action d’origine après annulation, ou scène réglée après édition.
 
@@ -276,6 +282,8 @@ Les listes précisent si l’entité est un groupe Home Assistant ou une lumièr
 Les groupes fournis par Philips Hue sont également reconnus. Un groupe reste indiqué comme tel lorsque son intégration n’expose pas ses membres ; aucune appartenance n’est inventée.
 
 Chaque sélection d’entité propose une recherche immédiate par nom et identifiant, insensible à la casse et aux accents, avec navigation au clavier et choix à la souris ou au toucher. La sélection courante reste lisible ; quitter une recherche sans choisir conserve cette sélection. Les cas sans résultat et les entités sélectionnées devenues indisponibles sont explicites. Les listes de lampes de la pièce, des associations naturelles, de l’ambiance de base et des scènes proposent aussi un filtre.
+
+La sélection est affichée dans le champ lui-même. Les lignes répétitives « Sélectionnée : nom · identifiant » et « Aucune entité » ne sont plus affichées sous les sélecteurs. Cette simplification conserve les indications utiles d’indisponibilité, les retours de recherche et de validation ainsi que les libellés accessibles.
 
 L’utilisation du sélecteur natif Home Assistant partout est demandée, mais reste **non implémentée** : le panneau ne dispose pas d’un mécanisme public de chargement identifié pour ce composant. Les sélecteurs Halo restent en place ; ils ne sont pas présentés comme natifs. La fenêtre native des lampes dans l’éditeur de scènes utilise, elle, une action publique documentée.
 

@@ -29,7 +29,7 @@ Limite vérifiée le 9 octobre 2026 : HACS 2.0.5 ne charge pas les icônes embar
 | Transitions globales et par pièce | Implémenté ; paramètres et concurrence testés, comportement matériel à vérifier. |
 | Localisation complète et sélection de langue du panneau | Catalogues anglais/français et sélection de langue implémentés ; tests locaux. |
 | Direction du dashboard | Actée et implémentée : pilotage prioritaire, liste de pièces et détail, sous-vues compactes et thème Home Assistant sans palette propre. |
-| Releases GitHub | [Première release `v0.1.0`](https://github.com/Gnol86/Halo/releases/tag/v0.1.0) publiée le 9 octobre 2026 ; workflow réussi avec Hassfest et HACS, archive contrôlée. Installation dans HACS et validation matérielle distinctes, preuves dans la documentation de développement. |
+| Releases GitHub | [Première release `v0.1.0`](https://github.com/Gnol86/Halo/releases/tag/v0.1.0) publiée le 9 octobre 2026 ; workflow réussi avec Hassfest et HACS, archive contrôlée. Version `0.1.1` en préparation pour les corrections d’interface décrites ci-dessous. Installation dans HACS et validation matérielle distinctes, preuves dans la documentation de développement. |
 | Référencement au catalogue HACS par défaut | Jalon final, après développement et validation. Les installations comme dépôt personnalisé sont distinctes. |
 
 ## 2. Installation et panneau Halo
@@ -57,6 +57,8 @@ Le panneau reprend les variables du thème Home Assistant pour les couleurs, ét
 La fermeture du panneau n’interrompt pas les automatismes.
 
 La barre signalant les modifications non enregistrées reste accessible au bas de la fenêtre pendant le défilement des réglages, sans masquer le contenu.
+
+Après une sauvegarde réussie, la confirmation **« Modifications enregistrées. »** disparaît automatiquement après **4 secondes**. Une nouvelle sauvegarde réussie renouvelle ce délai ; les erreurs et alertes ne sont pas effacées par cette temporisation.
 
 Les changements d’onglet, de pièce ou de profil conservent le brouillon. Un champ invalide empêche de quitter la sous-vue, est révélé si nécessaire et reçoit le focus ; la validation serveur reste la garantie finale. Abandonner rétablit aussi les champs contenant une saisie invalide. L’édition réelle bloque la navigation jusqu’à sa fin. Import et édition ramènent au pilotage avec un focus cohérent : nouvelle scène importée, action d’origine après annulation, ou scène réglée après édition.
 
@@ -91,6 +93,10 @@ Les listes distinguent les entités de groupe Home Assistant des lumières indiv
 Cela comprend les groupes Philips Hue v1 et v2 : un marqueur de groupe ou les métadonnées du registre permettent de reconnaître leur nature, même sans liste de membres. Les listes et ensembles de membres exposés sont pris en charge ; les appartenances non exposées restent inconnues.
 
 Tous les sélecteurs d’entités proposent une recherche immédiate par nom ou identifiant, insensible à la casse et aux accents. Cela couvre notamment la présence, la luminosité, le soleil et les conditions de scènes. Les listes de lampes de la pièce, des associations naturelles, de l’ambiance de base et des scènes sont également filtrables. Abandonner une recherche ne modifie pas la sélection enregistrée.
+
+La sélection reste lisible dans le champ, sans ligne répétitive « Sélectionnée : … » ou « Aucune entité » en dessous. Les informations utiles d’indisponibilité et de recherche, les libellés accessibles et la validation sont conservés. Les contrôles disposés sur une même rangée restent alignés malgré les différences de longueur des libellés, notamment dans les réglages de présence.
+
+Ces simplifications et la confirmation de sauvegarde limitée à 4 secondes sont implémentées et regroupées dans la **version 0.1.1 en préparation**. La publication et l’installation domestique restent distinctes des vérifications locales ; les [notes de version](releases/0.1.1.md) décrivent ce lot.
 
 **Demande de sélecteurs natifs partout : étudiée, non implémentée.** Aucun mécanisme public de chargement du sélecteur natif dans un panneau personnalisé n’a été identifié dans les documents et sources examinés. Les voies documentées concernent les formulaires natifs et l’éditeur de configuration des cartes. Pour respecter la contrainte de ne pas introduire de solution fragile, les sélecteurs Halo actuels sont conservés ; aucun chargement indirect de Lovelace ni import de fichier interne compilé n’est ajouté. [Diagnostic et alternatives](docs/ARCHITECTURE.md#sélecteurs-dentités-natifs).
 
@@ -435,14 +441,14 @@ Pour la refonte du 9 octobre 2026, les **52 tests frontend** (43 du panneau, 9 d
 | A23 | Rendre une source de présence, de luminosité, de soleil ou une lampe indisponible, puis la rétablir. | Indisponibilité explicite ; aucune mesure remplacée par zéro ; récupération vérifiée. |
 | A24 | Fermer le panneau, recharger l’intégration et redémarrer Home Assistant pendant une pause. | Moteur indépendant du panneau ; ressources libérées ; configuration, identifiants et échéance de pause conservés. |
 | A25 | Utiliser le français, ses variantes, l’anglais et une langue non prise en charge. | Français pour les variantes françaises ; anglais autrement ; noms personnalisés et identifiants inchangés. |
-| A26 | Rechercher par nom ou identifiant dans les sélecteurs d’entités et listes de lumières, au clavier et à la souris. | Filtrage immédiat ; sélection conservée si la recherche est abandonnée ; entités indisponibles identifiables. |
+| A26 | Rechercher par nom ou identifiant dans les sélecteurs d’entités et listes de lumières, au clavier et à la souris. | Filtrage immédiat ; sélection conservée si la recherche est abandonnée ; aucune ligne répétitive sous le champ ; entités indisponibles identifiables. |
 | A27 | Afficher une entité de groupe, une lampe membre et une lampe sans groupe connu. | Nature et appartenances connues explicites ; aucune information inaccessible divulguée. |
 | A28 | Sélectionner des capteurs en `lx`, en `%`, puis sans unité. | Unités adaptées sur seuil et hystérésis ; aucune conversion implicite des valeurs. |
 | A29 | Créer un profil naturel et une scène via une adresse Home Assistant locale en HTTP. | Création et sauvegarde possibles sans dépendre de `crypto.randomUUID`, réservé aux contextes sécurisés. |
 | A30 | Créer une configuration puis recharger une ancienne configuration. | Nouveaux défauts appliqués à la création ; durées et transitions déjà enregistrées conservées. |
 | A31 | Modifier un réglage puis faire défiler une longue page sur ordinateur et mobile. | Barre d’enregistrement visible au bas de la fenêtre ; derniers champs accessibles sans recouvrement. |
 | A32 | Afficher des courbes avec seuils décimaux, proches, négatifs ou aux limites. | Graduations aux hauteurs saisies et aux positions exactes ; plateaux conservés et libellés lisibles. |
-| A33 | Afficher les transitions avec des titres de longueurs différentes, globalement et par pièce. | Champs alignés dans chaque rangée, y compris après un changement de largeur. |
+| A33 | Afficher les grilles de champs avec des libellés de longueurs différentes, notamment la présence et les transitions globales ou par pièce. | Contrôles alignés dans chaque rangée, y compris après un changement de largeur ou de langue. |
 | A34 | Afficher des groupes Philips Hue v1/v2, dont un groupe sans membres exposés. | Nature du groupe reconnue ; seuls les membres connus et autorisés sont affichés. |
 | A35 | Choisir le type de chaque courbe, enregistrer et recharger ; ouvrir un ancien profil sans type. | Choix indépendants conservés, ancien profil linéaire, valeur inconnue rejetée par le serveur. |
 | A36 | Comparer linéaire et progression en S aux seuils, aux quarts et à mi-parcours, sur des courbes croissantes ou décroissantes. | Valeurs limites inchangées ; progression en S de 15,625 %, 50 % puis 84,375 % aux quarts du parcours solaire, avec ralentissement aux deux extrémités ; aperçu et moteur concordants. |

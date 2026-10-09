@@ -53,11 +53,15 @@ Les transitions dépendent des capacités annoncées par chaque lampe. Sur les �
 
 Les sélecteurs d’entités restent ceux de Halo. Leur remplacement par le sélecteur natif est demandé mais non implémenté : aucun chargement public fiable pour le panneau personnalisé n’a été identifié. La [limite et les voies natives disponibles](docs/ARCHITECTURE.md#sélecteurs-dentités-natifs) sont documentées.
 
+**Corrections d’interface de la version 0.1.1, en préparation :** les sélecteurs n’ajoutent plus de ligne répétant la sélection ou « Aucune entité » sous le champ ; les indications d’indisponibilité restent disponibles. Les champs côte à côte, notamment ceux de présence, restent alignés même si leurs libellés occupent plusieurs lignes. La confirmation **« Modifications enregistrées. »** disparaît après **4 secondes** ; ce délai ne masque ni les erreurs ni les alertes. Ces corrections sont implémentées dans le dépôt ; leur publication est en préparation, sans déploiement dans le logement. Les vérifications sont consignées dans le [guide de développement](docs/DEVELOPMENT.md).
+
 **Import de scènes Home Assistant :** depuis les scènes d’une pièce, un administrateur peut rechercher une scène enregistrée, vérifier les lampes retenues et renommer la copie avant de l’ajouter au brouillon. Seules les lampes sélectionnées dans la pièce Halo sont copiées, effets compris. La copie est indépendante, sans commande aux lampes pendant l’import ou sa sauvegarde ; les lampes absentes restent inchangées au lancement et à la réédition. L’import repose sur les scènes dans `scenes.yaml` avec un identifiant ; les scènes temporaires et celles d’intégrations tierces sans configuration accessible ne sont pas prises en charge. Le parcours est vérifié dans Home Assistant 2026.10.0 isolé avec des lampes simulées ; les essais sur les équipements du logement restent à faire.
 
 ## Versions et installation
 
 La première release **[v0.1.0](https://github.com/Gnol86/Halo/releases/tag/v0.1.0)** est publiée depuis le **9 octobre 2026**. Les versions disponibles et leurs notes figurent sur la [page Releases](https://github.com/Gnol86/Halo/releases). Le workflow de publication, Hassfest et les contrôles HACS ont réussi ; l’archive distribuée a été contrôlée. L’installation de cette release dans HACS et son fonctionnement sur les équipements du logement restent à vérifier séparément.
+
+La version **0.1.1** est en préparation avec les [corrections d’interface décrites dans ses notes](releases/0.1.1.md). Sa publication sera confirmée après la réussite du workflow de release et la vérification de la release GitHub effective.
 
 Dans HACS, ajouter `https://github.com/Gnol86/Halo` comme **dépôt personnalisé**, de catégorie **Intégration**, puis télécharger une version publiée de Halo. Pour un dépôt déjà ajouté, utiliser la mise à jour proposée par HACS. Après installation ou mise à jour, redémarrer Home Assistant et recharger le navigateur pour le panneau. Le minimum déclaré est **Home Assistant 2026.10.0** ; aucune compatibilité avec les versions précédentes n’est revendiquée.
 

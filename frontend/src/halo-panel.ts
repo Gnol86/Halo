@@ -28,6 +28,7 @@ export class HaloPanel extends LitElement {
   private busy = false;
   private error = "";
   private notice = "";
+  private noticeTimer?: ReturnType<typeof setTimeout>;
   private search = "";
   private showOtherLights = false;
   private roomSearch = "";
@@ -76,6 +77,7 @@ export class HaloPanel extends LitElement {
     this.unsubscribe?.();
     this.unsubscribe = undefined;
     this.connection = undefined;
+    this.clearNotice();
     this.clearEditorTimers();
     this.editor = undefined;
     this.importer = undefined;
@@ -118,11 +120,24 @@ export class HaloPanel extends LitElement {
     }
   }
 
+  private clearNotice() {
+    clearTimeout(this.noticeTimer);
+    this.noticeTimer = undefined;
+    this.notice = "";
+  }
+
+  private showSavedNotice() {
+    this.clearNotice();
+    if (!this.isConnected) return;
+    this.notice = this.t("saved");
+    this.noticeTimer = setTimeout(() => this.clearNotice(), 4000);
+  }
+
   private modify(callback: (config: Config) => void) {
     if (!this.admin || !this.draft || this.editor) return;
     callback(this.draft);
     this.dirty = true;
-    this.notice = "";
+    this.clearNotice();
     this.requestUpdate();
   }
 
@@ -164,7 +179,7 @@ export class HaloPanel extends LitElement {
   private markFieldDirty() {
     if (!this.admin || this.editor) return;
     this.dirty = true;
-    this.notice = "";
+    this.clearNotice();
   }
 
   private async save() {
@@ -175,7 +190,7 @@ export class HaloPanel extends LitElement {
       const result = await this.hass.callWS<Snapshot>({ type: "halo/save", config: this.draft, revision: this.revision });
       this.dirty = false;
       this.receive(result);
-      this.notice = this.t("saved");
+      this.showSavedNotice();
     } catch (error) { this.showError(error); }
     finally { this.busy = false; }
   }
@@ -184,7 +199,7 @@ export class HaloPanel extends LitElement {
     if (!this.snapshot) return;
     this.dirty = false;
     this.error = "";
-    this.notice = "";
+    this.clearNotice();
     this.durationModes.clear();
     this.viewGeneration++;
     this.receive(this.snapshot);
@@ -509,7 +524,7 @@ export class HaloPanel extends LitElement {
   private startImport(room: Room) {
     if (!this.admin || this.busy || this.dirty || this.editor || !this.snapshot?.config.rooms[room.id] || !room.lights.length) return;
     this.error = "";
-    this.notice = "";
+    this.clearNotice();
     this.importer = { roomId: room.id, revision: this.revision, entityId: null, loading: false, request: 0, error: "" };
     void this.updateComplete.then(() => this.renderRoot.querySelector<HTMLElement>("#import-title")?.focus());
   }

@@ -1,5 +1,30 @@
 # Développer Halo
 
+## Préparation de la release 0.1.1 — 9 octobre 2026
+
+Cette version regroupe les corrections de sélecteurs, d’alignement des champs et de confirmation temporaire décrites ci-dessous. Les versions du manifeste, de `pyproject.toml` et de `uv.lock` sont synchronisées à `0.1.1` ; aucune dépendance ni compatibilité minimale n’est modifiée.
+
+- Synchronisation uv figée, Ruff et formatage conformes ; **324 tests Python réussis**.
+- **55 tests frontend réussis**, TypeScript conforme et bundle reproductible, vérifiés après la dernière modification du panneau.
+- Publication demandée par Arnaud ; le tag et le workflow doivent encore être confirmés. L’installation domestique et le référencement au catalogue HACS ne font pas partie de cette livraison.
+
+## Confirmation de sauvegarde temporaire — 9 octobre 2026
+
+La confirmation de sauvegarde disparaît après **4 secondes**. Chaque succès remplace la temporisation précédente ; une nouvelle modification, un abandon, un import ou le retrait du panneau la libère. Les erreurs et alertes ne sont pas concernées.
+
+- TypeScript conforme et **55 tests frontend réussis** ; bundle reconstruit sous Node.js 24 et reproductible.
+- Aperçu local avec données simulées : sauvegarde suivie de l’apparition puis de la disparition automatique de « Modifications enregistrées. », sans action supplémentaire. Aucune erreur console relevée.
+- Documents produit, design et README actualisés. Correction locale, sans nouvelle release ni déploiement domestique. Aucun changement Python.
+
+## Sélecteurs et alignement des champs — 9 octobre 2026
+
+Correction locale après la release v0.1.0 : suppression des lignes « Sélectionnée : … » et « Aucune entité » sous les sélecteurs. Le nom et l’identifiant restent dans le champ ; une entité indisponible est signalée à côté du libellé. Les grilles partagent leurs rangées de libellés et de contrôles avec CSS `subgrid`, y compris le contenu du sélecteur. Les résultats de recherche restent dans le flux sans désaligner les contrôles voisins.
+
+- `npm ci`, contrôle TypeScript et **55 tests frontend réussis**, sous Node.js 24. Le test existant d’indisponibilité vérifie le libellé et la conservation de l’identifiant dans le champ.
+- Bundle reconstruit et reproductibilité vérifiée. Aucun changement du moteur Python ; ses tests n’ont pas été relancés pour cette correction de présentation.
+- Aperçu local `frontend/dev.html` avec données simulées : alignement examiné à 1 436, 1 156, 920 et 850 pixels de large, avec retour sur deux rangées à 850 pixels ; champs en colonne à 390 × 844 sans débordement horizontal observé. Thèmes clair/sombre, texte à 125 %, français/anglais, recherche ouverte/fermée et sélection vide examinés. Les trois contrôles de présence partagent exactement la même ordonnée lorsque leurs libellés occupent une ou plusieurs lignes. Aucune erreur console relevée.
+- `PROJET.md`, `DESIGN.md` et `README.md` actualisés. Aucune nouvelle release ni installation domestique effectuée ; cet aperçu ne constitue pas un essai dans Home Assistant.
+
 ## Périmètre initial
 
 Le domaine est `halo`. Une première implémentation comprend le moteur d’éclairage, les appareils par pièce, le stockage, l’API et le panneau embarqué. Le comportement attendu est défini dans [PROJET.md](../PROJET.md), les interactions dans [DESIGN.md](../DESIGN.md) et les contrats de code dans [ARCHITECTURE.md](ARCHITECTURE.md). La refonte compacte du panneau suit le thème Home Assistant. Les essais matériels restent à réaliser.

@@ -726,7 +726,8 @@ test("entity pickers filter domains, support pointer focus transfer and preserve
   const { panel } = await mount(true, snapshot);
   await openRoom(panel, "Automatisation");
   const presence = picker(panel, "Entité de présence");
-  assert.match(presence.shadowRoot!.textContent!, /binary_sensor.removed.*Indisponible/);
+  assert.match(presence.shadowRoot!.querySelector("label")!.textContent!, /Indisponible/);
+  assert.match(presence.shadowRoot!.querySelector<HTMLInputElement>("input")!.value, /binary_sensor.removed/);
   const control = picker(panel, "Capteur de luminosité");
   const input = await searchEntity(control, "luminosite");
   const option = control.shadowRoot!.querySelector<HTMLElement>('[role="option"]')!;

@@ -106,6 +106,9 @@ export const styles = css`
   .grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,290px),1fr)); gap: var(--ha-space-5, 20px); }
   .field-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,200px),1fr)); gap: var(--ha-space-2, 8px) var(--ha-space-4, 16px); }
   label { display: flex; flex-direction: column; gap: 6px; font-size: var(--ha-font-size-m, 14px); margin: 8px 0; min-width: 0; }
+  /* Share label/control rows, including the entity picker's shadow content. */
+  .field-grid > label:not(.check),.field-grid > halo-entity-picker { display: grid; grid-row: span 2; grid-template-rows: subgrid; row-gap: 6px; align-items: start; }
+  .field-grid > halo-entity-picker::part(control) { margin-top: 0; }
   .check { flex-direction: row; align-items: center; gap: 10px; min-height: 32px; cursor: pointer; }
   input,select,button { font: inherit; }
   input,select { min-width: 0; width: 100%; min-height: 38px; padding: 7px 10px; border: 1px solid var(--input-outlined-idle-border-color,var(--halo-line)); border-radius: var(--halo-control-radius); background: var(--input-fill-color,var(--halo-surface)); color: var(--input-ink-color,var(--halo-text)); caret-color: var(--halo-accent); }

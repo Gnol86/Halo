@@ -17,7 +17,7 @@ export class HaloEntityPicker extends LitElement {
   };
   static styles = css`
     :host {
-      display: block; min-width: 0; color-scheme: inherit;
+      display: block; min-width: 0; margin: 8px 0; color-scheme: inherit;
       font: inherit; font-size: var(--ha-font-size-m,14px);
       --picker-text: var(--primary-text-color,CanvasText);
       --picker-secondary: var(--secondary-text-color,var(--picker-text));
@@ -27,7 +27,9 @@ export class HaloEntityPicker extends LitElement {
       --picker-radius: var(--ha-border-radius-md,8px);
     }
     * { box-sizing: border-box; }
-    label { display: block; margin: 8px 0 6px; color: var(--input-label-ink-color,var(--picker-text)); }
+    label { display: block; margin: 0; color: var(--input-label-ink-color,var(--picker-text)); }
+    .control { margin-top: 6px; min-width: 0; }
+    .unavailable { font-size: var(--ha-font-size-s,12px); color: var(--picker-secondary); }
     input,button { font: inherit; color: inherit; }
     input {
       min-width: 0; width: 100%; min-height: 38px; padding: 7px 10px;
@@ -126,20 +128,20 @@ export class HaloEntityPicker extends LitElement {
 
   protected render() {
     const results = this.open ? this.results : [];
-    return html`<label for="entity-input">${this.label}</label>
-      <div class="field"><input id="entity-input" role="combobox" aria-autocomplete="list" aria-expanded=${String(this.open)}
-        aria-controls="entity-results" aria-required=${String(this.required)} aria-describedby="entity-help"
+    const unavailable = this.value && (!this.selected || ["unknown", "unavailable"].includes(this.selected.state ?? ""));
+    return html`<label for="entity-input">${this.label}${unavailable ? html`<span class="unavailable"> · ${this.t("unavailable")}</span>` : nothing}</label>
+      <div class="control" part="control"><div class="field"><input id="entity-input" role="combobox" aria-autocomplete="list" aria-expanded=${String(this.open)}
+        aria-controls="entity-results" aria-required=${String(this.required)}
         aria-activedescendant=${this.open && this.active >= 0 && results[this.active] ? `entity-option-${this.active}` : nothing}
-        autocomplete="off" spellcheck="false" placeholder=${this.t("searchEntities")} .value=${this.open ? this.query : this.selectionText}
+        autocomplete="off" spellcheck="false" placeholder=${this.t("searchEntities")} title=${this.selectionText || nothing} .value=${this.open ? this.query : this.selectionText}
         @focus=${this.startSearch} @click=${this.startSearch} @keydown=${this.onKey}
         @input=${(event: Event) => { this.query = (event.target as HTMLInputElement).value; this.open = true; this.active = -1; }}>
         ${this.value ? html`<button type="button" aria-label=${`${this.t("clearEntity")}: ${this.label}`} @click=${() => this.choose(null)}><svg class="clear-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"></path></svg></button>` : nothing}</div>
-      <small id="entity-help" class="help">${this.value ? `${this.t("selected")}: ${this.selected?.name ?? this.value} · ${this.value}${!this.selected || ["unknown", "unavailable"].includes(this.selected.state ?? "") ? ` · ${this.t("unavailable")}` : ""}` : this.t("noEntity")}</small>
       ${this.open ? html`<div class="results" id="entity-results" role="listbox" aria-label=${this.label}>
         ${results.map((entity, index) => html`<div role="option" tabindex="-1" id=${`entity-option-${index}`} aria-selected=${String(entity.entity_id === this.value)}
           ?data-active=${index === this.active} @mousedown=${(event: MouseEvent) => event.preventDefault()} @click=${() => this.choose(entity.entity_id)}>
           ${entity.name}<small>${entity.entity_id}${["unknown", "unavailable"].includes(entity.state ?? "") ? ` · ${this.t("unavailable")}` : ""}</small></div>`)}
-      </div><div class="help" role="status">${results.length === 0 ? this.t("noResults") : results.length === 100 ? this.t("refineSearch") : `${results.length} ${this.t("results")}`}</div>` : nothing}`;
+      </div><div class="help" role="status">${results.length === 0 ? this.t("noResults") : results.length === 100 ? this.t("refineSearch") : `${results.length} ${this.t("results")}`}</div>` : nothing}</div>`;
   }
 }
 
