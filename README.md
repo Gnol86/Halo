@@ -57,7 +57,7 @@ Les sélecteurs d’entités restent ceux de Halo. Leur remplacement par le sél
 
 ## Versions et installation
 
-La version **`0.1.0`** inaugure le versionnement de Halo par releases GitHub. Seules les versions effectivement publiées sur la [page Releases](https://github.com/Gnol86/Halo/releases) sont distribuées comme releases ; les notes précisent les changements et les limites. Une release ne valide pas à elle seule tous les équipements du logement.
+La première release **[v0.1.0](https://github.com/Gnol86/Halo/releases/tag/v0.1.0)** est publiée depuis le **9 octobre 2026**. Les versions disponibles et leurs notes figurent sur la [page Releases](https://github.com/Gnol86/Halo/releases). Le workflow de publication, Hassfest et les contrôles HACS ont réussi ; l’archive distribuée a été contrôlée. L’installation de cette release dans HACS et son fonctionnement sur les équipements du logement restent à vérifier séparément.
 
 Dans HACS, ajouter `https://github.com/Gnol86/Halo` comme **dépôt personnalisé**, de catégorie **Intégration**, puis télécharger une version publiée de Halo. Pour un dépôt déjà ajouté, utiliser la mise à jour proposée par HACS. Après installation ou mise à jour, redémarrer Home Assistant et recharger le navigateur pour le panneau. Le minimum déclaré est **Home Assistant 2026.10.0** ; aucune compatibilité avec les versions précédentes n’est revendiquée.
 

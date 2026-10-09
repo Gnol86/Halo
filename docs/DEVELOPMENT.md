@@ -60,7 +60,13 @@ Le workflow `Release` valide le tag et les versions du manifeste, de `pyproject.
 - La version du projet est `0.1.0`. Le minimum Home Assistant reste `2026.10.0` ; aucune dépendance fonctionnelle n’est mise à jour. La distribution utilise le dossier `custom_components/halo/` du tag et les archives sources natives de GitHub.
 - La description et les sujets GitHub ont été renseignés pour satisfaire les métadonnées HACS ; le dépôt est public et les issues sont activées.
 
-La publication distante et ses contrôles seront consignés après leur exécution. Aucun déploiement domestique, essai matériel ou référencement dans le catalogue par défaut n’est effectué par ce workflow.
+La [release `v0.1.0`](https://github.com/Gnol86/Halo/releases/tag/v0.1.0) est publiée le 9 octobre 2026 sur le commit `e5e1971f112fa443a226c49463716bd6ac24054f`. L’API GitHub confirme une release publique, non brouillon, non préversion, et la désigne comme dernière release.
+
+- Le [workflow Release](https://github.com/Gnol86/Halo/actions/runs/37958464981) a réussi ses six jobs : métadonnées, HACS sans contrôle ignoré, Hassfest, frontend, Python et publication. La validation préalable sur `main` et le [contrôle HACS manuel](https://github.com/Gnol86/Halo/actions/runs/37958287555) avaient également réussi.
+- L’archive source ZIP téléchargée depuis le tag GitHub contient le manifeste `0.1.0`, le panneau compilé, sa licence Lit, les deux icônes et les traductions anglaise/française ; les sept fichiers contrôlés sont identiques aux fichiers locaux. Le tag annoté pointe sur le commit validé ci-dessus.
+- Les règles de publication et les formats sont documentés dans [HACS.md](HACS.md). Aucun ZIP spécifique, jeton personnel supplémentaire ou publication à chaque push de développement n’est nécessaire.
+
+Cette publication ne constitue pas une installation ou une mise à jour observée dans HACS domestique. Aucun déploiement domestique, essai matériel ou référencement dans le catalogue par défaut n’a été effectué par cette tâche.
 
 ## Protection de la pause manuelle contre les pertes de présence — 9 octobre 2026
 

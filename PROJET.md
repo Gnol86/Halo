@@ -29,7 +29,7 @@ Limite vérifiée le 9 octobre 2026 : HACS 2.0.5 ne charge pas les icônes embar
 | Transitions globales et par pièce | Implémenté ; paramètres et concurrence testés, comportement matériel à vérifier. |
 | Localisation complète et sélection de langue du panneau | Catalogues anglais/français et sélection de langue implémentés ; tests locaux. |
 | Direction du dashboard | Actée et implémentée : pilotage prioritaire, liste de pièces et détail, sous-vues compactes et thème Home Assistant sans palette propre. |
-| Releases GitHub | Workflow implémenté pour la version `0.1.0` et les suivantes ; les versions publiées sont identifiées sur [GitHub Releases](https://github.com/Gnol86/Halo/releases), avec preuves dans la documentation de développement. |
+| Releases GitHub | [Première release `v0.1.0`](https://github.com/Gnol86/Halo/releases/tag/v0.1.0) publiée le 9 octobre 2026 ; workflow réussi avec Hassfest et HACS, archive contrôlée. Installation dans HACS et validation matérielle distinctes, preuves dans la documentation de développement. |
 | Référencement au catalogue HACS par défaut | Jalon final, après développement et validation. Les installations comme dépôt personnalisé sont distinctes. |
 
 ## 2. Installation et panneau Halo

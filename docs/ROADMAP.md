@@ -53,7 +53,7 @@ Le cahier des charges fonctionnel est défini et une première implémentation e
 Le 9 octobre 2026, Arnaud demande des releases GitHub pour distribuer des versions identifiables aux installations comme dépôt personnalisé HACS. Cette demande remplace le report initial de toute publication. Une release ne vaut ni validation complète du matériel ni activation dans le logement.
 
 - [x] Mettre en place un workflow de release sur tag avec cohérence des versions, tests Python/frontend, bundle reproductible, Hassfest et validation HACS sans contrôle ignoré. Les tests locaux passent ; les résultats GitHub et la publication sont consignés séparément dans [DEVELOPMENT.md](DEVELOPMENT.md).
-- [ ] Publier et vérifier la première release `v0.1.0`, accompagnée de ses limites de développement.
+- [x] Publier et vérifier la première [release `v0.1.0`](https://github.com/Gnol86/Halo/releases/tag/v0.1.0), accompagnée de ses limites de développement : publication le 9 octobre 2026, six jobs du workflow réussis dont HACS/Hassfest, archive GitHub contrôlée.
 - [ ] Vérifier son installation et sa mise à jour comme dépôt personnalisé HACS dans une instance de test.
 
 ## 5. Référencement HACS, en dernier

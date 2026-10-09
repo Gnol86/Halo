@@ -16,7 +16,7 @@ Lorsqu’un dépôt publie des releases GitHub, HACS utilise le nom de tag de la
 
 Halo conserve le format standard : HACS lit `custom_components/halo/` au tag choisi. Aucun `zip_release`, `filename` ni ZIP spécifique n’est ajouté. Les archives sources générées automatiquement par GitHub ne constituent pas un paquet Halo distinct.
 
-Le workflow de release est **implémenté**, avec la version initiale **`0.1.0`**. La présence du workflow ou du tag ne prouve pas sa publication. Les releases effectivement disponibles figurent sur la [page GitHub Releases](https://github.com/Gnol86/Halo/releases) ; les preuves d’exécution sont consignées dans [DEVELOPMENT.md](DEVELOPMENT.md). Le minimum Home Assistant reste `2026.10.0`, et les notes de la première version conservent les limites de validation matérielle.
+La première **[release `v0.1.0`](https://github.com/Gnol86/Halo/releases/tag/v0.1.0)** est publiée le **9 octobre 2026**, sans statut de brouillon ni de préversion, et identifiée comme dernière release normale par GitHub à cette date. Le [workflow Release](https://github.com/Gnol86/Halo/actions/runs/37958464981) a réussi ses six jobs, dont HACS et Hassfest. L’archive GitHub du tag a été contrôlée : manifeste `0.1.0`, panneau compilé, images, traductions et licence concordent avec les fichiers locaux. Les preuves détaillées figurent dans [DEVELOPMENT.md](DEVELOPMENT.md). Le minimum Home Assistant reste `2026.10.0` ; l’installation réelle via HACS et la validation matérielle ne sont pas attestées par cette publication.
 
 ### Contrat du workflow
 
@@ -66,8 +66,8 @@ Le dépôt `home-assistant/brands` n’accepte plus les images des nouvelles int
 - [x] Compléter la description GitHub : `Whole-home lighting management for Home Assistant.`
 - [x] Ajouter les sujets GitHub : `home-assistant`, `hacs`, `custom-integration`, `lighting`, `halo` ; conserver les issues activées.
 - [ ] Vérifier l’installation et la mise à jour comme dépôt personnalisé HACS.
-- [ ] Obtenir des résultats verts pour Hassfest et l’action HACS, **sans contrôle ignoré**.
-- [ ] Confirmer qu’une release GitHub utilisable est publiée, avec une version cohérente dans le manifeste ; sa publication suit désormais le jalon distinct ci-dessus.
+- [x] Obtenir des résultats verts pour Hassfest et l’action HACS, **sans contrôle ignoré** : workflow Release de `v0.1.0` réussi le 9 octobre 2026.
+- [x] Confirmer qu’une release GitHub est publiée, avec une version cohérente dans le manifeste : `v0.1.0`, archive vérifiée ; l’installation et la mise à jour HACS restent à valider séparément.
 - [ ] Depuis une branche d’un fork personnel de `hacs/default`, proposer `Gnol86/Halo` dans la liste `integration`, à sa place alphabétique, en remplissant le modèle de PR.
 - [ ] Attendre l’examen et la fusion par les mainteneurs, puis vérifier l’apparition effective dans le catalogue.
 
