@@ -6,7 +6,7 @@
 
 Une intégration Home Assistant destinée à gérer l’ensemble des lumières du logement.
 
-**Statut : première version de développement.** Halo dispose d’un panneau embarqué, d’appareils par pièce et d’un moteur d’éclairage. La refonte compacte est implémentée et vérifiée localement, avec des aperçus adaptatifs et des parcours ciblés dans Home Assistant 2026.10.0 isolé utilisant des lampes simulées. La validation complète dans une instance domestique et avec des lampes réelles reste à réaliser. Ces vérifications ne constituent pas un déploiement dans le logement. La publication et le référencement dans HACS sont prévus à la fin du projet.
+**Statut : première version de développement.** Halo dispose d’un panneau embarqué, d’appareils par pièce et d’un moteur d’éclairage. La refonte compacte est implémentée et vérifiée localement, avec des aperçus adaptatifs et des parcours ciblés dans Home Assistant 2026.10.0 isolé utilisant des lampes simulées. La validation complète dans une instance domestique et avec des lampes réelles reste à réaliser. Ces vérifications ne constituent pas un déploiement dans le logement. Les releases GitHub sont maintenant mises en place pour les installations comme dépôt personnalisé HACS ; le référencement dans le catalogue par défaut reste prévu à la fin du projet.
 
 ## Ce qui existe
 
@@ -55,7 +55,15 @@ Les sélecteurs d’entités restent ceux de Halo. Leur remplacement par le sél
 
 **Import de scènes Home Assistant :** depuis les scènes d’une pièce, un administrateur peut rechercher une scène enregistrée, vérifier les lampes retenues et renommer la copie avant de l’ajouter au brouillon. Seules les lampes sélectionnées dans la pièce Halo sont copiées, effets compris. La copie est indépendante, sans commande aux lampes pendant l’import ou sa sauvegarde ; les lampes absentes restent inchangées au lancement et à la réédition. L’import repose sur les scènes dans `scenes.yaml` avec un identifiant ; les scènes temporaires et celles d’intégrations tierces sans configuration accessible ne sont pas prises en charge. Le parcours est vérifié dans Home Assistant 2026.10.0 isolé avec des lampes simulées ; les essais sur les équipements du logement restent à faire.
 
-## Essai manuel en développement
+## Versions et installation
+
+La version **`0.1.0`** inaugure le versionnement de Halo par releases GitHub. Seules les versions effectivement publiées sur la [page Releases](https://github.com/Gnol86/Halo/releases) sont distribuées comme releases ; les notes précisent les changements et les limites. Une release ne valide pas à elle seule tous les équipements du logement.
+
+Dans HACS, ajouter `https://github.com/Gnol86/Halo` comme **dépôt personnalisé**, de catégorie **Intégration**, puis télécharger une version publiée de Halo. Pour un dépôt déjà ajouté, utiliser la mise à jour proposée par HACS. Après installation ou mise à jour, redémarrer Home Assistant et recharger le navigateur pour le panneau. Le minimum déclaré est **Home Assistant 2026.10.0** ; aucune compatibilité avec les versions précédentes n’est revendiquée.
+
+HACS installe le dossier `custom_components/halo/` de la version choisie, avec le bundle et le lotus. Aucune compilation, archive personnalisée ni carte supplémentaire n’est nécessaire. Publier une release n’installe pas automatiquement Halo chez les utilisateurs et ne l’ajoute pas au catalogue HACS par défaut. La [procédure de publication](docs/HACS.md) décrit le fonctionnement et les vérifications.
+
+### Installation manuelle de développement
 
 Les nouveaux profils naturels démarrent avec **40 % à −20° → 100 % à 20°** pour la luminosité et **2 000 K à 0° → 5 500 K à 20°** pour la température, en linéaire avec matin et soir liés. Les profils déjà enregistrés conservent leurs valeurs.
 
@@ -102,7 +110,7 @@ Ce README, `PROJET.md` et `DESIGN.md` sont maintenus à jour en temps réel. Tou
 - [Design du dashboard](DESIGN.md)
 - [Conventions de développement](docs/DEVELOPMENT.md)
 - [Architecture et API du panneau](docs/ARCHITECTURE.md)
-- [Documentation HACS étudiée et publication future](docs/HACS.md)
+- [Releases GitHub, installation HACS et référencement futur](docs/HACS.md)
 - [Feuille de route](docs/ROADMAP.md)
 - [Icône et source graphique](assets/branding/README.md)
 

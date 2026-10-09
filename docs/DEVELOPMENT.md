@@ -34,7 +34,7 @@ uv run --frozen ruff format --check .
 uv run --frozen pytest
 ```
 
-Le workflow `Validate` prépare ces contrôles, Hassfest, les tests TypeScript et la cohérence du bundle pour les futurs pushes et PR. `HACS readiness` s’exécute uniquement à la demande et ne publie rien. Son succès dépend aussi des métadonnées GitHub, à compléter au jalon de publication.
+Le workflow `Validate` exécute ces contrôles, Hassfest, les tests TypeScript et la cohérence du bundle sur les branches et PR. Il est aussi réutilisé avant publication par `Release`, avec `HACS readiness` sans contrôle ignoré. Le contrôle HACS reste exécutable manuellement et ne publie rien lui-même.
 
 Les tests couvrent la configuration unique, le cycle de vie, le service du bundle, les appareils dynamiques, les décisions du moteur, les profils naturels, les conditions, les transitions, les sessions d’édition, les permissions, la concurrence des écritures et la persistance des pauses. Les lampes et capteurs sont simulés ; l’API WebSocket et les plateformes Home Assistant sont réelles dans l’environnement de test.
 
@@ -49,7 +49,18 @@ npm run build
 
 Le bundle dans `custom_components/halo/frontend/` doit rester synchronisé avec `frontend/src/`. Le [guide du panneau](../frontend/README.md) explique l’aperçu local avec données simulées. Un contrôle de types ou un test DOM ne remplace pas un essai intégré dans Home Assistant.
 
-Avant une release utilisable, effectuer également un essai dans une instance Home Assistant de test : installation manuelle, rendu du panneau et du lotus en thèmes clair et sombre, textes français et anglais, pilotage des lampes réelles, redémarrage et suppression. Les tests Python ne valident pas le rendu intégré de l’interface.
+Avant de considérer une version entièrement validée, effectuer également un essai dans une instance Home Assistant de test : installation manuelle, rendu du panneau et du lotus en thèmes clair et sombre, textes français et anglais, pilotage des lampes réelles, redémarrage et suppression. Les tests Python ne valident pas le rendu intégré de l’interface. Les premières releases conservent explicitement ces limites.
+
+## Mise en place des releases GitHub — 9 octobre 2026
+
+Le workflow `Release` valide le tag et les versions du manifeste, de `pyproject.toml` et du verrou uv, puis réutilise les contrôles Python, frontend, Hassfest et HACS avant de publier. Les notes rédigées sont obligatoires. Les formats `vX.Y.ZaN`, `vX.Y.ZbN` et `vX.Y.ZrcN` donnent des préversions ; une relance ne remplace pas une release existante et échoue si celle-ci est encore un brouillon.
+
+- Contrôles locaux : `uv sync --frozen`, Ruff (analyse et format), **324 tests Python réussis**, dont 15 cas du contrôle de publication ; classification comparée à AwesomeVersion, refus des tags invalides, versions divergentes et notes absentes ou vides.
+- Sous Node.js 24 : `npm ci`, TypeScript et **55 tests frontend réussis** ; le bundle reconstruit correspond exactement au fichier distribué. Cette tâche ne modifie pas le comportement du panneau.
+- La version du projet est `0.1.0`. Le minimum Home Assistant reste `2026.10.0` ; aucune dépendance fonctionnelle n’est mise à jour. La distribution utilise le dossier `custom_components/halo/` du tag et les archives sources natives de GitHub.
+- La description et les sujets GitHub ont été renseignés pour satisfaire les métadonnées HACS ; le dépôt est public et les issues sont activées.
+
+La publication distante et ses contrôles seront consignés après leur exécution. Aucun déploiement domestique, essai matériel ou référencement dans le catalogue par défaut n’est effectué par ce workflow.
 
 ## Protection de la pause manuelle contre les pertes de présence — 9 octobre 2026
 

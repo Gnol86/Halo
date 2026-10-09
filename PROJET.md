@@ -29,7 +29,8 @@ Limite vérifiée le 9 octobre 2026 : HACS 2.0.5 ne charge pas les icônes embar
 | Transitions globales et par pièce | Implémenté ; paramètres et concurrence testés, comportement matériel à vérifier. |
 | Localisation complète et sélection de langue du panneau | Catalogues anglais/français et sélection de langue implémentés ; tests locaux. |
 | Direction du dashboard | Actée et implémentée : pilotage prioritaire, liste de pièces et détail, sous-vues compactes et thème Home Assistant sans palette propre. |
-| Publication et référencement HACS | Jalon final, après développement et validation. |
+| Releases GitHub | Workflow implémenté pour la version `0.1.0` et les suivantes ; les versions publiées sont identifiées sur [GitHub Releases](https://github.com/Gnol86/Halo/releases), avec preuves dans la documentation de développement. |
+| Référencement au catalogue HACS par défaut | Jalon final, après développement et validation. Les installations comme dépôt personnalisé sont distinctes. |
 
 ## 2. Installation et panneau Halo
 
@@ -474,7 +475,7 @@ Le choix des contrôles natifs de scène repose sur les [mécanismes officiels v
 | Date | Décision | Conséquence |
 | --- | --- | --- |
 | 9 octobre 2026 | Initialiser Halo avec une identité de lotus et une structure adaptée à Home Assistant et HACS. | Le socle est préparé avant les fonctions d’éclairage. |
-| 9 octobre 2026 | Reporter la disponibilité HACS à la fin du projet. | La publication reste un jalon futur. |
+| 9 octobre 2026 | Reporter initialement la disponibilité HACS à la fin du projet. | Décision ensuite précisée : les releases GitHub sont autorisées maintenant ; l’inclusion au catalogue par défaut reste un jalon final. |
 | 9 octobre 2026 | Maintenir `PROJET.md`, `DESIGN.md` et `README.md` en temps réel. | Chaque évolution est documentée dans la même tâche. |
 | 9 octobre 2026 | Adopter le panneau unique, les appareils par pièce et les règles d’automatisation décrites ici. | Spécification actée ; fonctionnalités à développer. |
 | 9 octobre 2026 | Unifier la pause manuelle et rendre son extinction automatique configurable par pièce. | Le réglage est activé par défaut ; scènes et ajustements naturels restent suspendus pendant la pause. |
@@ -485,5 +486,8 @@ Le choix des contrôles natifs de scène repose sur les [mécanismes officiels v
 | 9 octobre 2026 | Refaire le panneau avec pilotage prioritaire, liste/détail et développement direct, en suivant le thème Home Assistant. | Refonte compacte implémentée et vérifiée localement, sans suppression d’option métier ; cinq onglets par pièce et profils dans une vue dédiée. Aucun déploiement domestique ni publication HACS n’en découle. |
 | 9 octobre 2026 | Ajouter une fenêtre globale de rallumage après une extinction pour absence, initialement de 30 secondes. | Un retour rapide ignore ponctuellement la luminosité et utilise la transition de présence, uniquement lorsque l’extinction sur luminosité est désactivée ; zéro désactive la protection. |
 | 9 octobre 2026 | Réutiliser la durée globale pour protéger le mode manuel des pertes brèves de présence. | Le retour ne termine la pause qu’après une absence continue d’au moins le maximum entre délai local et durée globale, pour toutes les pièces ; ni l’extinction automatique ni l’expiration propre de pause ne sont retardées. |
+| 9 octobre 2026 | Mettre en place les releases GitHub selon la documentation HACS. | Versions identifiables pour les dépôts personnalisés, après vérification du tag, des versions, des tests, du bundle, de Hassfest et de HACS sans contrôle ignoré ; aucune soumission au catalogue par défaut ni installation domestique automatique. |
 
-Le développement et les essais précèdent toute publication. La release et la demande d’inclusion HACS suivent ensuite la [procédure documentée](docs/HACS.md). Aucun référencement n’est déclenché par la rédaction de ce cahier des charges.
+La distribution conserve la structure standard `custom_components/halo/`, avec le panneau compilé et les images embarquées. Une release GitHub publiée fournit la version à HACS ; un tag seul ne suffit pas. Chaque tag de publication correspond à la version du manifeste et de `pyproject.toml`, sans le préfixe `v`. Les notes de release décrivent les changements, le minimum Home Assistant et les limites connues. La publication ne vaut pas validation des équipements du logement.
+
+La [procédure de release](docs/HACS.md) et la demande ultérieure d’inclusion HACS sont distinctes. Le référencement au catalogue reste un jalon final, sans soumission automatique depuis le workflow de release.

@@ -132,6 +132,8 @@ La refonte est implémentée dans le panneau fonctionnel, avec son bundle recons
 
 Des parcours ciblés ont aussi été vérifiés dans **Home Assistant 2026.10.0 isolé avec des lampes simulées** : scène partielle, ouverture de la fenêtre native d’une lampe avec l’effet « Candle », annulation libérant la session, import de deux lampes retenues/deux entités ignorées jusqu’au brouillon puis à son abandon. Les limites et preuves détaillées se trouvent dans [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md). Ces essais ne prouvent pas tous les parcours dans Home Assistant, le comportement des lampes du logement, un push ou un déploiement domestique.
 
+Les releases GitHub demandées le 9 octobre 2026 distribuent ce même panneau compilé dans l’intégration. Elles n’ajoutent ni écran de mise à jour ni carte à installer dans Halo : le téléchargement et la mise à jour restent pris en charge par HACS, avec ses propres composants et le thème Home Assistant. Leur publication ne modifie pas les règles de design ni le niveau de validation matérielle indiqué ici. Le [statut de distribution](docs/HACS.md) distingue les releases du référencement au catalogue par défaut.
+
 ### Identité existante
 
 - **Nom :** Halo.

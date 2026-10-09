@@ -1,8 +1,9 @@
 name: HACS readiness
 
-# Run manually at the publication milestone. Validation does not publish Halo.
+# Run on demand or before publishing a GitHub release; no catalog submission.
 on:
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read

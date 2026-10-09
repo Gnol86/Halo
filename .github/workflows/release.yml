@@ -1,0 +1,78 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  metadata:
+    name: Check release version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      prerelease: ${{ steps.release.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+      - name: Validate tag, versions and release notes
+        id: release
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
+        run: |
+          test "$REF_TYPE" = tag
+          python scripts/release_metadata.py "$RELEASE_TAG" --github-output "$GITHUB_OUTPUT"
+
+  validate:
+    needs: metadata
+    uses: ./.github/workflows/validate.yml
+
+  hacs:
+    needs: metadata
+    uses: ./.github/workflows/hacs.yml
+
+  publish:
+    name: Publish GitHub release
+    needs: [metadata, validate, hacs]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Publish the validated tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_VERSION: ${{ needs.metadata.outputs.version }}
+          PRERELEASE: ${{ needs.metadata.outputs.prerelease }}
+        run: |
+          if is_draft=$(gh release view "$RELEASE_TAG" --repo "$GH_REPO" --json isDraft --jq .isDraft); then
+            if [ "$is_draft" != false ]; then
+              echo "An unpublished draft already exists for this tag; refusing to report it as published."
+              exit 1
+            fi
+            echo "Release already exists; leaving it unchanged."
+            exit 0
+          fi
+          flags=()
+          if [ "$PRERELEASE" = true ]; then
+            flags+=(--prerelease --latest=false)
+          fi
+          gh release create "$RELEASE_TAG" \
+            --repo "$GH_REPO" \
+            --verify-tag \
+            --title "Halo $RELEASE_VERSION" \
+            --notes-file "releases/$RELEASE_VERSION.md" \
+            --generate-notes \
+            "${flags[@]}"

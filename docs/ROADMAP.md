@@ -48,10 +48,15 @@ Le cahier des charges fonctionnel est défini et une première implémentation e
 - [ ] Achever les essais domestiques d’installation, de langues et d’interactions avec les écrans, thèmes et équipements retenus ; les vérifications locales ciblées ne couvrent pas l’ensemble de ce jalon.
 - [x] Actualiser les statuts dans `PROJET.md` et `DESIGN.md`, et présenter uniquement les fonctions réellement livrées comme disponibles dans le [README](../README.md).
 
-## 4. Publication, en dernier
+## 4. Releases GitHub
 
-La refonte est livrée dans le dépôt local ; sa validation ne constitue ni un push ni une activation dans le logement.
+Le 9 octobre 2026, Arnaud demande des releases GitHub pour distribuer des versions identifiables aux installations comme dépôt personnalisé HACS. Cette demande remplace le report initial de toute publication. Une release ne vaut ni validation complète du matériel ni activation dans le logement.
 
-- [ ] Suivre la [liste de publication HACS](HACS.md).
-- [ ] Publier une première release utilisable.
-- [ ] Demander ensuite l’inclusion au catalogue HACS par défaut.
+- [x] Mettre en place un workflow de release sur tag avec cohérence des versions, tests Python/frontend, bundle reproductible, Hassfest et validation HACS sans contrôle ignoré. Les tests locaux passent ; les résultats GitHub et la publication sont consignés séparément dans [DEVELOPMENT.md](DEVELOPMENT.md).
+- [ ] Publier et vérifier la première release `v0.1.0`, accompagnée de ses limites de développement.
+- [ ] Vérifier son installation et sa mise à jour comme dépôt personnalisé HACS dans une instance de test.
+
+## 5. Référencement HACS, en dernier
+
+- [ ] Achever les validations matérielles et suivre la [liste d’inclusion au catalogue](HACS.md#référencement-au-catalogue-en-dernier).
+- [ ] Demander l’inclusion au catalogue HACS par défaut, puis vérifier son apparition après acceptation par les mainteneurs.

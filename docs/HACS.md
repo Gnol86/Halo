@@ -1,14 +1,44 @@
-# Préparer la distribution HACS
+# Releases GitHub et distribution HACS
 
-Documentation officielle consultée le **9 octobre 2026**. **La publication est un jalon final, pas une action de cette initialisation.**
+Documentation officielle consultée le **9 octobre 2026**. À la demande d’Arnaud, les **releases GitHub sont mises en place maintenant** pour les installations comme dépôt personnalisé HACS. Le **référencement au catalogue par défaut reste un jalon final**. Cette précision remplace le report initial de toute publication ; elle n’autorise aucune soumission automatique à `hacs/default`.
 
-## Structure préparée
+## Structure distribuée
 
-HACS distribue une intégration personnalisée Home Assistant. Un seul domaine, `halo`, est présent dans `custom_components/`. Tout le contenu à installer, y compris le lotus, se trouve dans ce dossier. Le manifeste contient les coordonnées du dépôt existant `Gnol86/Halo`, le responsable et une version de développement. [Exigences des intégrations](https://www.hacs.xyz/docs/publish/integration/).
+HACS distribue une intégration personnalisée Home Assistant. Un seul domaine, `halo`, est présent dans `custom_components/`. Tout le contenu à installer, y compris le panneau compilé et le lotus, se trouve dans ce dossier. Le manifeste contient les coordonnées du dépôt existant `Gnol86/Halo`, le responsable et la version de l’intégration. [Exigences des intégrations](https://www.hacs.xyz/docs/publish/integration/).
 
 Le fichier racine `hacs.json` indique le nom et le minimum Home Assistant. Les valeurs par défaut conviennent : pas d’archive ZIP à produire, pas de contenu à la racine et aucune restriction géographique. HACS demande aussi un dépôt public sur GitHub, une description, des sujets et un README d’utilisation. [Exigences générales](https://www.hacs.xyz/docs/publish/start/).
 
 Depuis Home Assistant 2026.3, une intégration personnalisée peut embarquer ses images dans `brand/`. Halo utilise `brand/icon.png` et `brand/icon@2x.png` pour l’interface native Home Assistant, une fois les fichiers installés et l’intégration découverte. Cette prise en charge ne garantit pas l’affichage dans HACS. [Images de marque](https://developers.home-assistant.io/docs/core/integration/brand_images/).
+
+## Versions et releases
+
+Lorsqu’un dépôt publie des releases GitHub, HACS utilise le nom de tag de la dernière release comme version distante. **Créer ou pousser un tag seul ne suffit pas** : la release doit être publiée. HACS peut alors présenter les dernières releases au téléchargement et à la mise à jour. [Règles de versions](https://www.hacs.xyz/docs/publish/start/#versions) · [Releases d’intégrations](https://www.hacs.xyz/docs/publish/integration/#github-releases-optional).
+
+Halo conserve le format standard : HACS lit `custom_components/halo/` au tag choisi. Aucun `zip_release`, `filename` ni ZIP spécifique n’est ajouté. Les archives sources générées automatiquement par GitHub ne constituent pas un paquet Halo distinct.
+
+Le workflow de release est **implémenté**, avec la version initiale **`0.1.0`**. La présence du workflow ou du tag ne prouve pas sa publication. Les releases effectivement disponibles figurent sur la [page GitHub Releases](https://github.com/Gnol86/Halo/releases) ; les preuves d’exécution sont consignées dans [DEVELOPMENT.md](DEVELOPMENT.md). Le minimum Home Assistant reste `2026.10.0`, et les notes de la première version conservent les limites de validation matérielle.
+
+### Contrat du workflow
+
+Le workflow `.github/workflows/release.yml` est déclenché par le push d’un tag `v*`, ou relancé manuellement sur un tag existant. Un push de développement sur `main` ne crée pas de release.
+
+- Le tag doit être de la forme `vX.Y.Z`, ou `vX.Y.ZaN`, `vX.Y.ZbN`, `vX.Y.ZrcN` pour une préversion, par exemple `v0.2.0b1`.
+- La version sans le `v` doit correspondre exactement à `custom_components/halo/manifest.json` et à `pyproject.toml` ; le verrou `uv.lock` reste synchronisé.
+- Le fichier `releases/<version>.md` est obligatoire et fournit les notes rédigées : changements, compatibilité, installation et limites.
+- `scripts/release_metadata.py` contrôle ces métadonnées, y compris la version dans `uv.lock`. Le workflow réutilise les vérifications Python, frontend, reproductibilité du bundle et Hassfest de `validate.yml`, ainsi que **HACS readiness** sans contrôle ignoré, avant de créer la release.
+- La publication utilise le tag déjà présent et les notes rédigées, complétées par le journal généré par GitHub. Les suffixes `a`, `b` et `rc` créent une **préversion**, jamais désignée comme dernière release normale.
+
+Ce workflow ne soumet pas le dépôt au catalogue et ne redémarre aucune instance Home Assistant.
+
+### Préparer une prochaine version
+
+1. Mettre à jour le manifeste et `pyproject.toml` avec la même version, puis synchroniser `uv.lock`.
+2. Ajouter `releases/<version>.md`, actualiser les documents concernés et exécuter les contrôles de développement. Le bundle compilé doit accompagner ses sources.
+3. Enregistrer et pousser les changements sur `main`, puis créer et pousser un tag annoté `v<version>` sur le commit retenu. Ne pas déplacer un tag déjà publié.
+4. Vérifier la réussite du workflow **Release**, puis ouvrir la release GitHub et contrôler son tag, ses notes et son statut de préversion éventuel. Un workflow en cours ou en échec ne vaut pas publication.
+5. Vérifier séparément la détection et l’installation de la version dans HACS. Le workflow **HACS readiness** reste aussi exécutable manuellement pour recontrôler le dépôt. Les résultats sur GitHub ne prouvent pas l’installation ni l’activation dans le logement.
+
+L’action HACS contrôle le dépôt avec les règles HACS ; le contrôle est bloquant avant publication et disponible manuellement. Le choix de la référence vérifiée dépend de l’événement : l’action distingue les pushes, les demandes de fusion et les dépôts utilisant déjà des releases. [Action officielle HACS](https://www.hacs.xyz/docs/publish/action/).
 
 ## Affichage du lotus
 
@@ -27,24 +57,24 @@ La correction proposée dans [hacs/integration #5388](https://github.com/hacs/in
 
 Le dépôt `home-assistant/brands` n’accepte plus les images des nouvelles intégrations personnalisées : les images doivent rester embarquées dans Halo. Aucune soumission à ce dépôt ni au catalogue HACS n’est effectuée pour ce correctif. [Annonce officielle du changement](https://developers.home-assistant.io/blog/2026/02/24/brands-proxy-api/).
 
-## À exécuter à la fin du projet
+## Référencement au catalogue, en dernier
 
 - [ ] Terminer et vérifier les fonctions d’éclairage sur une instance de test.
 - [ ] Actualiser le README avec les fonctions, limites et instructions réellement disponibles.
 - [ ] Confirmer la compatibilité et ajuster le minimum Home Assistant si nécessaire.
 - [ ] Recontrôler les exigences officielles HACS au moment de publier.
-- [ ] Compléter la description GitHub : `Whole-home lighting management for Home Assistant.`
-- [ ] Ajouter les sujets GitHub : `home-assistant`, `hacs`, `custom-integration`, `lighting`, `halo` ; conserver les issues activées.
+- [x] Compléter la description GitHub : `Whole-home lighting management for Home Assistant.`
+- [x] Ajouter les sujets GitHub : `home-assistant`, `hacs`, `custom-integration`, `lighting`, `halo` ; conserver les issues activées.
 - [ ] Vérifier l’installation et la mise à jour comme dépôt personnalisé HACS.
 - [ ] Obtenir des résultats verts pour Hassfest et l’action HACS, **sans contrôle ignoré**.
-- [ ] Publier une vraie GitHub Release avec une version cohérente dans le manifeste ; un tag seul ne suffit pas.
+- [ ] Confirmer qu’une release GitHub utilisable est publiée, avec une version cohérente dans le manifeste ; sa publication suit désormais le jalon distinct ci-dessus.
 - [ ] Depuis une branche d’un fork personnel de `hacs/default`, proposer `Gnol86/Halo` dans la liste `integration`, à sa place alphabétique, en remplissant le modèle de PR.
 - [ ] Attendre l’examen et la fusion par les mainteneurs, puis vérifier l’apparition effective dans le catalogue.
 
 Le propriétaire ou un contributeur majeur doit soumettre la demande. L’inclusion dépend des mainteneurs HACS et n’est jamais automatique. [Procédure officielle d’inclusion](https://www.hacs.xyz/docs/publish/include/).
 
-## Validation préparée
+## Validation et limites
 
-`.github/workflows/validate.yml` prépare les tests et Hassfest. `.github/workflows/hacs.yml` prépare un contrôle HACS manuel, sans `ignore` et sans publication. Il faudra compléter les métadonnées du dépôt avant son exécution finale. [Action officielle HACS](https://www.hacs.xyz/docs/publish/action/).
+`.github/workflows/validate.yml` exécute les tests et Hassfest ; le workflow de release le réutilise avant publication. `.github/workflows/hacs.yml` fournit le contrôle HACS réutilisable et manuel, sans `ignore` et sans publication propre. Ses résultats bloquent également une release. Les métadonnées du dépôt doivent aussi satisfaire les exigences HACS. [Action officielle HACS](https://www.hacs.xyz/docs/publish/action/).
 
-Installer HACS, installer une intégration comme dépôt personnalisé et obtenir le référencement par défaut sont trois opérations distinctes. Le simple ajout de `hacs.json` ne réalise aucune d’elles.
+Publier une release, installer une intégration comme dépôt personnalisé et obtenir le référencement par défaut sont trois opérations distinctes. Le simple ajout de `hacs.json` ne réalise aucune d’elles. Les tests de code et d’interface avec lampes simulées ne remplacent pas les essais matériels prévus dans la feuille de route.

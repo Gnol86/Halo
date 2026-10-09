@@ -18,7 +18,7 @@ Préserver tous les réglages métier dans les sous-vues, le brouillon transvers
 
 L’anglais est la langue de référence du produit. Le panneau doit suivre la langue effective de l’interface Home Assistant : français pour `fr` et ses variantes, anglais autrement, avec des catalogues extensibles. Préserver les noms personnalisés et les identifiants techniques. Cette règle produit ne change pas la communication avec Arnaud, qui reste en français.
 
-La distribution via HACS est prévue **à la fin du projet**. Le référencement n’est pas une tâche à lancer pendant la préparation du socle ou la définition des fonctionnalités. La procédure future se trouve dans [docs/HACS.md](docs/HACS.md).
+Les **releases GitHub sont désormais demandées**, pour fournir des versions identifiables aux installations comme dépôt personnalisé HACS. Cette décision du 9 octobre 2026 remplace le report initial de toute publication. Le **référencement au catalogue HACS par défaut reste prévu à la fin du projet** ; aucune soumission à `hacs/default` ne découle d’une release. La procédure et son statut se trouvent dans [docs/HACS.md](docs/HACS.md).
 
 ## Documents à lire
 
@@ -55,6 +55,7 @@ Ces mises à jour font partie du travail demandé ; elles ne nécessitent pas un
 - Icônes embarquées : `custom_components/halo/brand/` ; source et prompt : `assets/branding/`.
 - Sources du panneau : `frontend/src/` ; bundle à reconstruire et distribuer : `custom_components/halo/frontend/halo-panel.js`.
 - Workflows de validation : `.github/workflows/`. Leur présence ne prouve pas leur exécution ni une publication.
+- Releases : tag `v` suivi de la version du manifeste et de `pyproject.toml`, notes de version et vérifications avant publication. Le dossier `custom_components/halo/` du tag contient tout le distribuable, bundle compris ; aucun ZIP spécifique HACS n’est nécessaire. Suivre [docs/HACS.md](docs/HACS.md) et vérifier la release GitHub effective avant de l’annoncer publiée. Un push ne vaut ni release ni activation domestique.
 
 Inspecter l’état Git et préserver les changements existants. Pour une modification de code, exécuter les vérifications adaptées :
 
