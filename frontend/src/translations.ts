@@ -1,4 +1,13 @@
 export const en = {
+  searchRooms: "Search rooms", noRoomsMatch: "No matching rooms.", chooseRoom: "Choose a room", chooseRoomHelp: "Select a room to control its lights or adjust its settings.",
+  roomNotConfigured: "Set up this room", configureRoomHelp: "Choose the lights Halo will control. Automation starts disabled.",
+  lightsCount: "lights", roomsCount: "rooms", roomSections: "Room sections", controlTab: "Control", ambiencesTab: "Ambiences", settingsTab: "Settings",
+  automationShort: "Automation", resumeShort: "Resume", howItWorks: "How it works",
+  scenesBrief: "Apply an ambience or adjust its settings.", noScenesHelp: "Create an ambience with the room’s lights, or copy a Home Assistant scene.",
+  conditionalScene: "Automatic conditions", manualScene: "Manual", sceneMayTurnOn: "May turn on", editSceneShort: "Edit", sceneActions: "Scene actions", scenePriorityHelp: "Priority and automatic scenes",
+  importIntro: "Copy a scene’s settings for this room’s lights.", importCompatibility: "Which scenes can be imported?", importCopyHelp: "About this copy",
+  liveBrief: "Live editing — this room’s automation is paused.", liveSessionHelp: "Saving and restoring lights", nativeControlHelp: "Native light controls",
+  linkedBrief: "Morning and evening linked", separateBrief: "Separate morning and evening", noProfilesTitle: "No natural profiles yet", curveHelp: "About this curve",
   rooms: "Rooms", global: "Global settings", loading: "Loading Halo…", retry: "Retry", back: "All rooms",
   configure: "Configure room", configured: "Configured", unconfigured: "Not configured", noRooms: "Create areas in Home Assistant to get started.",
   title: "Lighting throughout your home", save: "Save changes", saved: "Changes saved.", cancel: "Cancel", remove: "Remove", add: "Add", name: "Name",
@@ -26,7 +35,7 @@ export const en = {
   hue: "Hue (°)", saturation: "Saturation (%)", red: "Red", green: "Green", blue: "Blue", x: "x", y: "y",
   associations: "Natural profile assignments", associationHelp: "Only dimmable lights can use natural light. A light can have one assignment. Adjustments only affect lights that are already on.",
   profile: "Profile", addAssociation: "Assign a profile", offset: "Relative brightness adjustment (%)", offsetHelp: "For example, −30% applies 70% of the profile brightness; the shared profile stays unchanged.",
-  noProfiles: "Create a natural profile in Global settings first.", noProfile: "Select a profile", noAssociations: "No natural profiles assigned.",
+  noProfiles: "Create a profile in Natural light profiles first.", noProfile: "Select a profile", noAssociations: "No natural profiles assigned.",
   scenes: "Scenes", scenesHelp: "The first matching scene wins. Use the arrows or drag scenes to change priority. Running a scene manually starts the room’s manual pause.",
   createScene: "Create scene", editScene: "Edit in room", run: "Run", up: "Move up", down: "Move down", priority: "Priority", noScenes: "No scenes yet.",
   importScene: "Import from Home Assistant", sourceScene: "Home Assistant scene", confirmImport: "Add to room draft",
@@ -63,10 +72,19 @@ export const en = {
   edit_locked: "Another editing session already controls this room.", invalid_edit: "This editing session has expired. Close the editor and start again.",
   not_found: "This room or scene no longer exists. Reload the configuration.", command_failed: "The command failed. Check the lights and try again.",
   unauthorized: "Only an administrator may change Halo configuration.", unknown_error: "The action could not be completed. Try again.",
-  editFirstSave: "Save or discard configuration changes before starting live editing.", saveFirst: "Save this room before controlling its lights. Save or discard changes before switching automation modes.", status: "Room status", noSun: "Natural adjustments are paused because the sun’s elevation is unavailable.",
+  editFirstSave: "Save or discard configuration changes before starting live editing.", saveFirst: "Save this room before controlling its lights.", saveModesFirst: "Save or discard your changes before switching modes or resuming automation.", status: "Room status", noSun: "Natural adjustments are paused because the sun’s elevation is unavailable.",
 } as const;
 export type TranslationKey = keyof typeof en;
 export const fr: Record<TranslationKey, string> = {
+  searchRooms: "Rechercher une pièce", noRoomsMatch: "Aucune pièce correspondante.", chooseRoom: "Choisis une pièce", chooseRoomHelp: "Sélectionne une pièce pour piloter ses lumières ou ajuster ses réglages.",
+  roomNotConfigured: "Configurer cette pièce", configureRoomHelp: "Choisis les lumières que Halo pilotera. Les automatismes sont désactivés au départ.",
+  lightsCount: "lumières", roomsCount: "pièces", roomSections: "Rubriques de la pièce", controlTab: "Pilotage", ambiencesTab: "Ambiances", settingsTab: "Réglages",
+  automationShort: "Automatisation", resumeShort: "Reprendre", howItWorks: "Fonctionnement",
+  scenesBrief: "Applique une ambiance ou ajuste ses réglages.", noScenesHelp: "Crée une ambiance avec les lampes de la pièce, ou copie une scène Home Assistant.",
+  conditionalScene: "Conditions automatiques", manualScene: "Manuel", sceneMayTurnOn: "Peut allumer", editSceneShort: "Régler", sceneActions: "Actions de la scène", scenePriorityHelp: "Priorités et scènes automatiques",
+  importIntro: "Copie les réglages d’une scène pour les lampes de cette pièce.", importCompatibility: "Quelles scènes peut-on importer ?", importCopyHelp: "À propos de cette copie",
+  liveBrief: "Édition en direct — les automatismes de cette pièce sont suspendus.", liveSessionHelp: "Enregistrement et restauration", nativeControlHelp: "Contrôles natifs des lampes",
+  linkedBrief: "Matin et soir liés", separateBrief: "Matin et soir séparés", noProfilesTitle: "Aucun profil naturel", curveHelp: "Comprendre la courbe",
   rooms: "Pièces", global: "Réglages globaux", loading: "Chargement de Halo…", retry: "Réessayer", back: "Toutes les pièces",
   configure: "Configurer la pièce", configured: "Configurée", unconfigured: "Non configurée", noRooms: "Crée des pièces dans Home Assistant pour commencer.",
   title: "L’éclairage de tout ton logement", save: "Enregistrer les modifications", saved: "Modifications enregistrées.", cancel: "Annuler", remove: "Supprimer", add: "Ajouter", name: "Nom",
@@ -94,7 +112,7 @@ export const fr: Record<TranslationKey, string> = {
   hue: "Teinte (°)", saturation: "Saturation (%)", red: "Rouge", green: "Vert", blue: "Bleu", x: "x", y: "y",
   associations: "Associations de profils naturels", associationHelp: "Seules les lampes variables acceptent la lumière naturelle. Une lampe peut avoir une association. Les ajustements ne concernent que les lampes déjà allumées.",
   profile: "Profil", addAssociation: "Associer un profil", offset: "Correction relative de luminosité (%)", offsetHelp: "Par exemple, −30 % applique 70 % de la luminosité du profil ; le profil partagé reste inchangé.",
-  noProfiles: "Crée d’abord un profil naturel dans les réglages globaux.", noProfile: "Sélectionner un profil", noAssociations: "Aucun profil naturel associé.",
+  noProfiles: "Crée d’abord un profil dans Profils de lumière naturelle.", noProfile: "Sélectionner un profil", noAssociations: "Aucun profil naturel associé.",
   scenes: "Scènes", scenesHelp: "La première scène correspondante est prioritaire. Utilise les flèches ou déplace les scènes pour changer leur priorité. Lancer une scène manuellement met la pièce en pause.",
   createScene: "Créer une scène", editScene: "Régler dans la pièce", run: "Lancer", up: "Monter", down: "Descendre", priority: "Priorité", noScenes: "Aucune scène pour le moment.",
   importScene: "Importer depuis Home Assistant", sourceScene: "Scène Home Assistant", confirmImport: "Ajouter au brouillon de la pièce",
@@ -131,7 +149,7 @@ export const fr: Record<TranslationKey, string> = {
   edit_locked: "Une autre session d’édition contrôle déjà cette pièce.", invalid_edit: "Cette session d’édition a expiré. Ferme l’éditeur puis recommence.",
   not_found: "Cette pièce ou cette scène n’existe plus. Recharge la configuration.", command_failed: "La commande a échoué. Vérifie les lampes et réessaie.",
   unauthorized: "Seul un administrateur peut modifier la configuration de Halo.", unknown_error: "L’action n’a pas pu être effectuée. Réessaie.",
-  editFirstSave: "Enregistre ou abandonne les modifications avant de commencer l’édition en direct.", saveFirst: "Enregistre cette pièce avant de piloter ses lumières. Enregistre ou abandonne les modifications avant de changer les modes automatiques.", status: "État de la pièce", noSun: "Les ajustements naturels sont suspendus car la hauteur du soleil est indisponible.",
+  editFirstSave: "Enregistre ou abandonne les modifications avant de commencer l’édition en direct.", saveFirst: "Enregistre cette pièce avant de piloter ses lumières.", saveModesFirst: "Enregistre ou abandonne tes modifications avant de changer les modes ou de reprendre l’automatisation.", status: "État de la pièce", noSun: "Les ajustements naturels sont suspendus car la hauteur du soleil est indisponible.",
 };
 export function language(value?: string): "en" | "fr" {
   return /^fr(?:[-_]|$)/i.test(value ?? "") ? "fr" : "en";

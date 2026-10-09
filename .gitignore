@@ -13,3 +13,8 @@ coverage.xml
 config/
 tmp/
 node_modules/
+
+# Local Impeccable review evidence and decision server logs
+.impeccable/questions/
+.impeccable/review/
+.impeccable/hook.cache.json

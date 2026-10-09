@@ -4,7 +4,7 @@ Dernière mise à jour : **9 octobre 2026**.
 
 Ce document est le cahier des charges de Halo : objectifs, fonctionnalités, interactions, architecture et critères de validation. Les comportements ci-dessous sont actés. Une première implémentation de développement existe maintenant ; les statuts et limites de vérification sont précisés ci-dessous. La spécification reste la référence du résultat attendu, et ne prouve pas à elle seule son fonctionnement sur du matériel réel.
 
-Ce document, [DESIGN.md](DESIGN.md) et [README.md](README.md) doivent rester à jour en temps réel, conformément à [AGENTS.md](AGENTS.md). `DESIGN.md` détaille l’organisation et les interactions du dashboard ; ses choix esthétiques restent à définir. Le README présente les capacités effectivement disponibles. Les jalons se trouvent dans [docs/ROADMAP.md](docs/ROADMAP.md).
+Ce document, [DESIGN.md](DESIGN.md) et [README.md](README.md) doivent rester à jour en temps réel, conformément à [AGENTS.md](AGENTS.md). `DESIGN.md` détaille l’organisation et les interactions du dashboard ; la refonte compacte suit le thème Home Assistant. Le README présente les capacités effectivement disponibles. Les jalons se trouvent dans [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## 1. Vision et état du projet
 
@@ -14,18 +14,18 @@ Le socle initial est implémenté : ajout depuis l’interface Home Assistant, e
 
 Limite vérifiée le 9 octobre 2026 : HACS 2.0.5 ne charge pas les icônes embarquées pour sa liste de dépôts. L’image du README utilise une URL absolue GitHub ; les ressources `brand/` restent celles prévues pour Home Assistant. Le [diagnostic des deux emplacements](docs/HACS.md#affichage-du-lotus) distingue cette limite externe de la correction du README. Le référencement par défaut reste un jalon final.
 
-**Une première implémentation du panneau et du moteur d’éclairage est disponible dans le dépôt.** Les tests locaux utilisent Home Assistant avec des lampes simulées ; les essais matériels et la validation finale du dashboard dans une instance Home Assistant restent à effectuer. Les résultats sont consignés dans [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+**Une première implémentation du panneau et du moteur d’éclairage est disponible dans le dépôt.** La refonte compacte est implémentée et vérifiée localement, notamment dans Home Assistant 2026.10.0 isolé avec des lampes simulées. Cela ne vaut ni déploiement dans le logement, ni validation matérielle de tous les parcours. Les résultats et limites sont consignés dans [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 | Ensemble | Statut actuel |
 | --- | --- |
 | Socle d’intégration et configuration unique | Implémenté ; vérifications initiales décrites dans la documentation de développement. |
-| Panneau, configuration des pièces et appareils | Première implémentation ; tests de cycle de vie, API et appareils locaux. |
+| Panneau, configuration des pièces et appareils | Refonte compacte implémentée ; tests de navigation et de brouillons, essais ciblés dans Home Assistant isolé et aperçus adaptatifs. |
 | Présence, luminosité, pause manuelle et reprise | Implémenté ; tests avec capteurs et lampes simulés. |
 | Ambiance de base et profils naturels | Implémenté ; calculs et adaptation aux capacités testés localement. |
 | Scènes, conditions, priorités et édition en direct | Implémenté ; tests locaux des priorités, sessions et restaurations. |
 | Transitions globales et par pièce | Implémenté ; paramètres et concurrence testés, comportement matériel à vérifier. |
 | Localisation complète et sélection de langue du panneau | Catalogues anglais/français et sélection de langue implémentés ; tests locaux. |
-| Direction esthétique du dashboard | À définir dans `DESIGN.md`. |
+| Direction du dashboard | Actée et implémentée : pilotage prioritaire, liste de pièces et détail, sous-vues compactes et thème Home Assistant sans palette propre. |
 | Publication et référencement HACS | Jalon final, après développement et validation. |
 
 ## 2. Installation et panneau Halo
@@ -38,16 +38,23 @@ La barre latérale et l’en-tête du panneau utilisent le lotus monochrome nati
 
 Home Assistant fournit un mécanisme de panneau personnalisé pour cette interface. [Documentation officielle](https://developers.home-assistant.io/docs/frontend/custom-ui/creating-custom-panels/).
 
-Le panneau présente :
+Le panneau propose trois entrées : **Pièces**, **Profils de lumière naturelle** et **Réglages globaux**. Les deux dernières sont réservées aux administrateurs.
 
-- Les pièces récupérées depuis Home Assistant, en distinguant les pièces configurées dans Halo des autres.
-- Une page par pièce : lumières, automatisation, profils naturels, ambiance de base, scènes et transitions.
-- Une section globale : profils naturels, entité soleil et transitions par défaut.
-- L’état explicite de chaque pièce : scène sélectionnée, lumière naturelle, pause manuelle, absence, luminosité suffisante ou donnée indisponible.
+- Les pièces récupérées depuis Home Assistant sont regroupées dans une liste recherchable, avec état, nombre de lumières et commande d’allumage/extinction. Les pièces non configurées restent identifiables et accessibles pour leur configuration.
+- Sur grand écran, la liste reste visible à gauche du détail sélectionné ; sur mobile, la liste et le détail se succèdent avec un retour explicite. L’accueil invite à choisir une pièce.
+- Le détail donne d’abord accès à l’état réel, aux commandes et aux modes de la pièce. Ses cinq onglets sont **Pilotage** (scènes), **Lumières** (affectation), **Automatisation** (présence, luminosité, pause), **Ambiances** (associations naturelles et ambiance de base) et **Réglages** (transitions locales et suppression). Les utilisateurs ordinaires conservent le pilotage ; les réglages restent administrateurs.
+- Les profils naturels disposent d’une liste et d’un seul éditeur affiché à la fois. L’entité soleil et les transitions par défaut restent dans les réglages globaux.
+- L’état explicite de chaque pièce indique la scène sélectionnée, la lumière naturelle, la pause manuelle, l’absence, la luminosité suffisante ou une donnée indisponible.
+
+Cette organisation compacte remplace la page de longs formulaires simultanés, conformément aux choix du 9 octobre 2026 : pilotage prioritaire, liste/détail et construction directe dans le panneau fonctionnel. Toutes les options métier sont conservées. Les aides détaillées, associations naturelles, réglages individuels de l’ambiance de base et conditions de scène peuvent être dépliés au besoin. Les scènes gardent leurs actions de lancement et de réglage visibles ; déplacement et suppression sont regroupés dans un menu par ligne.
+
+Le panneau reprend les variables du thème Home Assistant pour les couleurs, états, typographie, tailles, espacements, bordures, rayons, en-tête et champs, avec des valeurs de repli lorsqu’une variable manque. Le mode clair/sombre suit Home Assistant et la préférence de mouvement réduit est respectée. Halo n’ajoute pas de palette indépendante.
 
 La fermeture du panneau n’interrompt pas les automatismes.
 
 La barre signalant les modifications non enregistrées reste accessible au bas de la fenêtre pendant le défilement des réglages, sans masquer le contenu.
+
+Les changements d’onglet, de pièce ou de profil conservent le brouillon. Un champ invalide empêche de quitter la sous-vue, est révélé si nécessaire et reçoit le focus ; la validation serveur reste la garantie finale. Abandonner rétablit aussi les champs contenant une saisie invalide. L’édition réelle bloque la navigation jusqu’à sa fin. Import et édition ramènent au pilotage avec un focus cohérent : nouvelle scène importée, action d’origine après annulation, ou scène réglée après édition.
 
 ### Accès et droits
 
@@ -356,6 +363,8 @@ Ces valeurs remplacent les choix initiaux (absence 120 secondes, pause 15 minute
 
 **Ces scénarios restent la référence d’acceptation complète.** Les tests automatisés couvrent notamment le moteur, les entités, la persistance, les droits, la concurrence et les langues. Leur réussite locale ne vaut pas validation matérielle ou validation de tous les parcours dans une instance Home Assistant ; ces dernières restent à réaliser.
 
+Pour la refonte du 9 octobre 2026, les **52 tests frontend** (43 du panneau, 9 du modèle) et le contrôle TypeScript réussissent. Les aperçus ont été examinés à 390 et 1 436 pixels de large, en clair, sombre et avec un thème personnalisé et une police à 125 %. Dans Home Assistant 2026.10.0 isolé, l’ouverture d’une scène partielle à deux lampes sur quatre, la fenêtre native avec l’effet « Candle », l’annulation libérant la session et l’import de deux entités retenues/deux ignorées jusqu’au brouillon puis à son abandon ont été vérifiés sans erreur console. Les lampes de ces essais sont simulées. Les preuves détaillées restent dans [le guide de développement](docs/DEVELOPMENT.md).
+
 | Référence | Scénario | Résultat attendu |
 | --- | --- | --- |
 | A01 | Ajouter Halo et essayer une seconde installation. | Une seule entrée ; le panneau apparaît après la première installation. |
@@ -401,6 +410,10 @@ Ces valeurs remplacent les choix initiaux (absence 120 secondes, pause 15 minute
 | A41 | Lancer une scène importée, puis la rouvrir et l’enregistrer sans changer les inclusions. | Seules les lampes incluses sont commandées et capturées ; les autres restent inchangées et ne sont pas ajoutées à la scène. |
 | A42 | Importer des états simples, des booléens YAML, des effets et plusieurs représentations de couleur. | Valeurs normalisées selon le mode actif ou la priorité native ; effets et canaux blancs conservés ; aucun attribut descriptif envoyé aux lampes. |
 | A43 | Importer sans correspondance, avec une source inaccessible ou invalide ; annuler ou provoquer un conflit de sauvegarde. | Erreur explicite sans commande ni copie enregistrée ; droits serveur respectés et brouillon préservé. |
+| A44 | Rechercher une pièce, la piloter depuis la liste puis ouvrir ses sous-vues sur ordinateur et mobile. | Liste/détail adaptée à l’écran ; commandes et états accessibles ; cinq onglets administrateur, pilotage seul pour les autres utilisateurs. |
+| A45 | Modifier plusieurs sous-vues ou profils avant une sauvegarde ; saisir une valeur invalide puis naviguer ou abandonner. | Brouillon conservé ; navigation bloquée sur une erreur révélée et focalisée ; abandon restaurant les valeurs enregistrées. |
+| A46 | Parcourir les onglets au clavier puis importer ou éditer une scène. | Flèches, Début et Fin déplacent l’onglet actif et le focus ; navigation bloquée pendant l’édition réelle ; retour au pilotage et focus approprié. |
+| A47 | Changer le thème Home Assistant, agrandir la police et activer la réduction des mouvements. | Couleurs, typographie et contrôles suivent le thème ; aucune palette Halo imposée ; contenu accessible et animations supprimées lorsque demandé. |
 
 Pour chaque scénario réalisé, consigner son résultat, la version examinée et le périmètre : test automatisé, essai d’interface ou essai sur des lumières réelles. Une fonctionnalité implémentée n’est pas automatiquement validée dans Home Assistant.
 
@@ -421,5 +434,6 @@ Le choix des contrôles natifs de scène repose sur les [mécanismes officiels v
 | 9 octobre 2026 | Utiliser l’anglais comme référence, avec français selon la langue de l’interface Home Assistant. | Localisation complète à développer et catalogues extensibles. |
 | 9 octobre 2026 | Lancer le développement du cahier des charges. | Première implémentation du moteur, des entités et du panneau ; validation locale et essais matériels distingués. |
 | 9 octobre 2026 | Préciser les groupes, rendre les entités recherchables, suivre les unités des capteurs et ajuster les valeurs initiales après les premiers retours du panneau. | Nouvelles règles décrites ci-dessus ; conservation des réglages existants et création de profils/scènes compatible HTTP local. |
+| 9 octobre 2026 | Refaire le panneau avec pilotage prioritaire, liste/détail et développement direct, en suivant le thème Home Assistant. | Refonte compacte implémentée et vérifiée localement, sans suppression d’option métier ; cinq onglets par pièce et profils dans une vue dédiée. Aucun déploiement domestique ni publication HACS n’en découle. |
 
 Le développement et les essais précèdent toute publication. La release et la demande d’inclusion HACS suivent ensuite la [procédure documentée](docs/HACS.md). Aucun référencement n’est déclenché par la rédaction de ce cahier des charges.

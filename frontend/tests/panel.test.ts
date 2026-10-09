@@ -68,6 +68,33 @@ function button(panel: InstanceType<typeof HaloPanel>, text: string): HTMLButton
   return match;
 }
 
+function roomTab(panel: InstanceType<typeof HaloPanel>, name: string): HTMLButtonElement {
+  const match = [...panel.shadowRoot!.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find((item) => item.textContent?.trim() === name);
+  assert.ok(match, `Room tab ${name} should exist`);
+  return match;
+}
+
+async function selectRoomTab(panel: InstanceType<typeof HaloPanel>, name: string) {
+  roomTab(panel, name).click();
+  await settle(panel);
+}
+
+async function openRoom(panel: InstanceType<typeof HaloPanel>, section = "Pilotage", name = "Salon personnalisé") {
+  const link = [...panel.shadowRoot!.querySelectorAll<HTMLButtonElement>(".room-link")].find((item) => item.getAttribute("aria-label") === name);
+  assert.ok(link, `Room ${name} should exist`);
+  link.click();
+  await settle(panel);
+  if (section !== "Pilotage") await selectRoomTab(panel, section);
+}
+
+function inputByLabel(panel: InstanceType<typeof HaloPanel>, text: string): HTMLInputElement {
+  const label = [...panel.shadowRoot!.querySelectorAll<HTMLLabelElement>("label")].find((item) => item.textContent?.includes(text));
+  assert.ok(label, `Label ${text} should exist`);
+  const input = label.querySelector<HTMLInputElement>("input");
+  assert.ok(input, `Input ${text} should exist`);
+  return input;
+}
+
 afterEach(() => { window.document.body.replaceChildren(); });
 
 test("natural graphs place entered elevations at the exact curve thresholds, including close and boundary values", async () => {
@@ -83,7 +110,7 @@ test("natural graphs place entered elevations at the exact curve thresholds, inc
   [profile.morning.brightness, profile.morning.temperature, profile.evening.brightness, profile.evening.temperature] = curves;
   snapshot.config.profiles.solar = profile;
   const { panel } = await mount(true, snapshot);
-  button(panel, "Réglages globaux").click();
+  button(panel, "Profils de lumière naturelle").click();
   await settle(panel);
   const graphs = [...panel.shadowRoot!.querySelectorAll<SVGSVGElement>('svg[role="img"]')];
   assert.equal(graphs.length, curves.length);
@@ -111,7 +138,7 @@ test("S-curve previews its actual values and keeps plateau thresholds and access
   profile.morning.brightness.interpolation = "ease_in";
   snapshot.config.profiles.solar = profile;
   const { panel } = await mount(true, snapshot);
-  button(panel, "Réglages globaux").click();
+  button(panel, "Profils de lumière naturelle").click();
   await settle(panel);
   assert.deepEqual([...panel.shadowRoot!.querySelectorAll<HTMLSelectElement>('.profile select[aria-describedby]')].map((select) => select.value), ["ease_in_out", "ease_in_out"]);
   [...panel.shadowRoot!.querySelectorAll<SVGSVGElement>('svg[role="img"]')].forEach((graph, index) => {
@@ -140,7 +167,7 @@ test("each natural curve type can be selected and saved independently while old 
   }
   snapshot.config.profiles.solar = profile;
   const { panel, calls, hass } = await mount(true, snapshot);
-  button(panel, "Réglages globaux").click();
+  button(panel, "Profils de lumière naturelle").click();
   await settle(panel);
   const selectors = () => [...panel.shadowRoot!.querySelectorAll<HTMLSelectElement>('.profile select[aria-describedby]')];
   assert.deepEqual(selectors().map((select) => select.value), ["linear", "linear"]);
@@ -190,15 +217,190 @@ test("panel follows HA user locale and keeps custom names without changing entit
   assert.match(panel.shadowRoot!.textContent!, /Salon personnalisé/);
 });
 
+test("native control color scheme follows the effective HA theme and inherits when it is absent", async () => {
+  const { panel, hass } = await mount();
+  assert.equal(panel.style.colorScheme, "");
+  panel.hass = { ...hass, themes: { darkMode: true } };
+  await settle(panel);
+  assert.equal(panel.style.colorScheme, "dark");
+  panel.hass = { ...hass, themes: { darkMode: false } };
+  await settle(panel);
+  assert.equal(panel.style.colorScheme, "light");
+  panel.hass = { ...hass };
+  await settle(panel);
+  assert.equal(panel.style.colorScheme, "");
+});
+
+test("room tabs provide one labelled panel and roving keyboard navigation with wraparound", async () => {
+  const { panel } = await mount();
+  await openRoom(panel);
+  assert.equal(panel.shadowRoot!.querySelectorAll('[role="tabpanel"]').length, 1);
+  assert.equal(panel.shadowRoot!.querySelector('[role="tablist"]')!.getAttribute("aria-label"), "Rubriques de la pièce");
+  const active = () => panel.shadowRoot!.querySelector<HTMLButtonElement>('[role="tab"][aria-selected="true"]')!;
+  const verifySelection = (name: string) => {
+    const selected = roomTab(panel, name);
+    assert.equal(active(), selected);
+    assert.equal(selected.tabIndex, 0);
+    assert.ok([...panel.shadowRoot!.querySelectorAll<HTMLButtonElement>('[role="tab"]')].filter((tab) => tab !== selected).every((tab) => tab.tabIndex === -1));
+    assert.equal(panel.shadowRoot!.querySelector('[role="tabpanel"]')!.getAttribute("aria-labelledby"), selected.id);
+    assert.equal(selected.getAttribute("aria-controls"), "room-panel");
+  };
+  verifySelection("Pilotage");
+  for (const [key, name] of [["ArrowRight", "Lumières"], ["End", "Réglages"], ["ArrowRight", "Pilotage"], ["ArrowLeft", "Réglages"], ["Home", "Pilotage"]]) {
+    const event = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true });
+    active().dispatchEvent(event);
+    await settle(panel);
+    assert.equal(event.defaultPrevented, true);
+    verifySelection(name);
+    assert.equal(panel.shadowRoot!.activeElement, active());
+  }
+  assert.equal(panel.shadowRoot!.querySelector(".light-list"), null, "Only the selected subsection is mounted");
+  assert.ok(panel.shadowRoot!.querySelector(".scenes-section"));
+});
+
+test("the room rail filters names and its power control does not open or configure a room", async () => {
+  const { panel, calls } = await mount();
+  const toggle = panel.shadowRoot!.querySelector<HTMLButtonElement>(".quick-toggle")!;
+  assert.equal(toggle.getAttribute("aria-label"), "Éteindre · Salon personnalisé");
+  assert.equal(toggle.getAttribute("aria-pressed"), "true");
+  toggle.click(); await settle(panel);
+  assert.deepEqual(calls.find((call) => call.type === "halo/command"), { type: "halo/command", room_id: "lounge", command: "turn_off" });
+  assert.ok(panel.shadowRoot!.querySelector(".welcome"));
+  assert.equal(panel.shadowRoot!.querySelector(".savebar"), null);
+  const search = panel.shadowRoot!.querySelector<HTMLInputElement>(".rail-search input")!;
+  search.value = "personnalise"; search.dispatchEvent(new Event("input", { bubbles: true })); await settle(panel);
+  assert.deepEqual([...panel.shadowRoot!.querySelectorAll(".room-link")].map((link) => link.getAttribute("aria-label")), ["Salon personnalisé"]);
+  search.value = "introuvable"; search.dispatchEvent(new Event("input", { bubbles: true })); await settle(panel);
+  assert.equal(panel.shadowRoot!.querySelectorAll(".room-link").length, 0);
+  assert.equal(calls.some((call) => call.type === "halo/save"), false);
+});
+
+test("room drafts survive subsection, room and top navigation before saving once", async () => {
+  const { panel, calls } = await mount();
+  await openRoom(panel, "Automatisation");
+  const delay = inputByLabel(panel, "Délai d’absence");
+  delay.value = "27"; delay.dispatchEvent(new Event("input", { bubbles: true })); await settle(panel);
+  await selectRoomTab(panel, "Pilotage");
+  assert.equal(button(panel, "Créer une scène").disabled, true);
+  assert.ok(panel.shadowRoot!.querySelector(".savebar"));
+  await openRoom(panel, "Pilotage", "Cuisine");
+  assert.ok(button(panel, "Configurer la pièce"));
+  button(panel, "Réglages globaux").click(); await settle(panel);
+  assert.ok(panel.shadowRoot!.querySelector(".global-settings"));
+  button(panel, "Pièces").click(); await settle(panel);
+  await openRoom(panel, "Automatisation");
+  assert.equal(inputByLabel(panel, "Délai d’absence").value, "27");
+  assert.equal(calls.some((call) => call.type === "halo/save"), false);
+  button(panel, "Enregistrer les modifications").click(); await settle(panel);
+  const saves = calls.filter((call) => call.type === "halo/save");
+  assert.equal(saves.length, 1);
+  assert.equal((saves[0].config as Snapshot["config"]).rooms.lounge.absence_delay, 27);
+  assert.equal((saves[0].config as Snapshot["config"]).rooms.kitchen, undefined);
+});
+
+test("an invalid room field stays visible and focused instead of being lost by any navigation", async () => {
+  const { panel, calls } = await mount();
+  await openRoom(panel, "Automatisation");
+  const delay = inputByLabel(panel, "Délai d’absence");
+  delay.value = "-1"; delay.dispatchEvent(new Event("input", { bubbles: true })); await settle(panel);
+  assert.equal(delay.checkValidity(), false);
+  for (const target of [roomTab(panel, "Pilotage"), panel.shadowRoot!.querySelector<HTMLButtonElement>('.room-link[aria-label="Cuisine"]')!, button(panel, "Réglages globaux"), button(panel, "Enregistrer les modifications")]) {
+    target.click(); await settle(panel);
+    assert.equal(roomTab(panel, "Automatisation").getAttribute("aria-selected"), "true");
+    assert.equal(panel.shadowRoot!.activeElement, delay);
+    assert.equal(delay.value, "-1");
+  }
+  assert.equal(calls.some((call) => call.type === "halo/save"), false);
+  delay.value = "12"; delay.dispatchEvent(new Event("input", { bubbles: true })); await settle(panel);
+  await selectRoomTab(panel, "Pilotage");
+  assert.equal(roomTab(panel, "Pilotage").getAttribute("aria-selected"), "true");
+});
+
+test("discarding an invalid number restores the saved control value and releases navigation", async () => {
+  const { panel, calls } = await mount();
+  await openRoom(panel, "Automatisation");
+  const delay = inputByLabel(panel, "Délai d’absence");
+  const original = delay.value;
+  delay.value = "-1"; delay.dispatchEvent(new Event("input", { bubbles: true })); await settle(panel);
+  button(panel, "Enregistrer les modifications").click(); await settle(panel);
+  assert.equal(panel.shadowRoot!.activeElement, delay);
+  button(panel, "Abandonner les modifications").click(); await settle(panel);
+  assert.equal(inputByLabel(panel, "Délai d’absence").value, original);
+  assert.equal(inputByLabel(panel, "Délai d’absence").checkValidity(), true);
+  assert.equal(panel.shadowRoot!.querySelector(".savebar"), null);
+  await selectRoomTab(panel, "Pilotage");
+  assert.equal(roomTab(panel, "Pilotage").getAttribute("aria-selected"), "true");
+  assert.equal(calls.some((call) => call.type === "halo/save"), false);
+});
+
+test("profile details preserve separate drafts and block leaving an invalid solar range", async () => {
+  const snapshot = fixture();
+  snapshot.config.profiles.first = newProfile("first", "Chaud");
+  snapshot.config.profiles.second = newProfile("second", "Clair");
+  const { panel, calls } = await mount(true, snapshot);
+  button(panel, "Profils de lumière naturelle").click(); await settle(panel);
+  const profileLinks = () => [...panel.shadowRoot!.querySelectorAll<HTMLButtonElement>(".profile-link")];
+  assert.equal(profileLinks()[0].getAttribute("aria-current"), "page");
+  const name = inputByLabel(panel, "Nom");
+  name.value = "Chaud personnalisé"; name.dispatchEvent(new Event("input", { bubbles: true })); await settle(panel);
+  profileLinks()[1].click(); await settle(panel);
+  assert.equal(panel.shadowRoot!.querySelectorAll(".profile").length, 1);
+  assert.equal(inputByLabel(panel, "Nom").value, "Clair");
+  assert.equal(profileLinks()[1].getAttribute("aria-current"), "page");
+  profileLinks()[0].click(); await settle(panel);
+  assert.equal(inputByLabel(panel, "Nom").value, "Chaud personnalisé");
+  const high = inputByLabel(panel, "Hauteur solaire haute");
+  high.value = "-10"; high.dispatchEvent(new Event("input", { bubbles: true })); await settle(panel);
+  for (const target of [profileLinks()[1], button(panel, "Nouveau profil"), button(panel, "Pièces"), button(panel, "Enregistrer les modifications")]) {
+    target.click(); await settle(panel);
+    assert.equal(inputByLabel(panel, "Nom").value, "Chaud personnalisé");
+    assert.equal(panel.shadowRoot!.activeElement, high);
+    assert.equal(profileLinks().length, 2);
+  }
+  assert.equal(calls.some((call) => call.type === "halo/save"), false);
+  high.value = "40"; high.dispatchEvent(new Event("input", { bubbles: true })); await settle(panel);
+  profileLinks()[1].click(); await settle(panel);
+  button(panel, "Enregistrer les modifications").click(); await settle(panel);
+  const config = calls.find((call) => call.type === "halo/save")!.config as Snapshot["config"];
+  assert.equal(config.profiles.first.name, "Chaud personnalisé");
+  assert.equal(config.profiles.first.morning.brightness.high_elevation, 40);
+  assert.equal(config.profiles.second.name, "Clair");
+});
+
+test("losing admin rights removes the selected configuration section while room control stays available", async () => {
+  const { panel, emit, calls } = await mount();
+  await openRoom(panel, "Automatisation");
+  assert.ok(picker(panel, "Entité de présence"));
+  emit(fixture(false)); await settle(panel);
+  assert.deepEqual([...panel.shadowRoot!.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent?.trim()), ["Pilotage"]);
+  assert.equal(panel.shadowRoot!.querySelectorAll(".room-panel input, .room-panel select, .room-panel halo-entity-picker").length, 0);
+  assert.equal(panel.shadowRoot!.querySelector(".create-scene, .import-scene"), null);
+  button(panel, "Allumer").click(); await settle(panel);
+  assert.ok(calls.some((call) => call.type === "halo/command" && call.command === "turn_on"));
+});
+
+test("scene editing locks workspace navigation and returns focus to the correct room action", async () => {
+  const { panel } = await mount();
+  await openRoom(panel);
+  for (const action of ["Régler", "Créer une scène"]) {
+    button(panel, action).click(); await settle(panel);
+    assert.ok([...panel.shadowRoot!.querySelectorAll<HTMLButtonElement>(".room-link, .quick-toggle, .top-nav button")].every((item) => item.disabled));
+    assert.equal(panel.shadowRoot!.querySelector('[role="tablist"]'), null);
+    button(panel, "Annuler").click(); await settle(panel);
+    assert.equal(roomTab(panel, "Pilotage").getAttribute("aria-selected"), "true");
+    assert.equal(panel.shadowRoot!.activeElement, button(panel, action));
+  }
+});
+
 test("non-admins can control and run scenes but see no configuration actions", async () => {
   const { panel, calls } = await mount(false);
   assert.equal([...panel.shadowRoot!.querySelectorAll("button")].some((item) => item.textContent?.includes("Réglages globaux")), false);
+  await openRoom(panel);
   button(panel, "Allumer").click();
   await settle(panel);
   assert.deepEqual(calls.find((call) => call.type === "halo/command"), { type: "halo/command", room_id: "lounge", command: "turn_on" });
-  button(panel, "Lumières · 2").click();
-  await settle(panel);
-  assert.equal(panel.shadowRoot!.querySelectorAll("details").length, 0);
+  assert.deepEqual([...panel.shadowRoot!.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent?.trim()), ["Pilotage"]);
+  assert.equal(panel.shadowRoot!.querySelectorAll(".room-panel input, .room-panel select, .room-panel halo-entity-picker").length, 0);
   button(panel, "Lancer").click();
   await settle(panel);
   assert.ok(calls.some((call) => call.type === "halo/command" && call.scene_id === "cinema"));
@@ -208,6 +410,7 @@ test("non-admins can control and run scenes but see no configuration actions", a
 
 test("configuring a room is explicit, preserves safe defaults and sends the draft revision", async () => {
   const { panel, calls } = await mount();
+  await openRoom(panel, "Pilotage", "Cuisine");
   button(panel, "Configurer la pièce").click();
   await settle(panel);
   const freeLight = [...panel.shadowRoot!.querySelectorAll<HTMLLabelElement>("label.check")].find((label) => label.textContent?.includes("Lampe libre"))!.querySelector<HTMLInputElement>("input")!;
@@ -226,6 +429,7 @@ test("configuring a room is explicit, preserves safe defaults and sends the draf
 
 test("new remote configuration does not overwrite unsaved changes and disables stale save", async () => {
   const { panel, emit, calls } = await mount();
+  await openRoom(panel, "Pilotage", "Cuisine");
   button(panel, "Configurer la pièce").click();
   await settle(panel);
   emit({ ...fixture(), revision: 8 });
@@ -235,14 +439,14 @@ test("new remote configuration does not overwrite unsaved changes and disables s
   assert.equal(calls.some((call) => call.type === "halo/save"), false);
   button(panel, "Abandonner les modifications").click();
   await settle(panel);
-  assert.match(panel.shadowRoot!.textContent!, /n’existe plus/);
+  assert.ok(button(panel, "Configurer la pièce"));
+  assert.equal(panel.shadowRoot!.querySelector(".savebar"), null);
 });
 
 test("scene editing opens Home Assistant through its public action event after applying the initial preview and renewing its lock", async () => {
   const { panel, calls } = await mount();
-  button(panel, "Lumières · 2").click();
-  await settle(panel);
-  button(panel, "Régler dans la pièce").click();
+  await openRoom(panel);
+  button(panel, "Régler").click();
   await settle(panel);
   assert.ok(calls.some((call) => call.type === "halo/edit/begin" && call.room_id === "lounge"));
   assert.match(panel.shadowRoot!.textContent!, /Tu modifies les lampes réelles/);
@@ -278,8 +482,8 @@ test("unmount unsubscribes state events", async () => {
 
 test("saving captures real native changes without sending a stale scene preview", async () => {
   const { panel, calls, hass } = await mount();
-  button(panel, "Lumières · 2").click(); await settle(panel);
-  button(panel, "Régler dans la pièce").click(); await settle(panel);
+  await openRoom(panel);
+  button(panel, "Régler").click(); await settle(panel);
   panel.shadowRoot!.querySelector<HTMLButtonElement>(".scene-lamp")!.click(); await settle(panel);
   panel.hass = { ...hass, states: { "light.colour": { state: "on", attributes: { brightness: 161, effect: "Candle", color_mode: "rgbww", rgbww_color: [1, 2, 3, 4, 5] } } } };
   await settle(panel);
@@ -296,8 +500,8 @@ test("saving captures real native changes without sending a stale scene preview"
 
 test("cancelling clears pending preview work and does not send delayed lamp commands", async () => {
   const { panel, calls } = await mount();
-  button(panel, "Lumières · 2").click(); await settle(panel);
-  button(panel, "Régler dans la pièce").click(); await settle(panel);
+  await openRoom(panel);
+  button(panel, "Régler").click(); await settle(panel);
   button(panel, "Annuler").click(); await settle(panel);
   const endIndex = calls.findIndex((call) => call.type === "halo/edit/end");
   await new Promise((resolve) => setTimeout(resolve, 180));
@@ -310,8 +514,8 @@ test("a pending initial scene preview blocks native controls and saving until th
   const { panel, calls } = await mount(true, fixture(), { preview: () => preview });
   const actions: Event[] = [];
   panel.addEventListener("hass-action", (event) => actions.push(event));
-  button(panel, "Lumières · 2").click(); await settle(panel);
-  button(panel, "Régler dans la pièce").click(); await settle(panel);
+  await openRoom(panel);
+  button(panel, "Régler").click(); await settle(panel);
   const lamp = panel.shadowRoot!.querySelector<HTMLButtonElement>(".scene-lamp")!;
   assert.equal(lamp.disabled, true);
   assert.equal(button(panel, "Enregistrer la scène").disabled, true);
@@ -332,8 +536,8 @@ test("an expired edit session never opens native controls after a failed lock re
   const { panel } = await mount(true, fixture(), { touch: () => touch });
   const actions: Event[] = [];
   panel.addEventListener("hass-action", (event) => actions.push(event));
-  button(panel, "Lumières · 2").click(); await settle(panel);
-  button(panel, "Régler dans la pièce").click(); await settle(panel);
+  await openRoom(panel);
+  button(panel, "Régler").click(); await settle(panel);
   panel.shadowRoot!.querySelector<HTMLButtonElement>(".scene-lamp")!.click(); await settle(panel);
   assert.equal(actions.length, 0);
   rejectTouch({ code: "invalid_edit" }); await settle(panel);
@@ -343,8 +547,8 @@ test("an expired edit session never opens native controls after a failed lock re
 
 test("a failed initial preview remains cancellable and cannot be saved as though it had applied", async () => {
   const { panel, calls } = await mount(true, fixture(), { preview: async () => { throw { code: "unknown_error" }; } });
-  button(panel, "Lumières · 2").click(); await settle(panel);
-  button(panel, "Régler dans la pièce").click(); await settle(panel);
+  await openRoom(panel);
+  button(panel, "Régler").click(); await settle(panel);
   assert.equal(button(panel, "Enregistrer la scène").disabled, true);
   assert.equal(panel.shadowRoot!.querySelector<HTMLButtonElement>(".scene-lamp")!.disabled, true);
   assert.equal(button(panel, "Annuler").disabled, false);
@@ -358,7 +562,7 @@ test("new scenes preserve native light precision and effects without inventing s
   colour.attributes = { brightness: 127, color_mode: "rgbww", rgbww_color: [1, 2, 3, 4, 5], rgb_color: [80, 90, 100], effect: "Candle" };
   snapshot.entities.find((entity) => entity.entity_id === "light.simple")!.state = "unavailable";
   const { panel, calls, hass } = await mount(true, snapshot);
-  button(panel, "Lumières · 2").click(); await settle(panel);
+  await openRoom(panel);
   button(panel, "Créer une scène").click(); await settle(panel);
   const lamps = [...panel.shadowRoot!.querySelectorAll<HTMLButtonElement>(".scene-lamp")];
   assert.equal(lamps.length, 2);
@@ -380,8 +584,8 @@ test("new scenes preserve native light precision and effects without inventing s
 
 test("reattaching a panel opens a fresh subscription and abandons its old editor heartbeat", async () => {
   const context = await mount();
-  button(context.panel, "Lumières · 2").click(); await settle(context.panel);
-  button(context.panel, "Régler dans la pièce").click(); await settle(context.panel);
+  await openRoom(context.panel);
+  button(context.panel, "Régler").click(); await settle(context.panel);
   context.panel.remove();
   window.document.body.appendChild(context.panel as never);
   await settle(context.panel);
@@ -394,8 +598,8 @@ test("leaving while a scene lock is pending cannot start a late preview or heart
   let release!: () => void;
   const begin = new Promise<void>((resolve) => { release = resolve; });
   const { panel, calls } = await mount(true, fixture(), { begin: () => begin });
-  button(panel, "Lumières · 2").click(); await settle(panel);
-  button(panel, "Régler dans la pièce").click(); await settle(panel);
+  await openRoom(panel);
+  button(panel, "Régler").click(); await settle(panel);
   panel.remove();
   release();
   await new Promise((resolve) => setTimeout(resolve, 10));
@@ -404,8 +608,8 @@ test("leaving while a scene lock is pending cannot start a late preview or heart
 
 test("live state snapshots do not erase text while the user is still typing", async () => {
   const { panel, emit } = await mount();
-  button(panel, "Lumières · 2").click(); await settle(panel);
-  button(panel, "Régler dans la pièce").click(); await settle(panel);
+  await openRoom(panel);
+  button(panel, "Régler").click(); await settle(panel);
   const name = panel.shadowRoot!.querySelector<HTMLInputElement>('.editor input[type="text"]')!;
   name.value = "Nouvelle ambiance en cours";
   name.dispatchEvent(new Event("input", { bubbles: true }));
@@ -435,7 +639,7 @@ test("entity search matches names, accents and identifiers and commits only an e
   const snapshot = fixture();
   snapshot.entities.push({ entity_id: "input_boolean.office_presence", name: "Présence Bureau", state: "on", attributes: {} });
   const { panel, calls, emit } = await mount(true, snapshot);
-  button(panel, "Lumières · 2").click(); await settle(panel);
+  await openRoom(panel, "Automatisation");
   const control = picker(panel, "Entité de présence");
   const input = await searchEntity(control, "presence office");
   assert.equal(control.shadowRoot!.querySelectorAll('[role="option"]').length, 1);
@@ -462,7 +666,7 @@ test("entity pickers filter domains, support pointer focus transfer and preserve
   snapshot.config.rooms.lounge.presence_entity_id = "binary_sensor.removed";
   snapshot.entities.push({ entity_id: "sensor.brightness", name: "Luminosité", state: "42", attributes: { unit_of_measurement: "%" } });
   const { panel } = await mount(true, snapshot);
-  button(panel, "Lumières · 2").click(); await settle(panel);
+  await openRoom(panel, "Automatisation");
   const presence = picker(panel, "Entité de présence");
   assert.match(presence.shadowRoot!.textContent!, /binary_sensor.removed.*Indisponible/);
   const control = picker(panel, "Capteur de luminosité");
@@ -485,14 +689,18 @@ test("entity pickers filter domains, support pointer focus transfer and preserve
 
 test("required entity search rejects arbitrary typed text rather than saving an empty condition", async () => {
   const { panel, calls } = await mount();
-  button(panel, "Lumières · 2").click(); await settle(panel);
-  button(panel, "Régler dans la pièce").click(); await settle(panel);
+  await openRoom(panel);
+  button(panel, "Régler").click(); await settle(panel);
   const control = picker(panel, "Entité");
+  const automation = panel.shadowRoot!.querySelector<HTMLDetailsElement>(".scene-automation")!;
+  assert.equal(automation.open, false);
   control.shadowRoot!.querySelector<HTMLButtonElement>("button")!.click(); await settle(panel);
   await searchEntity(control, "media_player.typo");
   button(panel, "Enregistrer la scène").click(); await settle(panel);
   assert.equal(calls.some((call) => call.type === "halo/edit/end"), false);
   assert.match(panel.shadowRoot!.textContent!, /Vérifie les champs/);
+  assert.equal(automation.open, true, "The invalid condition is revealed inside its collapsed section");
+  assert.equal(panel.shadowRoot!.activeElement, control);
   button(panel, "Annuler").click(); await settle(panel);
 });
 
@@ -501,7 +709,7 @@ test("brightness uses live sensor units without converting configured values", a
   Object.assign(snapshot.config.rooms.lounge, { lux_entity_id: "sensor.daylight", lux_threshold: 30, lux_hysteresis: 5 });
   snapshot.entities.push({ entity_id: "sensor.daylight", name: "Daylight", state: "50", attributes: { unit_of_measurement: "%" } });
   const { panel, hass, calls } = await mount(true, snapshot);
-  button(panel, "Lumières · 2").click(); await settle(panel);
+  await openRoom(panel, "Automatisation");
   const contents = () => panel.shadowRoot!.textContent!.replace(/\s+/g, " ");
   assert.match(contents(), /Seuil d’allumage \(%\)/);
   assert.match(contents(), /Hystérésis \(%\)/);
@@ -530,11 +738,12 @@ test("lights distinguish groups and membership and searchable associations keep 
   snapshot.config.profiles.day = newProfile("day", "Journée");
   snapshot.config.rooms.lounge.associations = [{ profile_id: "day", lights: ["light.colour"], brightness_offset: 0 }];
   const { panel, calls } = await mount(true, snapshot);
-  button(panel, "Lumières · 2").click(); await settle(panel);
+  await openRoom(panel, "Lumières");
   const list = panel.shadowRoot!.querySelector(".light-list")!;
   assert.match(list.textContent!.replace(/\s+/g, " "), /Lampe individuelle · Membre de: Bureau/);
   assert.match(list.textContent!.replace(/\s+/g, " "), /Lampe individuelle · Aucun groupe connu/);
   assert.match(list.textContent!.replace(/\s+/g, " "), /Groupe de lumières · Membres: Lampe couleur/);
+  await selectRoomTab(panel, "Ambiances");
   const filter = panel.shadowRoot!.querySelector<HTMLInputElement>('.association input[type="search"]')!;
   filter.value = "absent"; filter.dispatchEvent(new Event("input", { bubbles: true })); await settle(panel);
   assert.equal(panel.shadowRoot!.querySelectorAll('.association input[type="checkbox"]').length, 0);
@@ -552,16 +761,17 @@ test("profile and scene creation work on HTTP LAN without crypto.randomUUID", as
   Object.defineProperty(globalThis, "crypto", { configurable: true, value: { getRandomValues: original.getRandomValues.bind(original) } });
   try {
     const { panel, calls } = await mount();
-    button(panel, "Réglages globaux").click(); await settle(panel);
+    button(panel, "Profils de lumière naturelle").click(); await settle(panel);
     button(panel, "Nouveau profil").click(); await settle(panel);
     button(panel, "Nouveau profil").click(); await settle(panel);
-    assert.equal(panel.shadowRoot!.querySelectorAll(".profile").length, 2);
+    assert.equal(panel.shadowRoot!.querySelectorAll(".profile-list .profile-link").length, 2);
+    assert.equal(panel.shadowRoot!.querySelectorAll(".profile").length, 1);
     button(panel, "Enregistrer les modifications").click(); await settle(panel);
     const profiles = (calls.find((call) => call.type === "halo/save")!.config as Snapshot["config"]).profiles;
     const ids = Object.keys(profiles);
     assert.equal(ids.length, 2); assert.notEqual(ids[0], ids[1]);
     button(panel, "Pièces").click(); await settle(panel);
-    button(panel, "Lumières · 2").click(); await settle(panel);
+    await openRoom(panel);
     button(panel, "Créer une scène").click(); await settle(panel);
     assert.ok(panel.shadowRoot!.querySelector(".editor"));
     const name = panel.shadowRoot!.querySelector<HTMLInputElement>('.editor input[type="text"]')!;
@@ -582,7 +792,7 @@ test("large entity catalogs stay searchable and outside clicks cancel only the t
   snapshot.entities.push(...Array.from({ length: 240 }, (_, index) => ({ entity_id: `binary_sensor.device_${index}`, name: `Device ${index}`, state: "off", attributes: {} })));
   snapshot.config.rooms.lounge.presence_entity_id = "binary_sensor.device_239";
   const { panel, hass } = await mount(true, snapshot);
-  button(panel, "Lumières · 2").click(); await settle(panel);
+  await openRoom(panel, "Automatisation");
   const control = picker(panel, "Entité de présence");
   const input = await searchEntity(control, "device");
   assert.equal(control.shadowRoot!.querySelectorAll('[role="option"]').length, 100);
@@ -609,7 +819,7 @@ const importedScene: Scene = { id: "copied-scene", name: "Lecture existante", ca
   lights: { "light.colour": { state: "on", brightness: 161, color_mode: "rgbw", rgbw_color: [1, 2, 3, 4], effect: "Candle" } } };
 
 async function openImport(panel: InstanceType<typeof HaloPanel>) {
-  button(panel, "Lumières · 2").click(); await settle(panel);
+  await openRoom(panel);
   button(panel, "Importer depuis Home Assistant").click(); await settle(panel);
 }
 
@@ -640,6 +850,8 @@ test("scene import reads configuration without controlling lights, previews reta
   button(panel, "Ajouter au brouillon de la pièce").click(); await settle(panel);
   assert.equal(panel.shadowRoot!.querySelector(".scene-import"), null);
   assert.match(panel.shadowRoot!.querySelector(".savebar")!.textContent!, /non enregistrées/);
+  assert.equal(roomTab(panel, "Pilotage").getAttribute("aria-selected"), "true");
+  assert.equal((panel.shadowRoot!.activeElement as HTMLElement).dataset.sceneId, "copied-scene");
   assert.deepEqual([...panel.shadowRoot!.querySelectorAll(".scene-row strong")].map((item) => item.textContent), ["Cinéma perso", "Lecture Halo"]);
   const runButtons = () => [...panel.shadowRoot!.querySelectorAll<HTMLButtonElement>(".scene-row button")].filter((item) => item.textContent === "Lancer");
   assert.ok(runButtons().every((item) => item.disabled));
@@ -752,8 +964,8 @@ test("existing partial scenes preview and capture only included lamps while addi
   const { panel, calls } = await mount(true, snapshot);
   const actions: Event[] = [];
   panel.addEventListener("hass-action", (event) => actions.push(event));
-  button(panel, "Lumières · 2").click(); await settle(panel);
-  button(panel, "Régler dans la pièce").click(); await settle(panel);
+  await openRoom(panel);
+  button(panel, "Régler").click(); await settle(panel);
   assert.deepEqual(calls.find((call) => call.type === "halo/edit/preview")!.lights, importedScene.lights);
   const checks = [...panel.shadowRoot!.querySelectorAll<HTMLInputElement>(".scene-inclusion input")];
   assert.deepEqual(checks.map((input) => input.checked), [true, false]);
@@ -790,8 +1002,8 @@ test("resaving a partial scene retains remembered settings for its unavailable s
   snapshot.config.rooms.lounge.scenes = [structuredClone(importedScene)];
   snapshot.entities.find((entity) => entity.entity_id === "light.colour")!.state = "unavailable";
   const { panel, calls } = await mount(true, snapshot);
-  button(panel, "Lumières · 2").click(); await settle(panel);
-  button(panel, "Régler dans la pièce").click(); await settle(panel);
+  await openRoom(panel);
+  button(panel, "Régler").click(); await settle(panel);
   assert.deepEqual([...panel.shadowRoot!.querySelectorAll<HTMLInputElement>(".scene-inclusion input")].map((input) => input.checked), [true, false]);
   button(panel, "Enregistrer la scène").click(); await settle(panel);
   const end = calls.find((call) => call.type === "halo/edit/end")!;

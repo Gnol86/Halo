@@ -1,38 +1,237 @@
 <!doctype html>
-<html lang="en">
+<html lang="fr">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Halo — isolated UI test harness</title>
+<title>Halo — aperçu isolé avec données simulées</title>
 <link rel="icon" href="data:,">
 <style>
-  body { margin: 0; height:100dvh; display:flex; flex-direction:column; overflow:hidden; --primary-color:#03a9f4; --primary-text-color:#212121; --secondary-text-color:#666; --primary-background-color:#fafafa; --card-background-color:#fff; --secondary-background-color:#eee; --divider-color:#ddd; --text-primary-color:#fff; }
-  body.dark { color-scheme:dark; --primary-text-color:#eee; --secondary-text-color:#bbb; --primary-background-color:#111; --card-background-color:#1c1c1c; --secondary-background-color:#2c2c2c; --divider-color:#454545; }
-  .harness { background:#e6edf3; color:#111; padding:8px; font:12px system-ui; display:flex; gap:8px; align-items:center; flex-shrink:0; }
+  body {
+    margin:0; height:100dvh; display:flex; flex-direction:column; overflow:hidden;
+    color-scheme:light; font-family:system-ui,sans-serif;
+    --ha-font-family-body:system-ui,sans-serif; --ha-font-family-heading:system-ui,sans-serif;
+    --ha-font-size-s:12px; --ha-font-size-m:14px; --ha-font-size-l:16px; --ha-font-size-xl:20px; --ha-font-size-2xl:24px;
+    --ha-font-weight-normal:400; --ha-font-weight-medium:500; --ha-font-weight-bold:700;
+    --ha-line-height-normal:1.55; --ha-line-height-condensed:1.2;
+    --ha-space-2:8px; --ha-space-3:12px; --ha-space-4:16px; --ha-space-5:20px; --ha-space-6:24px;
+    --ha-card-border-radius:12px; --ha-border-radius-lg:12px; --ha-border-radius-md:8px; --ha-card-box-shadow:none;
+    --primary-color:#0277bd; --primary-text-color:#212121; --secondary-text-color:#626262; --disabled-text-color:#777;
+    --primary-background-color:#fafafa; --card-background-color:#fff; --secondary-background-color:#f0f2f3; --divider-color:#d4d8db;
+    --ha-card-background:var(--card-background-color); --text-primary-color:#fff; --error-color:#b52222;
+    --app-header-background-color:#fff; --app-header-text-color:#212121; --app-header-border-bottom:1px solid var(--divider-color);
+    --input-fill-color:#f4f6f7; --input-ink-color:#212121; --input-label-ink-color:#555;
+    --input-outlined-idle-border-color:#90979d; --input-outlined-hover-border-color:#51585e;
+    --state-light-on-color:#986000; --state-light-off-color:#697079;
+  }
+  body[data-theme="dark"] {
+    color-scheme:dark; --primary-color:#7ccaff; --primary-text-color:#f1f3f5; --secondary-text-color:#b7bfc8; --disabled-text-color:#919ba6;
+    --primary-background-color:#111418; --card-background-color:#1b2026; --secondary-background-color:#252c34; --divider-color:#444d58;
+    --text-primary-color:#122332; --error-color:#ffaaa6;
+    --app-header-background-color:#1b2026; --app-header-text-color:#f1f3f5;
+    --input-fill-color:#252c34; --input-ink-color:#f1f3f5; --input-label-ink-color:#c4ccd5;
+    --input-outlined-idle-border-color:#637181; --input-outlined-hover-border-color:#b7c7d8;
+    --state-light-on-color:#ffcf75; --state-light-off-color:#a6b1bf;
+  }
+  body[data-theme="contrast"] {
+    --primary-color:#6a1745; --primary-text-color:#172e28; --secondary-text-color:#455c53; --disabled-text-color:#68746e;
+    --primary-background-color:#f5f1e6; --card-background-color:#fffdf5; --secondary-background-color:#e5ebdf; --divider-color:#9baaa0;
+    --text-primary-color:#fff; --error-color:#9f2029;
+    --app-header-background-color:#163e31; --app-header-text-color:#fffaf0; --app-header-border-bottom:2px solid #6a1745;
+    --input-fill-color:#fffdf5; --input-ink-color:#172e28; --input-label-ink-color:#455c53;
+    --input-outlined-idle-border-color:#677a6d; --input-outlined-hover-border-color:#172e28;
+    --ha-font-family-body:Verdana,Geneva,sans-serif; --ha-font-family-heading:Verdana,Geneva,sans-serif;
+    --ha-card-border-radius:4px; --ha-border-radius-lg:4px; --ha-border-radius-md:3px;
+    --ha-space-2:10px; --ha-space-3:14px; --ha-space-4:18px; --ha-space-5:22px; --ha-space-6:26px;
+    --state-light-on-color:#795000; --state-light-off-color:#50635a;
+  }
+  body.large-text { --ha-font-size-s:15px; --ha-font-size-m:17.5px; --ha-font-size-l:20px; --ha-font-size-xl:25px; --ha-font-size-2xl:30px; }
+  .harness { background:#e6edf3; color:#162635; padding:6px 10px; font:12px/1.4 system-ui,sans-serif; display:flex; flex-wrap:wrap; gap:6px 10px; align-items:center; flex-shrink:0; border-bottom:1px solid #a9b4bf; }
+  .harness strong { font-weight:700; }
+  .harness button { min-height:32px; padding:4px 8px; background:#fff; color:#162635; border:1px solid #8292a2; border-radius:4px; font:inherit; cursor:pointer; }
+  .harness button:focus-visible { outline:2px solid #005f9c; outline-offset:2px; }
+  .harness button[aria-pressed="true"] { background:#183c58; color:#fff; }
+  .harness details { flex-basis:100%; }
+  .harness summary { cursor:pointer; }
+  .harness p { margin:4px 0; max-width:85ch; }
   halo-panel { height:auto; min-height:0; flex:1; }
 </style>
-<div class="harness">Simulated Home Assistant <button id="language">EN / FR</button><button id="theme">Light / dark</button><button id="admin">Admin / user</button><span id="native-action" role="status">Native light controls require a real Home Assistant frontend.</span></div>
+<div class="harness" aria-label="Outils de l’aperçu simulé">
+  <strong>Données simulées · aucun logement connecté</strong>
+  <button id="language">Langue : FR</button>
+  <button id="theme">Thème : clair</button>
+  <button id="admin">Rôle : administrateur</button>
+  <button id="text-size" aria-pressed="false">Texte : 100 %</button>
+  <details><summary>À propos de cet aperçu</summary><p>Six pièces configurées et deux pièces à configurer. États et commandes simulés, sans moteur d’automatisation. Les icônes utilisent un substitut SVG réservé à cet aperçu ; aucun composant privé Home Assistant n’est importé.</p><p id="native-action" role="status">Les vrais contrôles des lampes nécessitent le frontend Home Assistant.</p></details>
+</div>
 <halo-panel></halo-panel>
 <script type="module">
 import "../custom_components/halo/frontend/halo-panel.js";
-const transitions = { turn_on:0, lux_on:10, natural:60, scene:10, turn_off:2 };
-const morning = { brightness:{low_elevation:-6.5,high_elevation:45.5,low:20,high:100},temperature:{low_elevation:-6.5,high_elevation:45.5,low:2200,high:6000} };
-const room = {id:"lounge",lights:["light.sofa","light.ceiling","light.table"],presence_entity_id:"binary_sensor.presence",presence_states:["on"],lux_entity_id:"sensor.illuminance",lux_threshold:50,lux_hysteresis:20,lux_off:false,absence_delay:0,manual_pause:7200,lux_off_delay:30,allow_off_during_pause:true,automation_enabled:false,natural_enabled:true,transitions:Object.fromEntries(Object.keys(transitions).map(key=>[key,"inherit"])),base:{},associations:[{profile_id:"warm",lights:["light.sofa","light.ceiling"],brightness_offset:-30}],scenes:[{id:"cinema",name:"Cinéma",can_turn_on:false,conditions:{type:"state",entity_id:"media_player.tv",state:"on"},lights:{"light.sofa":{state:"on",brightness_pct:20,rgb_color:[230,140,40]},"light.ceiling":{state:"on",brightness_pct:15,color_temp_kelvin:2500},"light.table":{state:"off"}}}]};
-let snapshot={revision:1,is_admin:true,config:{sun_entity_id:"sun.sun",transitions,profiles:{warm:{id:"warm",name:"Blanc chaleureux",linked:true,morning,evening:structuredClone(morning)}},rooms:{lounge:room}},areas:[{id:"lounge",name:"Salon"},{id:"kitchen",name:"Cuisine"},{id:"bedroom",name:"Chambre"}],lights:[{entity_id:"light.sofa",name:"Lampadaire",area_id:"lounge",available:true,supported_color_modes:["rgb"],supported_features:32},{entity_id:"light.ceiling",name:"Plafonnier",area_id:"lounge",available:true,supported_color_modes:["color_temp"],min_color_temp_kelvin:2000,max_color_temp_kelvin:6500,supported_features:32},{entity_id:"light.table",name:"Lampe de table",area_id:"lounge",available:true,supported_color_modes:["onoff"],supported_features:0},{entity_id:"light.kitchen",name:"Cuisine",area_id:"kitchen",available:true,supported_color_modes:["brightness"],supported_features:0}],entities:[{entity_id:"sun.sun",name:"Soleil",state:"above_horizon",attributes:{elevation:15}},{entity_id:"binary_sensor.presence",name:"Présence du salon",state:"on",attributes:{}},{entity_id:"sensor.illuminance",name:"Luminosité du salon",state:"30",attributes:{unit_of_measurement:"lx"}},{entity_id:"media_player.tv",name:"Télévision",state:"off",attributes:{}}],status:{lounge:{reason:"disabled",is_on:true,available:true,pause_until:null}}};
-// Illustrate the new metadata and sensor units without any real HA connection.
-snapshot.lights.push({entity_id:"light.lounge_group",name:"Groupe du salon",area_id:"lounge",available:true,supported_color_modes:["brightness"],supported_features:32,is_group:true,group_members:["light.sofa","light.ceiling"],member_of:[]});
-for (const light of snapshot.lights) { light.is_group ??= false; light.group_members ??= []; light.member_of ??= []; }
-for (const light of snapshot.lights.slice(0,2)) light.member_of=["light.lounge_group"];
-snapshot.entities.push({entity_id:"sensor.daylight_percent",name:"Luminosité relative",state:"25",attributes:{unit_of_measurement:"%"}});
-snapshot.entities.push({entity_id:"input_boolean.presence",name:"Présence personnalisée",state:"off",attributes:{}});
-snapshot.entities.push({entity_id:"scene.reading",name:"Lecture du soir",state:"unknown",attributes:{id:"reading"}});
-snapshot.entities.push({entity_id:"scene.hue_ambience",name:"Ambiance Hue",state:"unknown",attributes:{}});
+
+// Preview-only icon renderer. These are icon paths, not copied Home Assistant controls.
+// Material Design Icons by Pictogrammers (Apache 2.0):
+// https://github.com/Templarian/MaterialDesign/blob/master/LICENSE
+// SVG source: https://github.com/Templarian/MaterialDesign/tree/master/svg
+const previewIconPaths = {
+  "alert-circle-outline": [
+    "M11,15H13V17H11V15M11,7H13V13H11V7M12,2C6.47,2 2,6.5 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20Z"
+  ],
+  "arrow-down": [
+    "M11,4H13V16L18.5,10.5L19.92,11.92L12,19.84L4.08,11.92L5.5,10.5L11,16V4Z"
+  ],
+  "arrow-left": [
+    "M20,11V13H8L13.5,18.5L12.08,19.92L4.16,12L12.08,4.08L13.5,5.5L8,11H20Z"
+  ],
+  "arrow-up": [
+    "M13,20H11V8L5.5,13.5L4.08,12.08L12,4.16L19.92,12.08L18.5,13.5L13,8V20Z"
+  ],
+  "check-circle-outline": [
+    "M12 2C6.5 2 2 6.5 2 12S6.5 22 12 22 22 17.5 22 12 17.5 2 12 2M12 20C7.59 20 4 16.41 4 12S7.59 4 12 4 20 7.59 20 12 16.41 20 12 20M16.59 7.58L10 14.17L7.41 11.59L6 13L10 17L18 9L16.59 7.58Z"
+  ],
+  "chevron-right": [
+    "M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z"
+  ],
+  "delete-outline": [
+    "M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H16V19H8V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"
+  ],
+  "dots-vertical": [
+    "M12,16A2,2 0 0,1 14,18A2,2 0 0,1 12,20A2,2 0 0,1 10,18A2,2 0 0,1 12,16M12,10A2,2 0 0,1 14,12A2,2 0 0,1 12,14A2,2 0 0,1 10,12A2,2 0 0,1 12,10M12,4A2,2 0 0,1 14,6A2,2 0 0,1 12,8A2,2 0 0,1 10,6A2,2 0 0,1 12,4Z"
+  ],
+  "import": [
+    "M14,12L10,8V11H2V13H10V16M20,18V6C20,4.89 19.1,4 18,4H6A2,2 0 0,0 4,6V9H6V6H18V18H6V15H4V18A2,2 0 0,0 6,20H18A2,2 0 0,0 20,18Z"
+  ],
+  "information-outline": [
+    "M11,9H13V7H11M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,17H13V11H11V17Z"
+  ],
+  "lightbulb-group-outline": [
+    "M7 19A2.93 2.93 0 0 0 7.17 20H6A1 1 0 0 1 5 19V18H7M10 19A1 1 0 0 0 11 20H13A1 1 0 0 0 14 19V18H10M4 16A1 1 0 0 0 5 17H7V14.88A6.92 6.92 0 0 1 5 10A6.79 6.79 0 0 1 5.68 7A4 4 0 0 0 4 14.45M17 19A2.93 2.93 0 0 1 16.83 20H18A1 1 0 0 0 19 19V18H17M17 10A5 5 0 0 1 15 14V16A1 1 0 0 1 14 17H10A1 1 0 0 1 9 16V14A5 5 0 1 1 17 10M15 10A3 3 0 1 0 11 12.82V15H13V12.82A3 3 0 0 0 15 10M18.32 7A6.79 6.79 0 0 1 19 10A6.92 6.92 0 0 1 17 14.88V17H19A1 1 0 0 0 20 16V14.45A4 4 0 0 0 18.32 7Z"
+  ],
+  "lightbulb-off-outline": [
+    "M12,2C9.76,2 7.78,3.05 6.5,4.68L7.93,6.11C8.84,4.84 10.32,4 12,4A5,5 0 0,1 17,9C17,10.68 16.16,12.16 14.89,13.06L16.31,14.5C17.94,13.21 19,11.24 19,9A7,7 0 0,0 12,2M3.28,4L2,5.27L5.04,8.3C5,8.53 5,8.76 5,9C5,11.38 6.19,13.47 8,14.74V17A1,1 0 0,0 9,18H14.73L18.73,22L20,20.72L3.28,4M7.23,10.5L12.73,16H10V13.58C8.68,13 7.66,11.88 7.23,10.5M9,20V21A1,1 0 0,0 10,22H14A1,1 0 0,0 15,21V20H9Z"
+  ],
+  "lightbulb-on-outline": [
+    "M20,11H23V13H20V11M1,11H4V13H1V11M13,1V4H11V1H13M4.92,3.5L7.05,5.64L5.63,7.05L3.5,4.93L4.92,3.5M16.95,5.63L19.07,3.5L20.5,4.93L18.37,7.05L16.95,5.63M12,6A6,6 0 0,1 18,12C18,14.22 16.79,16.16 15,17.2V19A1,1 0 0,1 14,20H10A1,1 0 0,1 9,19V17.2C7.21,16.16 6,14.22 6,12A6,6 0 0,1 12,6M14,21V22A1,1 0 0,1 13,23H11A1,1 0 0,1 10,22V21H14M11,18H13V15.87C14.73,15.43 16,13.86 16,12A4,4 0 0,0 12,8A4,4 0 0,0 8,12C8,13.86 9.27,15.43 11,15.87V18Z"
+  ],
+  "lightbulb-outline": [
+    "M12,2A7,7 0 0,1 19,9C19,11.38 17.81,13.47 16,14.74V17A1,1 0 0,1 15,18H9A1,1 0 0,1 8,17V14.74C6.19,13.47 5,11.38 5,9A7,7 0 0,1 12,2M9,21V20H15V21A1,1 0 0,1 14,22H10A1,1 0 0,1 9,21M12,4A5,5 0 0,0 7,9C7,11.05 8.23,12.81 10,13.58V16H14V13.58C15.77,12.81 17,11.05 17,9A5,5 0 0,0 12,4Z"
+  ],
+  "palette-outline": [
+    "M12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2C17.5,2 22,6 22,11A6,6 0 0,1 16,17H14.2C13.9,17 13.7,17.2 13.7,17.5C13.7,17.6 13.8,17.7 13.8,17.8C14.2,18.3 14.4,18.9 14.4,19.5C14.5,20.9 13.4,22 12,22M12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20C12.3,20 12.5,19.8 12.5,19.5C12.5,19.3 12.4,19.2 12.4,19.1C12,18.6 11.8,18.1 11.8,17.5C11.8,16.1 12.9,15 14.3,15H16A4,4 0 0,0 20,11C20,7.1 16.4,4 12,4M6.5,10C7.3,10 8,10.7 8,11.5C8,12.3 7.3,13 6.5,13C5.7,13 5,12.3 5,11.5C5,10.7 5.7,10 6.5,10M9.5,6C10.3,6 11,6.7 11,7.5C11,8.3 10.3,9 9.5,9C8.7,9 8,8.3 8,7.5C8,6.7 8.7,6 9.5,6M14.5,6C15.3,6 16,6.7 16,7.5C16,8.3 15.3,9 14.5,9C13.7,9 13,8.3 13,7.5C13,6.7 13.7,6 14.5,6M17.5,10C18.3,10 19,10.7 19,11.5C19,12.3 18.3,13 17.5,13C16.7,13 16,12.3 16,11.5C16,10.7 16.7,10 17.5,10Z"
+  ],
+  "play": [
+    "M8,5.14V19.14L19,12.14L8,5.14Z"
+  ],
+  "play-circle-outline": [
+    "M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M10,16.5L16,12L10,7.5V16.5Z"
+  ],
+  "plus": [
+    "M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z"
+  ],
+  "plus-circle-outline": [
+    "M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M13,7H11V11H7V13H11V17H13V13H17V11H13V7Z"
+  ],
+  "power": [
+    "M16.56,5.44L15.11,6.89C16.84,7.94 18,9.83 18,12A6,6 0 0,1 12,18A6,6 0 0,1 6,12C6,9.83 7.16,7.94 8.88,6.88L7.44,5.44C5.36,6.88 4,9.28 4,12A8,8 0 0,0 12,20A8,8 0 0,0 20,12C20,9.28 18.64,6.88 16.56,5.44M13,3H11V13H13"
+  ],
+  "spa": [
+    "M15.5,9.63C15.31,6.84 14.18,4.12 12.06,2C9.92,4.14 8.74,6.86 8.5,9.63C9.79,10.31 10.97,11.19 12,12.26C13.03,11.2 14.21,10.32 15.5,9.63M12,15.45C9.85,12.17 6.18,10 2,10C2,20 11.32,21.89 12,22C12.68,21.88 22,20 22,10C17.82,10 14.15,12.17 12,15.45Z"
+  ],
+  "white-balance-sunny": [
+    "M3.55 19.09L4.96 20.5L6.76 18.71L5.34 17.29M12 6C8.69 6 6 8.69 6 12S8.69 18 12 18 18 15.31 18 12C18 8.68 15.31 6 12 6M20 13H23V11H20M17.24 18.71L19.04 20.5L20.45 19.09L18.66 17.29M20.45 5L19.04 3.6L17.24 5.39L18.66 6.81M13 1H11V4H13M6.76 5.39L4.96 3.6L3.55 5L5.34 6.81L6.76 5.39M1 13H4V11H1M13 20H11V23H13"
+  ]
+};
+class PreviewIcon extends HTMLElement {
+  static observedAttributes = ["icon"];
+  constructor() { super(); this.attachShadow({mode:"open"}); }
+  connectedCallback() { this.renderIcon(); }
+  attributeChangedCallback() { this.renderIcon(); }
+  renderIcon() {
+    const namespace="http://www.w3.org/2000/svg";
+    const svg=document.createElementNS(namespace,"svg");
+    svg.setAttribute("viewBox","0 0 24 24"); svg.setAttribute("width","100%"); svg.setAttribute("height","100%");
+    svg.setAttribute("fill","currentColor"); svg.setAttribute("aria-hidden","true");
+    for(const data of previewIconPaths[(this.getAttribute("icon")??"").replace(/^mdi:/,"")]??[]) {
+      const path=document.createElementNS(namespace,"path"); path.setAttribute("d",data); svg.append(path);
+    }
+    this.shadowRoot.replaceChildren(svg);
+  }
+}
+if(!customElements.get("ha-icon")) customElements.define("ha-icon",PreviewIcon);
+
+const transitions={turn_on:0,lux_on:10,natural:60,scene:10,turn_off:2};
+const inherited=()=>Object.fromEntries(Object.keys(transitions).map(key=>[key,"inherit"]));
+const curves=(low,high,warm,cool,interpolation="ease_in_out")=>({
+  brightness:{low_elevation:-6.5,high_elevation:45.5,low,high,interpolation},
+  temperature:{low_elevation:-6.5,high_elevation:45.5,low:warm,high:cool,interpolation},
+});
+const morning=curves(20,100,2200,6000);
+const room=(id,lights,overrides={})=>({
+  id,lights,presence_entity_id:null,presence_states:["on"],lux_entity_id:null,lux_threshold:null,lux_hysteresis:0,lux_off:false,
+  absence_delay:0,manual_pause:7200,lux_off_delay:30,allow_off_during_pause:true,automation_enabled:true,natural_enabled:true,
+  transitions:inherited(),base:{},associations:[],scenes:[],...overrides,
+});
+const scenes=[
+  {id:"cinema",name:"Cinéma",can_turn_on:false,conditions:{type:"state",entity_id:"media_player.tv",state:"on"},lights:{"light.sofa":{state:"on",brightness:51,color_mode:"rgb",rgb_color:[230,140,40]},"light.ceiling":{state:"off"},"light.table":{state:"off"}}},
+  {id:"reading",name:"Lecture du soir",can_turn_on:false,conditions:null,lights:{"light.sofa":{state:"on",brightness:191,color_mode:"rgb",rgb_color:[255,185,112],effect:"Candle"},"light.ceiling":{state:"on",brightness:90,color_mode:"color_temp",color_temp_kelvin:2700}}},
+  {id:"welcome",name:"Accueil",can_turn_on:true,conditions:{type:"state",entity_id:"input_boolean.guests",state:"on"},lights:{"light.sofa":{state:"on",brightness:180},"light.ceiling":{state:"on",brightness:200},"light.table":{state:"on"}}},
+];
+const rooms={
+  lounge:room("lounge",["light.sofa","light.ceiling","light.table"],{presence_entity_id:"binary_sensor.presence",lux_entity_id:"sensor.illuminance",lux_threshold:50,lux_hysteresis:20,associations:[{profile_id:"warm",lights:["light.sofa"],brightness_offset:-30},{profile_id:"daylight",lights:["light.ceiling"],brightness_offset:0}],scenes}),
+  kitchen:room("kitchen",["light.kitchen","light.worktop"],{associations:[{profile_id:"daylight",lights:["light.kitchen","light.worktop"],brightness_offset:0}]}),
+  bedroom:room("bedroom",["light.bed_left","light.bed_right"],{automation_enabled:false,associations:[{profile_id:"rhythm",lights:["light.bed_left","light.bed_right"],brightness_offset:-15}]}),
+  office:room("office",["light.desk","light.office_ceiling"],{associations:[{profile_id:"daylight",lights:["light.desk","light.office_ceiling"],brightness_offset:0}]}),
+  hall:room("hall",["light.hall"],{presence_entity_id:"binary_sensor.hall_presence",absence_delay:30,natural_enabled:false}),
+  bathroom:room("bathroom",["light.mirror","light.bathroom_ceiling"],{associations:[{profile_id:"rhythm",lights:["light.mirror","light.bathroom_ceiling"],brightness_offset:0}]}),
+};
+const light=(id,name,area,mode,state="on",attributes={})=>({
+  entity_id:`light.${id}`,name,area_id:area,available:state!=="unavailable",is_group:false,group_members:[],member_of:[],
+  supported_color_modes:[mode],supported_features:mode==="onoff"?0:32,
+  ...(mode==="color_temp"?{min_color_temp_kelvin:2000,max_color_temp_kelvin:6500}:{}),
+  state,attributes:{...(state==="on"&&mode!=="onoff"?{brightness:153,color_mode:mode}:{}),...attributes},
+});
+const lights=[
+  light("sofa","Lampadaire","lounge","rgb","on",{rgb_color:[255,205,148],effect:"Candle"}),
+  light("ceiling","Plafonnier","lounge","color_temp","on",{color_temp_kelvin:3800}),
+  light("table","Lampe de table","lounge","onoff","off"),
+  light("kitchen","Suspension","kitchen","brightness"),light("worktop","Plan de travail","kitchen","color_temp","on",{color_temp_kelvin:4200}),
+  light("bed_left","Chevet gauche","bedroom","color_temp","off"),light("bed_right","Chevet droit","bedroom","color_temp","off"),
+  light("desk","Lampe du bureau","office","rgb","on",{rgb_color:[235,215,180]}),light("office_ceiling","Plafond du bureau","office","color_temp","on",{color_temp_kelvin:4000}),
+  light("hall","Éclairage du hall","hall","onoff","off"),
+  light("mirror","Miroir","bathroom","color_temp","unavailable"),light("bathroom_ceiling","Plafond de la salle de bain","bathroom","brightness","unavailable"),
+  light("garage","Garage","garage","onoff","off"),light("garden","Terrasse","garden","onoff","off"),
+];
+lights.push({...light("lounge_group","Groupe du salon","lounge","brightness"),is_group:true,group_members:["light.sofa","light.ceiling"]});
+for(const entry of lights.slice(0,2)) entry.member_of=["light.lounge_group"];
+const entities=[
+  {entity_id:"sun.sun",name:"Soleil",state:"above_horizon",attributes:{elevation:15}},
+  {entity_id:"binary_sensor.presence",name:"Présence du salon",state:"on",attributes:{}},
+  {entity_id:"binary_sensor.hall_presence",name:"Présence du hall",state:"off",attributes:{}},
+  {entity_id:"sensor.illuminance",name:"Luminosité du salon",state:"30",attributes:{unit_of_measurement:"lx"}},
+  {entity_id:"sensor.daylight_percent",name:"Luminosité relative",state:"25",attributes:{unit_of_measurement:"%"}},
+  {entity_id:"input_boolean.presence",name:"Présence personnalisée",state:"off",attributes:{}},
+  {entity_id:"input_boolean.guests",name:"Invités à la maison",state:"off",attributes:{}},
+  {entity_id:"media_player.tv",name:"Télévision",state:"off",attributes:{}},
+  {entity_id:"scene.reading",name:"Lecture du soir",state:"unknown",attributes:{id:"reading"}},
+  {entity_id:"scene.hue_ambience",name:"Ambiance Hue",state:"unknown",attributes:{}},
+];
+let snapshot={revision:1,is_admin:true,config:{sun_entity_id:"sun.sun",transitions,profiles:{
+  warm:{id:"warm",name:"Blanc chaleureux",linked:true,morning,evening:structuredClone(morning)},
+  daylight:{id:"daylight",name:"Lumière du jour",linked:true,morning:curves(35,100,2700,6500,"linear"),evening:curves(35,100,2700,6500,"linear")},
+  rhythm:{id:"rhythm",name:"Réveil et soirée",linked:false,morning:curves(15,95,2400,5500),evening:curves(8,70,2000,4000)},
+},rooms},areas:[{id:"lounge",name:"Salon"},{id:"kitchen",name:"Cuisine"},{id:"bedroom",name:"Chambre"},{id:"office",name:"Bureau"},{id:"hall",name:"Hall d’entrée"},{id:"bathroom",name:"Salle de bain"},{id:"garage",name:"Garage"},{id:"garden",name:"Jardin"}],lights,entities:[...entities,...lights.map(({entity_id,name,state,attributes})=>({entity_id,name,state,attributes}))],status:{
+  lounge:{reason:"natural",is_on:true,available:true,presence:true,lux:30,pause_until:null},
+  kitchen:{reason:"base",is_on:true,available:true,pause_until:null},
+  bedroom:{reason:"disabled",is_on:false,available:true,pause_until:null},
+  office:{reason:"manual_pause",is_on:true,available:true,pause_until:Math.floor(Date.now()/1000)+35*60},
+  hall:{reason:"absence",is_on:false,available:true,presence:false,pause_until:null},
+  bathroom:{reason:"unavailable",is_on:false,available:false,pause_until:null},
+}};
 const sourceScene={id:"reading",name:"Lecture du soir",entities:{"light.sofa":{state:"on",brightness:110,color_mode:"rgb",rgb_color:[255,180,100],effect:"Candle"},"light.ceiling":{state:"off"},"light.kitchen":{state:"on"},"media_player.tv":"off"}};
 let callback;
 let initialStates;
+let initialStatus;
 window.haloCalls=[];
 const panel=document.querySelector("halo-panel");
 const send=()=>callback?.(structuredClone(snapshot));
-const hass={locale:{language:"fr-BE"},states:{"light.sofa":{state:"on",attributes:{brightness:128,color_mode:"rgb",rgb_color:[255,255,255],effect:"Candle"}},"light.ceiling":{state:"on",attributes:{brightness:128,color_mode:"color_temp",color_temp_kelvin:3000}},"light.table":{state:"off",attributes:{}}},connection:{async subscribeMessage(cb){callback=cb;return()=>callback=undefined;}},async callApi(method,path){
+const hass={locale:{language:"fr-BE"},themes:{darkMode:false},states:Object.fromEntries([...entities,...lights].map(({entity_id,state,attributes})=>[entity_id,{state,attributes:structuredClone(attributes)}])),connection:{async subscribeMessage(cb){callback=cb;return()=>callback=undefined;}},async callApi(method,path){
   window.haloCalls.push({type:"api",method,path});
   if(method==="GET"&&path==="config/scene/config/reading")return structuredClone(sourceScene);
   throw {status_code:404};
@@ -44,32 +243,64 @@ const hass={locale:{language:"fr-BE"},states:{"light.sofa":{state:"on",attribute
     if(!entries.length)throw{code:"no_matching_lights"};
     return{scene:{id:crypto.randomUUID(),name:message.config.name,conditions:null,can_turn_on:false,lights:Object.fromEntries(entries)},ignored_entities:Object.keys(message.config.entities).length-entries.length};
   }
-  if(message.type==="halo/save"){if(message.revision!==snapshot.revision)throw{code:"conflict"};snapshot.config=structuredClone(message.config);snapshot.revision++;send();}
-  if(message.type==="halo/edit/begin"){initialStates=structuredClone(hass.states);snapshot.status[message.room_id].reason="editing";send();return{token:"mock-token"};}
-  if(message.type==="halo/edit/preview"){
-    for(const [id,target] of Object.entries(message.lights)){
-      const {state,...attributes}=target;
-      if(attributes.brightness_pct!=null){attributes.brightness=Math.round(attributes.brightness_pct*255/100);delete attributes.brightness_pct;}
-      hass.states[id]={state,attributes};
-    }
-    panel.hass={...hass};
+  if(message.type==="halo/save"){
+    if(message.revision!==snapshot.revision)throw{code:"conflict"};
+    snapshot.config=structuredClone(message.config);snapshot.revision++;
+    for(const room of Object.values(snapshot.config.rooms))snapshot.status[room.id]??={reason:"disabled",is_on:false,available:true,pause_until:null};
+    send();
   }
+  if(message.type==="halo/edit/begin"){
+    initialStates=structuredClone(hass.states);initialStatus=structuredClone(snapshot.status[message.room_id]);
+    snapshot.status[message.room_id]={...initialStatus,reason:"editing",editing:true};send();return{token:"mock-token"};
+  }
+  if(message.type==="halo/edit/preview")applyTargets(message.lights);
   if(message.type==="halo/edit/end"){
     if(message.save){
       const room=snapshot.config.rooms[message.room_id];const scene=structuredClone(message.scene);
       if(message.capture){const included=message.capture_entities??room.lights;scene.lights=Object.fromEntries(Object.entries(scene.lights).filter(([id])=>included.includes(id)));for(const id of included){const current=hass.states[id];if(current&&["on","off"].includes(current.state))scene.lights[id]={state:current.state,...current.attributes};}}
-      room.scenes=room.scenes.filter(item=>item.id!==scene.id);room.scenes.push(scene);snapshot.revision++;
+      const index=room.scenes.findIndex(item=>item.id===scene.id);if(index===-1)room.scenes.push(scene);else room.scenes[index]=scene;
+      snapshot.revision++;
     }else if(initialStates){hass.states=initialStates;panel.hass={...hass};}
-    initialStates=undefined;snapshot.status[message.room_id].reason="disabled";send();
+    initialStates=undefined;snapshot.status[message.room_id]={...initialStatus,editing:false};initialStatus=undefined;send();
   }
-  if(message.type==="halo/command"){const room=snapshot.config.rooms[message.room_id];if(["automation","natural"].includes(message.command)){room[message.command+"_enabled"]=message.enabled;snapshot.revision++;}if(message.command==="turn_on")snapshot.status[room.id].is_on=true;if(message.command==="turn_off")snapshot.status[room.id].is_on=false;send();}
+  if(message.type==="halo/command"){
+    const room=snapshot.config.rooms[message.room_id];const status=snapshot.status[room.id];
+    if(["automation","natural"].includes(message.command)){room[message.command+"_enabled"]=message.enabled;snapshot.revision++;status.reason=!room.automation_enabled?"disabled":room.natural_enabled?"natural":"base";}
+    if(message.command==="turn_on"||message.command==="turn_off"){
+      const on=message.command==="turn_on";applyTargets(Object.fromEntries(room.lights.map(id=>[id,{state:on?"on":"off"}])));status.is_on=on;
+      status.reason="manual_pause";status.pause_until=Math.floor(Date.now()/1000)+room.manual_pause;
+    }
+    if(message.command==="scene"){
+      const scene=room.scenes.find(item=>item.id===message.scene_id);if(scene){applyTargets(scene.lights);status.scene_id=scene.id;status.reason="manual_pause";status.pause_until=Math.floor(Date.now()/1000)+room.manual_pause;status.is_on=room.lights.some(id=>hass.states[id]?.state==="on");}
+    }
+    if(message.command==="resume"){room.automation_enabled=true;status.pause_until=null;status.scene_id=null;status.reason=room.natural_enabled?"natural":"base";snapshot.revision++;}
+    send();
+  }
   return structuredClone(snapshot);
 }};
+function applyTargets(targets){
+  for(const [id,target] of Object.entries(targets)){
+    if(hass.states[id]?.state==="unavailable")continue;
+    const {state,...attributes}=target;
+    if(attributes.brightness_pct!=null){attributes.brightness=Math.round(attributes.brightness_pct*255/100);delete attributes.brightness_pct;}
+    hass.states[id]={state,attributes:{...hass.states[id]?.attributes,...attributes}};
+  }
+  panel.hass={...hass};
+}
 panel.hass=hass;
-// Record the public event, but never pretend a copied control is Home Assistant.
-panel.addEventListener("hass-action",event=>{window.haloCalls.push({type:"hass-action",...structuredClone(event.detail)});document.querySelector("#native-action").textContent=`Native controls requested for ${event.detail.config.entity}; open Halo in Home Assistant to use them.`;});
-document.querySelector("#language").onclick=()=>{hass.locale={language:hass.locale.language.startsWith("fr")?"en":"fr-BE"};panel.hass={...hass};};
-document.querySelector("#theme").onclick=()=>document.body.classList.toggle("dark");
-document.querySelector("#admin").onclick=()=>{snapshot.is_admin=!snapshot.is_admin;send();};
+// Only record the documented action; a simulated preview never supplies a native light dialog.
+panel.addEventListener("hass-action",event=>{window.haloCalls.push({type:"hass-action",...structuredClone(event.detail)});document.querySelector("#native-action").textContent=`Contrôles natifs demandés pour ${event.detail.config.entity}. Ouvre Halo dans Home Assistant pour les utiliser.`;document.querySelector(".harness details").open=true;});
+document.querySelector("#language").onclick=()=>{
+  const english=hass.locale.language.startsWith("fr");hass.locale={language:english?"en":"fr-BE"};document.documentElement.lang=english?"en":"fr";
+  document.querySelector("#language").textContent=`Langue : ${english?"EN":"FR"}`;panel.hass={...hass};
+};
+const themes=[{id:"light",label:"clair"},{id:"dark",label:"sombre"},{id:"contrast",label:"personnalisé contrasté"}];
+let themeIndex=0;
+document.querySelector("#theme").onclick=()=>{
+  const theme=themes[themeIndex=(themeIndex+1)%themes.length];document.body.dataset.theme=theme.id;
+  hass.themes={darkMode:theme.id==="dark"};panel.hass={...hass};document.querySelector("#theme").textContent=`Thème : ${theme.label}`;
+};
+document.querySelector("#admin").onclick=()=>{snapshot.is_admin=!snapshot.is_admin;document.querySelector("#admin").textContent=`Rôle : ${snapshot.is_admin?"administrateur":"utilisateur"}`;send();};
+document.querySelector("#text-size").onclick=()=>{const large=document.body.classList.toggle("large-text");const button=document.querySelector("#text-size");button.textContent=`Texte : ${large?"125":"100"} %`;button.setAttribute("aria-pressed",String(large));};
 </script>
 </html>

@@ -12,7 +12,9 @@ Halo est une intégration personnalisée Home Assistant destinée à gérer tout
 
 Le projet contient une première implémentation du moteur d’éclairage, des entités par pièce et du panneau embarqué TypeScript/Lit, en plus du socle d’installation unique et des traductions. Des tests locaux couvrent le moteur, les plateformes, la persistance, l’API et le panneau. Les essais sur une instance domestique et les lampes réelles restent à faire. Relire l’état courant du code et des documents avant toute intervention.
 
-Le cahier des charges fonctionnel est acté dans `PROJET.md` : panneau unique, appareils par pièce, présence et luminosité, pause manuelle, profils naturels, scènes et transitions. Les règles d’interface actées se trouvent dans `DESIGN.md` ; la direction esthétique reste à définir. La présentation fonctionnelle actuelle n’est pas une charte esthétique définitivement validée. Les contrats de code sont décrits dans [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Le cahier des charges fonctionnel est acté dans `PROJET.md` : panneau unique, appareils par pièce, présence et luminosité, pause manuelle, profils naturels, scènes et transitions. Les règles d’interface actées se trouvent dans `DESIGN.md`. La refonte compacte du 9 octobre 2026 est implémentée : pilotage prioritaire, liste/détail des pièces, cinq onglets par pièce, profils dans une vue dédiée et thème Home Assistant sans palette indépendante. Ces choix remplacent l’ancienne direction esthétique laissée ouverte. Les contrats de code sont décrits dans [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+Préserver tous les réglages métier dans les sous-vues, le brouillon transversal, la validation avant navigation et les garanties de l’édition réelle. La fenêtre native d’une lampe utilise l’action publique Home Assistant ; les sélecteurs d’entités restent ceux de Halo, faute de contrat public de chargement identifié pour ce panneau. Ne pas présenter leur remplacement natif comme implémenté. Les essais ciblés dans Home Assistant isolé utilisent des lampes simulées et ne prouvent pas le comportement du matériel du logement.
 
 L’anglais est la langue de référence du produit. Le panneau doit suivre la langue effective de l’interface Home Assistant : français pour `fr` et ses variantes, anglais autrement, avec des catalogues extensibles. Préserver les noms personnalisés et les identifiants techniques. Cette règle produit ne change pas la communication avec Arnaud, qui reste en français.
 
@@ -27,6 +29,8 @@ Avant de travailler sur le projet, lire :
 3. [README.md](README.md) : état présenté aux utilisateurs et installation.
 
 Selon la tâche, consulter également [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md), [docs/ROADMAP.md](docs/ROADMAP.md) et [docs/HACS.md](docs/HACS.md). La feuille de route organise les jalons ; les spécifications détaillées appartiennent à `PROJET.md` et `DESIGN.md`.
+
+Pour une évolution de l’interface, consulter aussi [PRODUCT.md](PRODUCT.md) et le [contrat de direction du panneau](.impeccable/surfaces/frontend-src-halo-panel-ts.md). Ils résument le contexte de conception ; ils ne remplacent pas les spécifications fonctionnelles et les règles de `DESIGN.md`.
 
 ## Mise à jour en temps réel — obligatoire
 

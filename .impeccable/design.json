@@ -1,0 +1,229 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-09T15:08:47.448275+00:00",
+  "title": "Design System: Halo",
+  "extensions": {
+    "colorMeta": {
+      "background": {
+        "role": "neutral",
+        "displayName": "Fond du panneau"
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Surface Home Assistant"
+      },
+      "muted-background": {
+        "role": "neutral",
+        "displayName": "Fond secondaire"
+      },
+      "primary-text": {
+        "role": "neutral",
+        "displayName": "Texte principal"
+      },
+      "secondary-text": {
+        "role": "neutral",
+        "displayName": "Texte secondaire"
+      },
+      "divider": {
+        "role": "neutral",
+        "displayName": "Séparateur"
+      },
+      "accent": {
+        "role": "primary",
+        "displayName": "Accent Home Assistant"
+      },
+      "on-accent": {
+        "role": "primary",
+        "displayName": "Texte sur accent"
+      },
+      "selected": {
+        "role": "primary",
+        "displayName": "Sélection teintée"
+      },
+      "header-background": {
+        "role": "neutral",
+        "displayName": "Fond de l’en-tête"
+      },
+      "header-text": {
+        "role": "neutral",
+        "displayName": "Texte de l’en-tête"
+      },
+      "input-background": {
+        "role": "neutral",
+        "displayName": "Fond de saisie"
+      },
+      "input-text": {
+        "role": "neutral",
+        "displayName": "Texte de saisie"
+      },
+      "input-border": {
+        "role": "neutral",
+        "displayName": "Contour de saisie"
+      }
+    },
+    "typographyMeta": {
+      "room-title": {
+        "displayName": "Titre de pièce",
+        "purpose": "Repère principal du détail ; taille de titre de page sur mobile."
+      },
+      "headline": {
+        "displayName": "Titre de page",
+        "purpose": "Nom Halo et titres des vues globales."
+      },
+      "title": {
+        "displayName": "Titre de section",
+        "purpose": "Groupes de réglages et courbes."
+      },
+      "body": {
+        "displayName": "Corps",
+        "purpose": "Texte courant et contrôles."
+      },
+      "label": {
+        "displayName": "Libellé secondaire",
+        "purpose": "Métadonnées, états et aides compactes."
+      }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "halo-fast",
+        "value": "var(--ha-animation-duration-fast, 150ms)",
+        "purpose": "Changements de fond, texte et bordure des boutons ; désactivés avec prefers-reduced-motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "intermediate",
+        "value": "1100px"
+      },
+      {
+        "name": "mobile",
+        "value": "760px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Action principale",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Enregistrement ou création, avec l’accent du thème.",
+      "html": "<div class=\"ds-preview\"><button class=\"ds-button ds-primary\">Save changes</button></div>",
+      "css": ".ds-preview {\n    --halo-bg: var(--primary-background-color, Canvas);\n    --halo-surface: var(--ha-card-background, var(--card-background-color, var(--halo-bg)));\n    --halo-muted-bg: var(--secondary-background-color, var(--halo-surface));\n    --halo-text: var(--primary-text-color, CanvasText);\n    --halo-secondary: var(--secondary-text-color, var(--halo-text));\n    --halo-line: var(--divider-color, var(--outline-color, GrayText));\n    --halo-accent: var(--primary-color, Highlight);\n    --halo-on-accent: var(--text-primary-color, HighlightText);\n    --halo-selected: color-mix(in srgb, var(--halo-accent) 10%, var(--halo-surface));\n    --halo-control-radius: var(--ha-border-radius-md, 8px);\n    --halo-fast: var(--ha-animation-duration-fast, 150ms);\n    color:var(--halo-text);font-family:var(--ha-font-family-body, var(--paper-font-body1_-_font-family, inherit));font-size:var(--ha-font-size-m,14px);line-height:var(--ha-line-height-normal,1.6);font-weight:var(--ha-font-weight-normal,400);color-scheme:inherit;} .ds-preview :focus-visible{outline:2px solid var(--halo-accent);outline-offset:3px;} @media(prefers-reduced-motion:reduce){.ds-preview *{transition:none!important;animation:none!important;}} .ds-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:36px;max-width:100%;padding:7px 12px;border:1px solid var(--outline-color,var(--halo-line));border-radius:var(--halo-control-radius);background:var(--halo-surface);color:var(--halo-text);cursor:pointer;font:inherit;line-height:1.4;transition:background-color var(--halo-fast),color var(--halo-fast),border-color var(--halo-fast);} .ds-button:hover:not(:disabled){background:var(--halo-muted-bg);border-color:var(--outline-hover-color,var(--halo-secondary));}.ds-button:active:not(:disabled){background:var(--halo-selected);}.ds-button:disabled{color:var(--disabled-text-color,var(--halo-secondary));cursor:default;}@media(pointer:coarse){.ds-button{min-height:44px;}}.ds-primary{background:var(--halo-accent);color:var(--halo-on-accent);border-color:transparent;}.ds-primary:hover:not(:disabled){background:var(--halo-accent);filter:brightness(.94);}.ds-primary:disabled{background:var(--halo-muted-bg);border-color:var(--halo-line);filter:none;}"
+    },
+    {
+      "name": "Action secondaire",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Commande courante sur la surface du thème.",
+      "html": "<div class=\"ds-preview\"><button class=\"ds-button\">Turn on</button></div>",
+      "css": ".ds-preview {\n    --halo-bg: var(--primary-background-color, Canvas);\n    --halo-surface: var(--ha-card-background, var(--card-background-color, var(--halo-bg)));\n    --halo-muted-bg: var(--secondary-background-color, var(--halo-surface));\n    --halo-text: var(--primary-text-color, CanvasText);\n    --halo-secondary: var(--secondary-text-color, var(--halo-text));\n    --halo-line: var(--divider-color, var(--outline-color, GrayText));\n    --halo-accent: var(--primary-color, Highlight);\n    --halo-on-accent: var(--text-primary-color, HighlightText);\n    --halo-selected: color-mix(in srgb, var(--halo-accent) 10%, var(--halo-surface));\n    --halo-control-radius: var(--ha-border-radius-md, 8px);\n    --halo-fast: var(--ha-animation-duration-fast, 150ms);\n    color:var(--halo-text);font-family:var(--ha-font-family-body, var(--paper-font-body1_-_font-family, inherit));font-size:var(--ha-font-size-m,14px);line-height:var(--ha-line-height-normal,1.6);font-weight:var(--ha-font-weight-normal,400);color-scheme:inherit;} .ds-preview :focus-visible{outline:2px solid var(--halo-accent);outline-offset:3px;} @media(prefers-reduced-motion:reduce){.ds-preview *{transition:none!important;animation:none!important;}} .ds-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:36px;max-width:100%;padding:7px 12px;border:1px solid var(--outline-color,var(--halo-line));border-radius:var(--halo-control-radius);background:var(--halo-surface);color:var(--halo-text);cursor:pointer;font:inherit;line-height:1.4;transition:background-color var(--halo-fast),color var(--halo-fast),border-color var(--halo-fast);} .ds-button:hover:not(:disabled){background:var(--halo-muted-bg);border-color:var(--outline-hover-color,var(--halo-secondary));}.ds-button:active:not(:disabled){background:var(--halo-selected);}.ds-button:disabled{color:var(--disabled-text-color,var(--halo-secondary));cursor:default;}@media(pointer:coarse){.ds-button{min-height:44px;}}"
+    },
+    {
+      "name": "Bouton d’icône",
+      "kind": "button",
+      "refersTo": "button-icon",
+      "description": "Action compacte avec nom accessible ; SVG de fermeture extrait du sélecteur Halo.",
+      "html": "<div class=\"ds-preview\"><button class=\"ds-button ds-icon\" aria-label=\"Clear selection\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z\"></path></svg></button></div>",
+      "css": ".ds-preview {\n    --halo-bg: var(--primary-background-color, Canvas);\n    --halo-surface: var(--ha-card-background, var(--card-background-color, var(--halo-bg)));\n    --halo-muted-bg: var(--secondary-background-color, var(--halo-surface));\n    --halo-text: var(--primary-text-color, CanvasText);\n    --halo-secondary: var(--secondary-text-color, var(--halo-text));\n    --halo-line: var(--divider-color, var(--outline-color, GrayText));\n    --halo-accent: var(--primary-color, Highlight);\n    --halo-on-accent: var(--text-primary-color, HighlightText);\n    --halo-selected: color-mix(in srgb, var(--halo-accent) 10%, var(--halo-surface));\n    --halo-control-radius: var(--ha-border-radius-md, 8px);\n    --halo-fast: var(--ha-animation-duration-fast, 150ms);\n    color:var(--halo-text);font-family:var(--ha-font-family-body, var(--paper-font-body1_-_font-family, inherit));font-size:var(--ha-font-size-m,14px);line-height:var(--ha-line-height-normal,1.6);font-weight:var(--ha-font-weight-normal,400);color-scheme:inherit;} .ds-preview :focus-visible{outline:2px solid var(--halo-accent);outline-offset:3px;} @media(prefers-reduced-motion:reduce){.ds-preview *{transition:none!important;animation:none!important;}} .ds-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:36px;max-width:100%;padding:7px 12px;border:1px solid var(--outline-color,var(--halo-line));border-radius:var(--halo-control-radius);background:var(--halo-surface);color:var(--halo-text);cursor:pointer;font:inherit;line-height:1.4;transition:background-color var(--halo-fast),color var(--halo-fast),border-color var(--halo-fast);} .ds-button:hover:not(:disabled){background:var(--halo-muted-bg);border-color:var(--outline-hover-color,var(--halo-secondary));}.ds-button:active:not(:disabled){background:var(--halo-selected);}.ds-button:disabled{color:var(--disabled-text-color,var(--halo-secondary));cursor:default;}@media(pointer:coarse){.ds-button{min-height:44px;}}.ds-icon{width:36px;min-width:36px;height:36px;padding:7px;border-color:transparent;background:transparent;}.ds-icon svg{width:18px;height:18px;fill:currentColor;}@media(pointer:coarse){.ds-icon{width:44px;min-width:44px;height:44px;}}"
+    },
+    {
+      "name": "Champ",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Champ avec couleurs de saisie et contour Home Assistant.",
+      "html": "<div class=\"ds-preview\"><label class=\"ds-field\">Name<input type=\"text\" placeholder=\"Name\" value=\"Living room\"></label></div>",
+      "css": ".ds-preview {\n    --halo-bg: var(--primary-background-color, Canvas);\n    --halo-surface: var(--ha-card-background, var(--card-background-color, var(--halo-bg)));\n    --halo-muted-bg: var(--secondary-background-color, var(--halo-surface));\n    --halo-text: var(--primary-text-color, CanvasText);\n    --halo-secondary: var(--secondary-text-color, var(--halo-text));\n    --halo-line: var(--divider-color, var(--outline-color, GrayText));\n    --halo-accent: var(--primary-color, Highlight);\n    --halo-on-accent: var(--text-primary-color, HighlightText);\n    --halo-selected: color-mix(in srgb, var(--halo-accent) 10%, var(--halo-surface));\n    --halo-control-radius: var(--ha-border-radius-md, 8px);\n    --halo-fast: var(--ha-animation-duration-fast, 150ms);\n    color:var(--halo-text);font-family:var(--ha-font-family-body, var(--paper-font-body1_-_font-family, inherit));font-size:var(--ha-font-size-m,14px);line-height:var(--ha-line-height-normal,1.6);font-weight:var(--ha-font-weight-normal,400);color-scheme:inherit;} .ds-preview :focus-visible{outline:2px solid var(--halo-accent);outline-offset:3px;} @media(prefers-reduced-motion:reduce){.ds-preview *{transition:none!important;animation:none!important;}}.ds-field{display:flex;flex-direction:column;gap:6px;font-size:var(--ha-font-size-m,14px);margin:8px 0;min-width:0;}.ds-field input{font:inherit;min-width:0;min-height:38px;padding:7px 10px;border:1px solid var(--input-outlined-idle-border-color,var(--halo-line));border-radius:var(--halo-control-radius);background:var(--input-fill-color,var(--halo-surface));color:var(--input-ink-color,var(--halo-text));caret-color:var(--halo-accent);}.ds-field input:hover{border-color:var(--input-outlined-hover-border-color,var(--halo-secondary));}.ds-field input::placeholder{color:var(--input-label-ink-color,var(--halo-secondary));opacity:1;}.ds-field input:invalid{border-color:var(--error-color,var(--halo-text));}@media(pointer:coarse){.ds-field input{min-height:44px;}}"
+    },
+    {
+      "name": "Navigation globale",
+      "kind": "nav",
+      "refersTo": "global-nav",
+      "description": "Navigation de l’en-tête, page courante soulignée.",
+      "html": "<div class=\"ds-preview\"><nav class=\"ds-top-nav\" aria-label=\"Halo\"><button class=\"ds-button\" aria-current=\"page\">Rooms</button><button class=\"ds-button\">Natural light profiles</button><button class=\"ds-button\">Global settings</button></nav></div>",
+      "css": ".ds-preview {\n    --halo-bg: var(--primary-background-color, Canvas);\n    --halo-surface: var(--ha-card-background, var(--card-background-color, var(--halo-bg)));\n    --halo-muted-bg: var(--secondary-background-color, var(--halo-surface));\n    --halo-text: var(--primary-text-color, CanvasText);\n    --halo-secondary: var(--secondary-text-color, var(--halo-text));\n    --halo-line: var(--divider-color, var(--outline-color, GrayText));\n    --halo-accent: var(--primary-color, Highlight);\n    --halo-on-accent: var(--text-primary-color, HighlightText);\n    --halo-selected: color-mix(in srgb, var(--halo-accent) 10%, var(--halo-surface));\n    --halo-control-radius: var(--ha-border-radius-md, 8px);\n    --halo-fast: var(--ha-animation-duration-fast, 150ms);\n    color:var(--halo-text);font-family:var(--ha-font-family-body, var(--paper-font-body1_-_font-family, inherit));font-size:var(--ha-font-size-m,14px);line-height:var(--ha-line-height-normal,1.6);font-weight:var(--ha-font-weight-normal,400);color-scheme:inherit;} .ds-preview :focus-visible{outline:2px solid var(--halo-accent);outline-offset:3px;} @media(prefers-reduced-motion:reduce){.ds-preview *{transition:none!important;animation:none!important;}} .ds-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:36px;max-width:100%;padding:7px 12px;border:1px solid var(--outline-color,var(--halo-line));border-radius:var(--halo-control-radius);background:var(--halo-surface);color:var(--halo-text);cursor:pointer;font:inherit;line-height:1.4;transition:background-color var(--halo-fast),color var(--halo-fast),border-color var(--halo-fast);} .ds-button:hover:not(:disabled){background:var(--halo-muted-bg);border-color:var(--outline-hover-color,var(--halo-secondary));}.ds-button:active:not(:disabled){background:var(--halo-selected);}.ds-button:disabled{color:var(--disabled-text-color,var(--halo-secondary));cursor:default;}@media(pointer:coarse){.ds-button{min-height:44px;}}.ds-top-nav{display:flex;gap:var(--ha-space-2,8px);overflow-x:auto;background:var(--app-header-background-color,var(--halo-surface));color:var(--app-header-text-color,var(--halo-text));}.ds-top-nav .ds-button{position:relative;border:0;border-radius:0;padding:var(--ha-space-3,12px) var(--ha-space-4,16px);background:transparent;color:inherit;font-weight:var(--ha-font-weight-medium,500);flex-shrink:0;}.ds-top-nav .ds-button[aria-current=\"page\"]::after{content:\"\";position:absolute;inset-inline:var(--ha-space-4,16px);bottom:0;height:3px;background:currentColor;border-radius:3px 3px 0 0;}.ds-top-nav .ds-button:hover:not(:disabled){background:color-mix(in srgb,currentColor 8%,transparent);}"
+    },
+    {
+      "name": "Onglets de pièce",
+      "kind": "nav",
+      "refersTo": "room-tab-selected",
+      "description": "Sous-vues de la pièce ; la logique de sélection reste gérée par le panneau.",
+      "html": "<div class=\"ds-preview\"><nav class=\"ds-tabs\" role=\"tablist\" aria-label=\"Room sections\"><button class=\"ds-button\" role=\"tab\" aria-selected=\"true\">Control</button><button class=\"ds-button\" role=\"tab\" aria-selected=\"false\" tabindex=\"-1\">Lights</button><button class=\"ds-button\" role=\"tab\" aria-selected=\"false\" tabindex=\"-1\">Automation</button><button class=\"ds-button\" role=\"tab\" aria-selected=\"false\" tabindex=\"-1\">Ambiences</button><button class=\"ds-button\" role=\"tab\" aria-selected=\"false\" tabindex=\"-1\">Settings</button></nav></div>",
+      "css": ".ds-preview {\n    --halo-bg: var(--primary-background-color, Canvas);\n    --halo-surface: var(--ha-card-background, var(--card-background-color, var(--halo-bg)));\n    --halo-muted-bg: var(--secondary-background-color, var(--halo-surface));\n    --halo-text: var(--primary-text-color, CanvasText);\n    --halo-secondary: var(--secondary-text-color, var(--halo-text));\n    --halo-line: var(--divider-color, var(--outline-color, GrayText));\n    --halo-accent: var(--primary-color, Highlight);\n    --halo-on-accent: var(--text-primary-color, HighlightText);\n    --halo-selected: color-mix(in srgb, var(--halo-accent) 10%, var(--halo-surface));\n    --halo-control-radius: var(--ha-border-radius-md, 8px);\n    --halo-fast: var(--ha-animation-duration-fast, 150ms);\n    color:var(--halo-text);font-family:var(--ha-font-family-body, var(--paper-font-body1_-_font-family, inherit));font-size:var(--ha-font-size-m,14px);line-height:var(--ha-line-height-normal,1.6);font-weight:var(--ha-font-weight-normal,400);color-scheme:inherit;} .ds-preview :focus-visible{outline:2px solid var(--halo-accent);outline-offset:3px;} @media(prefers-reduced-motion:reduce){.ds-preview *{transition:none!important;animation:none!important;}} .ds-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:36px;max-width:100%;padding:7px 12px;border:1px solid var(--outline-color,var(--halo-line));border-radius:var(--halo-control-radius);background:var(--halo-surface);color:var(--halo-text);cursor:pointer;font:inherit;line-height:1.4;transition:background-color var(--halo-fast),color var(--halo-fast),border-color var(--halo-fast);} .ds-button:hover:not(:disabled){background:var(--halo-muted-bg);border-color:var(--outline-hover-color,var(--halo-secondary));}.ds-button:active:not(:disabled){background:var(--halo-selected);}.ds-button:disabled{color:var(--disabled-text-color,var(--halo-secondary));cursor:default;}@media(pointer:coarse){.ds-button{min-height:44px;}}.ds-tabs{display:flex;gap:4px;overflow-x:auto;padding:4px 0;border-bottom:1px solid var(--halo-line);}.ds-tabs .ds-button{flex-shrink:0;border:0;background:transparent;color:var(--halo-secondary);padding:8px 12px;}.ds-tabs .ds-button[aria-selected=\"true\"]{color:var(--halo-accent);background:var(--halo-selected);font-weight:var(--ha-font-weight-medium,500);}"
+    },
+    {
+      "name": "État textuel",
+      "kind": "chip",
+      "refersTo": "status",
+      "description": "État sans pastille décorative ; disponible en complément des couleurs.",
+      "html": "<div class=\"ds-preview\"><div aria-label=\"Room status\"><span class=\"ds-status\">Manual pause</span><span class=\"ds-status\">On</span></div></div>",
+      "css": ".ds-preview {\n    --halo-bg: var(--primary-background-color, Canvas);\n    --halo-surface: var(--ha-card-background, var(--card-background-color, var(--halo-bg)));\n    --halo-muted-bg: var(--secondary-background-color, var(--halo-surface));\n    --halo-text: var(--primary-text-color, CanvasText);\n    --halo-secondary: var(--secondary-text-color, var(--halo-text));\n    --halo-line: var(--divider-color, var(--outline-color, GrayText));\n    --halo-accent: var(--primary-color, Highlight);\n    --halo-on-accent: var(--text-primary-color, HighlightText);\n    --halo-selected: color-mix(in srgb, var(--halo-accent) 10%, var(--halo-surface));\n    --halo-control-radius: var(--ha-border-radius-md, 8px);\n    --halo-fast: var(--ha-animation-duration-fast, 150ms);\n    color:var(--halo-text);font-family:var(--ha-font-family-body, var(--paper-font-body1_-_font-family, inherit));font-size:var(--ha-font-size-m,14px);line-height:var(--ha-line-height-normal,1.6);font-weight:var(--ha-font-weight-normal,400);color-scheme:inherit;} .ds-preview :focus-visible{outline:2px solid var(--halo-accent);outline-offset:3px;} @media(prefers-reduced-motion:reduce){.ds-preview *{transition:none!important;animation:none!important;}}.ds-status{display:inline-flex;align-items:center;gap:5px;font-size:var(--ha-font-size-s,12px);color:var(--halo-secondary);padding:2px 0;font-variant-numeric:tabular-nums;}.ds-status+.ds-status::before{content:\"·\";margin-inline:8px;}"
+    },
+    {
+      "name": "Groupe de conditions",
+      "kind": "card",
+      "refersTo": "condition",
+      "description": "Conteneur de formulaire ; les sous-conditions utilisent des séparateurs.",
+      "html": "<div class=\"ds-preview\"><div class=\"ds-condition\"><strong>All conditions</strong><div class=\"ds-condition\">Presence is on</div><div class=\"ds-condition\">After sunset</div></div></div>",
+      "css": ".ds-preview {\n    --halo-bg: var(--primary-background-color, Canvas);\n    --halo-surface: var(--ha-card-background, var(--card-background-color, var(--halo-bg)));\n    --halo-muted-bg: var(--secondary-background-color, var(--halo-surface));\n    --halo-text: var(--primary-text-color, CanvasText);\n    --halo-secondary: var(--secondary-text-color, var(--halo-text));\n    --halo-line: var(--divider-color, var(--outline-color, GrayText));\n    --halo-accent: var(--primary-color, Highlight);\n    --halo-on-accent: var(--text-primary-color, HighlightText);\n    --halo-selected: color-mix(in srgb, var(--halo-accent) 10%, var(--halo-surface));\n    --halo-control-radius: var(--ha-border-radius-md, 8px);\n    --halo-fast: var(--ha-animation-duration-fast, 150ms);\n    color:var(--halo-text);font-family:var(--ha-font-family-body, var(--paper-font-body1_-_font-family, inherit));font-size:var(--ha-font-size-m,14px);line-height:var(--ha-line-height-normal,1.6);font-weight:var(--ha-font-weight-normal,400);color-scheme:inherit;} .ds-preview :focus-visible{outline:2px solid var(--halo-accent);outline-offset:3px;} @media(prefers-reduced-motion:reduce){.ds-preview *{transition:none!important;animation:none!important;}}.ds-condition{padding:12px;margin:12px 0;border:1px solid var(--halo-line);border-radius:var(--halo-control-radius);background:var(--halo-surface);min-width:0;}.ds-condition .ds-condition{border-radius:0;border-width:0 0 1px;padding:8px 0;margin:4px 0;}"
+    },
+    {
+      "name": "Pièce sélectionnée",
+      "kind": "custom",
+      "refersTo": "room-list-item-selected",
+      "description": "Rangée compacte sélectionnée, avec nom et métadonnées.",
+      "html": "<div class=\"ds-preview\"><div class=\"ds-room-item\" data-active><button class=\"ds-button ds-room-link\" aria-current=\"page\"><span><strong>Living room</strong><small>4 lights · Natural light</small></span></button></div></div>",
+      "css": ".ds-preview {\n    --halo-bg: var(--primary-background-color, Canvas);\n    --halo-surface: var(--ha-card-background, var(--card-background-color, var(--halo-bg)));\n    --halo-muted-bg: var(--secondary-background-color, var(--halo-surface));\n    --halo-text: var(--primary-text-color, CanvasText);\n    --halo-secondary: var(--secondary-text-color, var(--halo-text));\n    --halo-line: var(--divider-color, var(--outline-color, GrayText));\n    --halo-accent: var(--primary-color, Highlight);\n    --halo-on-accent: var(--text-primary-color, HighlightText);\n    --halo-selected: color-mix(in srgb, var(--halo-accent) 10%, var(--halo-surface));\n    --halo-control-radius: var(--ha-border-radius-md, 8px);\n    --halo-fast: var(--ha-animation-duration-fast, 150ms);\n    color:var(--halo-text);font-family:var(--ha-font-family-body, var(--paper-font-body1_-_font-family, inherit));font-size:var(--ha-font-size-m,14px);line-height:var(--ha-line-height-normal,1.6);font-weight:var(--ha-font-weight-normal,400);color-scheme:inherit;} .ds-preview :focus-visible{outline:2px solid var(--halo-accent);outline-offset:3px;} @media(prefers-reduced-motion:reduce){.ds-preview *{transition:none!important;animation:none!important;}} .ds-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:36px;max-width:100%;padding:7px 12px;border:1px solid var(--outline-color,var(--halo-line));border-radius:var(--halo-control-radius);background:var(--halo-surface);color:var(--halo-text);cursor:pointer;font:inherit;line-height:1.4;transition:background-color var(--halo-fast),color var(--halo-fast),border-color var(--halo-fast);} .ds-button:hover:not(:disabled){background:var(--halo-muted-bg);border-color:var(--outline-hover-color,var(--halo-secondary));}.ds-button:active:not(:disabled){background:var(--halo-selected);}.ds-button:disabled{color:var(--disabled-text-color,var(--halo-secondary));cursor:default;}@media(pointer:coarse){.ds-button{min-height:44px;}}.ds-room-item{display:flex;align-items:center;gap:4px;padding:3px;margin-bottom:4px;border-radius:var(--halo-control-radius);min-width:0;}.ds-room-item[data-active]{background:var(--halo-selected);}.ds-room-link{justify-content:flex-start;gap:10px;flex:1;min-width:0;text-align:start;border:0;background:transparent;padding:10px 8px;}.ds-room-link strong{display:block;font-weight:var(--ha-font-weight-medium,500);overflow-wrap:anywhere;}.ds-room-link small{display:block;color:var(--halo-secondary);font-size:var(--ha-font-size-s,12px);line-height:1.45;overflow-wrap:anywhere;}.ds-room-item[data-active] .ds-room-link{color:var(--halo-accent);}"
+    },
+    {
+      "name": "Barre de sauvegarde",
+      "kind": "custom",
+      "refersTo": "savebar",
+      "description": "Actions persistantes dans le cadre du panneau ; le snippet illustre son apparence.",
+      "html": "<div class=\"ds-preview\"><div class=\"ds-savebar\" role=\"status\"><span class=\"ds-grow\">Unsaved changes</span><button class=\"ds-button\">Discard</button><button class=\"ds-button ds-primary\">Save changes</button></div></div>",
+      "css": ".ds-preview {\n    --halo-bg: var(--primary-background-color, Canvas);\n    --halo-surface: var(--ha-card-background, var(--card-background-color, var(--halo-bg)));\n    --halo-muted-bg: var(--secondary-background-color, var(--halo-surface));\n    --halo-text: var(--primary-text-color, CanvasText);\n    --halo-secondary: var(--secondary-text-color, var(--halo-text));\n    --halo-line: var(--divider-color, var(--outline-color, GrayText));\n    --halo-accent: var(--primary-color, Highlight);\n    --halo-on-accent: var(--text-primary-color, HighlightText);\n    --halo-selected: color-mix(in srgb, var(--halo-accent) 10%, var(--halo-surface));\n    --halo-control-radius: var(--ha-border-radius-md, 8px);\n    --halo-fast: var(--ha-animation-duration-fast, 150ms);\n    color:var(--halo-text);font-family:var(--ha-font-family-body, var(--paper-font-body1_-_font-family, inherit));font-size:var(--ha-font-size-m,14px);line-height:var(--ha-line-height-normal,1.6);font-weight:var(--ha-font-weight-normal,400);color-scheme:inherit;} .ds-preview :focus-visible{outline:2px solid var(--halo-accent);outline-offset:3px;} @media(prefers-reduced-motion:reduce){.ds-preview *{transition:none!important;animation:none!important;}} .ds-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:36px;max-width:100%;padding:7px 12px;border:1px solid var(--outline-color,var(--halo-line));border-radius:var(--halo-control-radius);background:var(--halo-surface);color:var(--halo-text);cursor:pointer;font:inherit;line-height:1.4;transition:background-color var(--halo-fast),color var(--halo-fast),border-color var(--halo-fast);} .ds-button:hover:not(:disabled){background:var(--halo-muted-bg);border-color:var(--outline-hover-color,var(--halo-secondary));}.ds-button:active:not(:disabled){background:var(--halo-selected);}.ds-button:disabled{color:var(--disabled-text-color,var(--halo-secondary));cursor:default;}@media(pointer:coarse){.ds-button{min-height:44px;}}.ds-primary{background:var(--halo-accent);color:var(--halo-on-accent);border-color:transparent;}.ds-primary:hover:not(:disabled){background:var(--halo-accent);filter:brightness(.94);}.ds-primary:disabled{background:var(--halo-muted-bg);border-color:var(--halo-line);filter:none;}.ds-savebar{display:flex;align-items:center;gap:12px;padding:12px 20px calc(12px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--halo-line);background:var(--halo-surface);}.ds-savebar .ds-grow{flex:1;min-width:0;font-size:var(--ha-font-size-m,14px);}@media(max-width:760px){.ds-savebar{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:10px 14px calc(10px + env(safe-area-inset-bottom,0px));}.ds-savebar .ds-grow{grid-column:1/-1;font-size:var(--ha-font-size-s,12px);}.ds-savebar .ds-button{min-width:0;padding:9px 6px;font-size:var(--ha-font-size-s,12px);}}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Le panneau de pilotage Home Assistant",
+    "overview": "Halo est un panneau de pilotage domestique compact, intégré visuellement à Home Assistant. Il permet de lire l’état réel d’une pièce, de commander ses lumières puis d’ouvrir le groupe de réglages voulu. Les couleurs, la typographie et les propriétés des contrôles suivent le thème actif, avec des replis lorsque Home Assistant ne fournit pas une variable.\n\nLa refonte du 9 octobre 2026 est **actée et implémentée** : pilotage prioritaire, liste et détail des pièces, réglages en sous-vues et profils édités un à un. Elle remplace l’ancienne direction esthétique laissée ouverte et les longs formulaires simultanés. La densité vient de l’organisation et de la divulgation progressive, sans retrait d’option métier.",
+    "keyCharacteristics": [
+      "Pilotage accessible avant la configuration.",
+      "Thème Home Assistant vivant, sans palette Halo indépendante.",
+      "Listes, séparateurs et aides dépliables pour une lecture compacte.",
+      "Brouillon transversal préservé et édition réelle explicitement distincte."
+    ],
+    "rules": [
+      {
+        "name": "Thème hôte",
+        "body": "Le thème Home Assistant est la source des couleurs, y compris les états, les champs et l’en-tête. Les replis CSS gardent le panneau lisible lorsque certaines variables manquent ; ils ne définissent pas une palette Halo.",
+        "section": "colors"
+      },
+      {
+        "name": "Typographie hôte",
+        "body": "Les titres et le texte suivent les familles et les tailles Home Assistant. Ne pas ajouter de police décorative ni une hiérarchie d’affiche à ce panneau de pilotage.",
+        "section": "typography"
+      },
+      {
+        "name": "Surfaces simples",
+        "body": "Les surfaces restent sans ombre ajoutée par Halo. Les fonds du thème, les séparateurs et la sélection teintée suffisent à distinguer les niveaux.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do préserver toutes les options métier dans leurs sous-vues et utiliser des aides dépliables pour le détail.",
+      "Do suivre les variables du thème Home Assistant pour les surfaces, textes, états, champs, en-tête et typographie.",
+      "Do maintenir des libellés explicites, un focus visible, les parcours clavier et des cibles adaptées au toucher.",
+      "Do conserver le brouillon entre vues, révéler les erreurs de saisie et maintenir la barre de sauvegarde accessible.",
+      "Do distinguer état réel, commande envoyée, pause manuelle, automatisation désactivée et édition réelle.",
+      "Do consigner les écrans, thèmes, langues et états effectivement vérifiés, avec les limites matérielles."
+    ],
+    "donts": [
+      "Don’t imposer une palette Halo ou une police décorative au thème de Home Assistant.",
+      "Don’t transformer la compacité en suppression d’option, de libellé utile ou de garantie d’édition.",
+      "Don’t présenter un sélecteur Halo comme natif ni charger indirectement un composant privé Home Assistant.",
+      "Don’t remplacer une donnée indisponible par zéro ou un état éteint inventé.",
+      "Don’t assimiler un aperçu simulé ou un test dans Home Assistant isolé à une validation sur les lampes du logement."
+    ]
+  }
+}

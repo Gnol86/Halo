@@ -6,7 +6,7 @@
 
 Une intégration Home Assistant destinée à gérer l’ensemble des lumières du logement.
 
-**Statut : première version de développement.** Halo dispose d’un panneau embarqué, d’appareils par pièce et d’un moteur d’éclairage. Les vérifications locales utilisent Home Assistant avec des lampes simulées et un navigateur avec des données simulées. Les premiers retours du panneau dans Home Assistant sont pris en compte ; la validation complète dans une instance domestique et avec des lampes réelles reste à réaliser. La publication et le référencement dans HACS sont prévus à la fin du projet.
+**Statut : première version de développement.** Halo dispose d’un panneau embarqué, d’appareils par pièce et d’un moteur d’éclairage. La refonte compacte est implémentée et vérifiée localement, avec des aperçus adaptatifs et des parcours ciblés dans Home Assistant 2026.10.0 isolé utilisant des lampes simulées. La validation complète dans une instance domestique et avec des lampes réelles reste à réaliser. Ces vérifications ne constituent pas un déploiement dans le logement. La publication et le référencement dans HACS sont prévus à la fin du projet.
 
 ## Ce qui existe
 
@@ -24,9 +24,11 @@ Les comportements retenus sont détaillés dans [PROJET.md](PROJET.md), et les r
 
 - Un panneau **Halo** ajouté automatiquement à la barre latérale après l’installation unique, pour toute la configuration ; pilotage accessible aux utilisateurs et configuration réservée aux administrateurs.
 - Un lotus monochrome natif dans la barre latérale et l’en-tête, suivant le thème Home Assistant ; l’en-tête Halo ne comporte pas de bouton de menu supplémentaire.
+- Un panneau compact centré sur le pilotage : liste recherchable des pièces et commandes rapides à gauche, détail à droite sur ordinateur ; liste puis détail sur mobile. Les cinq onglets d’une pièce organisent le pilotage, les lumières, l’automatisation, les ambiances et les réglages.
+- Une vue dédiée aux profils naturels, avec un seul profil à éditer à la fois ; l’entité soleil et les transitions par défaut sont dans les réglages globaux. Les aides et réglages détaillés se déplient au besoin.
 - Les pièces de Home Assistant, avec sélection explicite des lumières et un appareil par pièce regroupant la commande d’éclairage, les modes automatique et naturel, la reprise et les scènes.
 - La recherche par nom ou identifiant dans les sélecteurs d’entités et les listes de lampes, avec indication des groupes Home Assistant, y compris Philips Hue, et des appartenances connues. Certains groupes Hue n’exposent pas leurs membres.
-- Une barre d’enregistrement toujours visible au bas du panneau pendant le défilement, des repères graphiques placés aux hauteurs solaires configurées et des champs de transition alignés.
+- Une barre d’enregistrement toujours visible au bas du panneau pendant le défilement, un brouillon conservé entre sous-vues et une validation avant de quitter un champ incorrect. Les repères graphiques suivent les hauteurs solaires configurées et les champs de transition restent alignés.
 - L’allumage et l’extinction selon la présence et la luminosité, avec seuil, hystérésis et temporisations configurables.
 - Une pause après une commande manuelle, avec une option par pièce pour maintenir les extinctions automatiques pendant cette pause.
 - Des profils de lumière naturelle fondés sur l’élévation du soleil, associables à plusieurs groupes dans une même pièce, avec courbes de luminosité et de température de blanc adaptées aux lampes compatibles. Chaque courbe peut être **linéaire** ou à **accélération et décélération progressives**, avec aperçu en S et arrivée douce aux deux limites. Les anciennes sélections d’accélération adoptent ce comportement corrigé ; les profils sans type explicite restent linéaires.
@@ -34,7 +36,7 @@ Les comportements retenus sont détaillés dans [PROJET.md](PROJET.md), et les r
 - Des transitions par type de changement, définies globalement et personnalisables ou désactivables par pièce.
 - L’anglais comme langue de référence, une traduction française suivant la langue de l’interface Home Assistant et un repli en anglais pour les autres langues. Les noms personnalisés restent inchangés.
 
-Les pièces nouvellement configurées ont leurs automatismes **désactivés** jusqu’à leur activation. L’interface actuelle utilise une présentation fonctionnelle et les couleurs du thème Home Assistant ; la direction esthétique définitive reste à définir. Les étapes de validation figurent dans la [feuille de route](docs/ROADMAP.md).
+Les pièces nouvellement configurées ont leurs automatismes **désactivés** jusqu’à leur activation. La direction retenue est une interface compacte suivant le thème Home Assistant : couleurs et états, police, tailles, espacements, bordures, rayons, en-tête et champs, avec des valeurs de repli si nécessaire. Le mode clair/sombre et la préférence de mouvement réduit sont respectés, sans palette propre à Halo. Les étapes de validation figurent dans la [feuille de route](docs/ROADMAP.md).
 
 Les nouveaux réglages proposent **0 seconde** de délai d’absence et **120 minutes** de pause manuelle. Les transitions globales initiales sont **0 s** à l’allumage, **10 s** après baisse de luminosité, **60 s** pour la lumière naturelle, **10 s** pour les scènes et **2 s** à l’extinction ; les pièces en héritent. Les valeurs déjà enregistrées sont conservées. Le seuil et l’hystérésis affichent l’unité du capteur (`lx`, `%`, etc.), sans conversion implicite. La création des profils et des scènes est compatible avec un accès local en HTTP.
 
@@ -55,8 +57,8 @@ La version de référence et le minimum déclaré sont **Home Assistant 2026.10.
 3. Ouvrir **Paramètres → Appareils et services → Ajouter une intégration**.
 4. Rechercher **Halo**, puis confirmer la configuration.
 
-5. Ouvrir **Halo** dans la barre latérale, configurer une pièce, sélectionner ses lampes puis enregistrer. La configuration est réservée aux administrateurs.
-6. Vérifier les commandes de la pièce, renseigner les capteurs et profils souhaités, puis activer les automatismes lorsque les réglages sont prêts.
+5. Ouvrir **Halo** dans la barre latérale, choisir une pièce puis **Configurer la pièce**. Sélectionner ses lampes dans **Lumières** et enregistrer. La configuration est réservée aux administrateurs.
+6. Vérifier les commandes de la pièce. Renseigner les capteurs dans **Automatisation**, créer les profils dans **Profils de lumière naturelle**, puis les associer dans **Ambiances**. Activer les automatismes lorsque les réglages sont prêts.
 
 Le dossier à copier contient déjà le bundle du panneau ; aucune compilation ni carte supplémentaire n’est nécessaire dans Home Assistant. Après remplacement du bundle pendant le développement, recharger également la page du navigateur. Pour retirer Halo, supprimer son entrée dans **Appareils et services**, puis son dossier si nécessaire.
 

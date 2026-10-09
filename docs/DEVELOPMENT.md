@@ -2,7 +2,7 @@
 
 ## Périmètre initial
 
-Le domaine est `halo`. Une première implémentation comprend le moteur d’éclairage, les appareils par pièce, le stockage, l’API et le panneau embarqué. Le comportement attendu est défini dans [PROJET.md](../PROJET.md), les interactions dans [DESIGN.md](../DESIGN.md) et les contrats de code dans [ARCHITECTURE.md](ARCHITECTURE.md). Les essais matériels et les choix esthétiques définitifs restent à réaliser.
+Le domaine est `halo`. Une première implémentation comprend le moteur d’éclairage, les appareils par pièce, le stockage, l’API et le panneau embarqué. Le comportement attendu est défini dans [PROJET.md](../PROJET.md), les interactions dans [DESIGN.md](../DESIGN.md) et les contrats de code dans [ARCHITECTURE.md](ARCHITECTURE.md). La refonte compacte du panneau suit le thème Home Assistant. Les essais matériels restent à réaliser.
 
 `manifest.json` déclare une intégration de type `service`, une seule entrée de configuration et une classe IoT `calculated` : Halo ne communique pas directement avec un équipement ou un cloud. Réévaluer ces déclarations si le périmètre change.
 
@@ -50,6 +50,18 @@ npm run build
 Le bundle dans `custom_components/halo/frontend/` doit rester synchronisé avec `frontend/src/`. Le [guide du panneau](../frontend/README.md) explique l’aperçu local avec données simulées. Un contrôle de types ou un test DOM ne remplace pas un essai intégré dans Home Assistant.
 
 Avant une release utilisable, effectuer également un essai dans une instance Home Assistant de test : installation manuelle, rendu du panneau et du lotus en thèmes clair et sombre, textes français et anglais, pilotage des lampes réelles, redémarrage et suppression. Les tests Python ne valident pas le rendu intégré de l’interface.
+
+## Refonte compacte du dashboard — 9 octobre 2026
+
+La navigation adopte une liste de pièces et un panneau de détail, avec pilotage prioritaire, cinq rubriques par pièce et un éditeur de profil naturel à la fois. Sur mobile, la liste et le détail se succèdent. Le moteur, le stockage et les contrats API restent inchangés.
+
+- `uv sync --frozen`, Ruff (analyse et format), TypeScript et installation npm réussis ; **219 tests Python et 52 tests frontend réussis**. Les nouveaux cas couvrent la navigation clavier/ARIA, les brouillons entre vues, les erreurs de saisie avant navigation, les droits, le verrouillage d’édition et le changement de thème Home Assistant à chaud.
+- Aperçu isolé avec données simulées : pilotage et profils examinés à **1436 pixels** de large et **390 × 844**, thèmes clair et sombre ; thème personnalisé avec police, espacements et rayons différents, texte à **125 %**. Les valeurs calculées confirment l’héritage de ces variables et aucun débordement horizontal n’est relevé dans la vue des réglages globaux à 390 pixels. Les onglets de pièce défilent horizontalement sur petit écran.
+- **Home Assistant 2026.10.0 isolé**, frontend **20260930.2**, lampes simulées : ouverture de la scène partielle existante avec deux lampes incluses sur quatre, ouverture de la fenêtre native de lampe avec effet `Candle` visible, puis annulation et sortie de session vérifiées. L’import de la source native affiche deux lampes retenues et deux entités ignorées ; ajout au brouillon et abandon vérifiés. Aucune erreur console constatée durant ce parcours. Ce passage ne répète pas les essais matériels ni toute la validation de l’import du jalon précédent.
+- Les variables d’interface sont héritées, avec repli lorsque la variable manque. Les [variables de thème documentées](https://www.home-assistant.io/integrations/frontend/#supported-theme-variables) sont complétées par les propriétés présentes dans les sources du frontend pris en charge : [couleurs](https://github.com/home-assistant/frontend/blob/20260930.2/src/resources/theme/color/color.globals.ts), [typographie](https://github.com/home-assistant/frontend/blob/20260930.2/src/resources/theme/typography.globals.ts), [espacements et rayons](https://github.com/home-assistant/frontend/blob/20260930.2/src/resources/theme/core.globals.ts). Ces propriétés supplémentaires ne sont pas présentées comme un contrat public stable. Un thème tiers arbitraire peut toujours définir des contrastes insuffisants.
+- Revue visuelle Impeccable séparée : structure, thème, captures et parcours conformes ; une ambiguïté du message de brouillon a été corrigée. Le verdict `ship` du second passage porte sur cette correction : les commandes explicites restent utilisables pour une pièce enregistrée, tandis que les modes et la reprise attendent la sauvegarde ou l’abandon. Une nouvelle pièce doit être enregistrée avant le pilotage.
+- Serveurs et onglets de test fermés, ports locaux vérifiés fermés. Le harness Home Assistant conserve son code de sortie `139` après SIGTERM et l’avertissement caméra `libturbojpeg` déjà documentés ; l’arrêt normal du harness n’est pas validé par ce passage.
+- Captures de revue locales dans `.impeccable/review/` (ignoré par Git). Le bundle distribué est reconstruit et sa reproductibilité vérifiée. Cette vérification locale ne constitue ni un push, ni une activation sur l’instance domestique.
 
 ## Import de scènes Home Assistant — 9 octobre 2026
 

@@ -91,6 +91,7 @@ export interface Snapshot {
 export interface Hass {
   language?: string;
   locale?: { language?: string };
+  themes?: { darkMode?: boolean };
   states?: Record<string, { state: string; attributes: Record<string, unknown> }>;
   callWS<T>(message: Record<string, unknown>): Promise<T>;
   callApi<T>(method: "GET", path: string): Promise<T>;

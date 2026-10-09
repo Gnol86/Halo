@@ -1,16 +1,138 @@
-# Halo — Design du dashboard
+---
+name: "Halo"
+description: "Panneau Home Assistant compact pour piloter les lumières et retrouver tous leurs réglages."
+colors:
+  background: "var(--primary-background-color, Canvas)"
+  surface: "var(--ha-card-background, var(--card-background-color, var(--primary-background-color, Canvas)))"
+  muted-background: "var(--secondary-background-color, var(--ha-card-background, var(--card-background-color, var(--primary-background-color, Canvas))))"
+  primary-text: "var(--primary-text-color, CanvasText)"
+  secondary-text: "var(--secondary-text-color, var(--primary-text-color, CanvasText))"
+  divider: "var(--divider-color, var(--outline-color, GrayText))"
+  accent: "var(--primary-color, Highlight)"
+  on-accent: "var(--text-primary-color, HighlightText)"
+  selected: "color-mix(in srgb, var(--primary-color, Highlight) 10%, var(--ha-card-background, var(--card-background-color, var(--primary-background-color, Canvas))))"
+  light-on: "var(--state-light-on-color, var(--state-light-active-color, var(--state-active-color, var(--primary-color, Highlight))))"
+  light-off: "var(--state-light-off-color, var(--state-light-inactive-color, var(--state-inactive-color, var(--secondary-text-color, var(--primary-text-color, CanvasText)))))"
+  error: "var(--error-color, var(--primary-text-color, CanvasText))"
+  disabled-text: "var(--disabled-text-color, var(--secondary-text-color, var(--primary-text-color, CanvasText)))"
+  header-background: "var(--app-header-background-color, var(--ha-card-background, var(--card-background-color, var(--primary-background-color, Canvas))))"
+  header-text: "var(--app-header-text-color, var(--primary-text-color, CanvasText))"
+  input-background: "var(--input-fill-color, var(--ha-card-background, var(--card-background-color, var(--primary-background-color, Canvas))))"
+  input-text: "var(--input-ink-color, var(--primary-text-color, CanvasText))"
+  input-border: "var(--input-outlined-idle-border-color, var(--divider-color, var(--outline-color, GrayText)))"
+typography:
+  room-title:
+    fontFamily: "var(--ha-font-family-heading, var(--ha-font-family-body, inherit))"
+    fontSize: "var(--ha-font-size-2xl, 24px)"
+    fontWeight: "var(--ha-font-weight-bold, 700)"
+    lineHeight: "var(--ha-line-height-condensed, 1.2)"
+  headline:
+    fontFamily: "var(--ha-font-family-heading, var(--ha-font-family-body, inherit))"
+    fontSize: "var(--ha-font-size-xl, 20px)"
+    fontWeight: "var(--ha-font-weight-bold, 700)"
+    lineHeight: "var(--ha-line-height-condensed, 1.2)"
+  title:
+    fontFamily: "var(--ha-font-family-heading, var(--ha-font-family-body, inherit))"
+    fontSize: "var(--ha-font-size-l, 16px)"
+    fontWeight: "var(--ha-font-weight-bold, 700)"
+    lineHeight: "var(--ha-line-height-condensed, 1.2)"
+  body:
+    fontFamily: "var(--ha-font-family-body, var(--paper-font-body1_-_font-family, inherit))"
+    fontSize: "var(--ha-font-size-m, 14px)"
+    fontWeight: "var(--ha-font-weight-normal, 400)"
+    lineHeight: "var(--ha-line-height-normal, 1.6)"
+  label:
+    fontFamily: "var(--ha-font-family-body, var(--paper-font-body1_-_font-family, inherit))"
+    fontSize: "var(--ha-font-size-s, 12px)"
+rounded:
+  control: "var(--ha-border-radius-md, 8px)"
+spacing:
+  ha-2: "var(--ha-space-2, 8px)"
+  ha-3: "var(--ha-space-3, 12px)"
+  ha-4: "var(--ha-space-4, 16px)"
+  ha-5: "var(--ha-space-5, 20px)"
+  ha-6: "var(--ha-space-6, 24px)"
+components:
+  button-primary:
+    backgroundColor: "{colors.accent}"
+    textColor: "{colors.on-accent}"
+    typography: "{typography.body}"
+    rounded: "{rounded.control}"
+    padding: "7px 12px"
+  button-secondary:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.primary-text}"
+    typography: "{typography.body}"
+    rounded: "{rounded.control}"
+    padding: "7px 12px"
+  button-icon:
+    backgroundColor: "transparent"
+    textColor: "{colors.primary-text}"
+    rounded: "{rounded.control}"
+    padding: "7px"
+    size: "36px"
+  input:
+    backgroundColor: "{colors.input-background}"
+    textColor: "{colors.input-text}"
+    typography: "{typography.body}"
+    rounded: "{rounded.control}"
+    padding: "7px 10px"
+  global-nav:
+    backgroundColor: "transparent"
+    textColor: "{colors.header-text}"
+    padding: "var(--ha-space-3, 12px) var(--ha-space-4, 16px)"
+  room-tab-selected:
+    backgroundColor: "{colors.selected}"
+    textColor: "{colors.accent}"
+    rounded: "{rounded.control}"
+    padding: "8px 12px"
+  status:
+    textColor: "{colors.secondary-text}"
+    typography: "{typography.label}"
+    padding: "2px 0"
+  condition:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.primary-text}"
+    rounded: "{rounded.control}"
+    padding: "12px"
+  room-list-item-selected:
+    backgroundColor: "{colors.selected}"
+    rounded: "{rounded.control}"
+    padding: "3px"
+  savebar:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.primary-text}"
+    padding: "12px 20px calc(12px + env(safe-area-inset-bottom, 0px))"
+---
+
+# Design System: Halo
 
 Dernière mise à jour : **9 octobre 2026**.
 
-Ce document est la référence des règles de design du dashboard de Halo : apparence, organisation, composants et interactions. Il doit être mis à jour en temps réel, conformément à [AGENTS.md](AGENTS.md). Les fonctionnalités et leurs comportements métier sont définis dans [PROJET.md](PROJET.md). L’état réellement disponible est présenté dans [README.md](README.md).
+## Overview
 
-## État actuel
+**Creative North Star: "Le panneau de pilotage Home Assistant"**
 
-**Une première version fonctionnelle du dashboard est implémentée.** Son organisation et ses interactions reprennent les règles actées ci-dessous. Des tests DOM et un aperçu dans Chrome avec données simulées vérifient plusieurs parcours, langues, tailles d’écran et thèmes. L’intégration complète du rendu dans Home Assistant et les essais sur des lampes réelles restent à réaliser.
+Halo est un panneau de pilotage domestique compact, intégré visuellement à Home Assistant. Il permet de lire l’état réel d’une pièce, de commander ses lumières puis d’ouvrir le groupe de réglages voulu. Les couleurs, la typographie et les propriétés des contrôles suivent le thème actif, avec des replis lorsque Home Assistant ne fournit pas une variable.
 
-Les choix esthétiques détaillés restent à définir dans la section « Règles à définir ». Les textes français de ce document décrivent les contrôles attendus ; la langue de référence de l’interface sera l’anglais.
+La refonte du 9 octobre 2026 est **actée et implémentée** : pilotage prioritaire, liste et détail des pièces, réglages en sous-vues et profils édités un à un. Elle remplace l’ancienne direction esthétique laissée ouverte et les longs formulaires simultanés. La densité vient de l’organisation et de la divulgation progressive, sans retrait d’option métier.
 
-## Identité existante
+**Key Characteristics:**
+
+- Pilotage accessible avant la configuration.
+- Thème Home Assistant vivant, sans palette Halo indépendante.
+- Listes, séparateurs et aides dépliables pour une lecture compacte.
+- Brouillon transversal préservé et édition réelle explicitement distincte.
+
+Ce document est la référence des règles visuelles, d’organisation et d’interaction du dashboard, maintenue en temps réel selon [AGENTS.md](AGENTS.md). Les fonctionnalités métier restent définies dans [PROJET.md](PROJET.md), l’état disponible dans [README.md](README.md), le contexte produit dans [PRODUCT.md](PRODUCT.md) et la direction de cette surface dans [le contrat du panneau](.impeccable/surfaces/frontend-src-halo-panel-ts.md). Le frontmatter contient les tokens normatifs extraits de [styles.ts](frontend/src/styles.ts) et [entity-picker.ts](frontend/src/entity-picker.ts) ; les propriétés hors de son schéma et les composants autonomes figurent dans [.impeccable/design.json](.impeccable/design.json).
+
+### Statut et vérifications
+
+La refonte est implémentée dans le panneau fonctionnel, avec son bundle reconstruit. Les vérifications de cette tâche comprennent **219 tests Python**, **52 tests frontend** (43 du panneau et 9 du modèle), les contrôles TypeScript et Ruff et la construction du bundle. Les aperçus ont été examinés à **390 et 1 436 pixels** de large, en clair, sombre et avec un thème personnalisé et une police à **125 %**. Ces aperçus utilisent des données simulées.
+
+Des parcours ciblés ont aussi été vérifiés dans **Home Assistant 2026.10.0 isolé avec des lampes simulées** : scène partielle, ouverture de la fenêtre native d’une lampe avec l’effet « Candle », annulation libérant la session, import de deux lampes retenues/deux entités ignorées jusqu’au brouillon puis à son abandon. Les limites et preuves détaillées se trouvent dans [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md). Ces essais ne prouvent pas tous les parcours dans Home Assistant, le comportement des lampes du logement, un push ou un déploiement domestique.
+
+### Identité existante
 
 - **Nom :** Halo.
 - **Symbole demandé :** une fleur de lotus.
@@ -21,28 +143,129 @@ Le README référence le lotus par une URL absolue GitHub pour permettre son aff
 
 L’image de marque actuelle emploie des tons chauds. Ces couleurs ne constituent pas, à elles seules, une palette validée pour le dashboard. La barre latérale Home Assistant et l’en-tête Halo utilisent le lotus monochrome natif **`mdi:spa`**, dont la couleur suit le thème et l’état de sélection, comme les autres icônes. Le nom `mdi:flower-lotus`, qui ne désigne pas une icône valide, est remplacé. [Lotus du catalogue Material Design Icons](https://pictogrammers.com/library/mdi/icon/spa/).
 
-Le bouton « Ouvrir le menu Home Assistant » ajouté par Halo est supprimé de son en-tête, à la demande du 9 octobre 2026. L’en-tête conserve le lotus, le nom Halo et son descriptif ; le menu de l’application hôte n’est pas modifié.
+Le bouton « Ouvrir le menu Home Assistant » ajouté par Halo est supprimé de son en-tête, à la demande du 9 octobre 2026. L’en-tête conserve le lotus et le nom Halo ; le descriptif est masqué dans la refonte compacte et le menu de l’application hôte n’est pas modifié.
 
-## Accès, navigation et droits
+## Colors
+
+La couleur appartient au thème Home Assistant. Les tokens conservent les expressions CSS et leurs replis ; aucune couleur fixe ni rampe chromatique indépendante n’est déduite des images de marque.
+
+### Primary
+
+- **Accent de Home Assistant** : action principale, focus, sélection, courbes et icônes de navigation sélectionnées.
+- **Texte sur accent** : libellé du bouton principal et sélection de texte.
+- **Sélection teintée** : mélange léger de l’accent et de la surface, employé pour la pièce, le profil ou l’onglet courant et les messages informatifs.
+
+### Neutral
+
+- **Fond du panneau, surface et fond secondaire** : distinguent la zone de détail, la liste et les contrôles au repos ou au survol.
+- **Texte principal et secondaire** : séparent les libellés d’action des aides, identifiants, métadonnées et statuts.
+- **Séparateur** : structure les listes, groupes et limites de panneaux sans multiplier les cartes.
+- **En-tête et champs** : reprennent aussi leurs variables dédiées Home Assistant, en priorité sur les rôles généraux.
+
+### États
+
+Les couleurs allumé/éteint proviennent des variables d’état des lumières, avec les replis d’état généraux puis les rôles du panneau. Erreur et désactivation reprennent leurs variables Home Assistant. La couleur accompagne un nom, un état textuel ou un attribut accessible ; elle ne suffit pas à expliquer une indisponibilité ou une pause.
+
+**The Thème hôte Rule.** Le thème Home Assistant est la source des couleurs, y compris les états, les champs et l’en-tête. Les replis CSS gardent le panneau lisible lorsque certaines variables manquent ; ils ne définissent pas une palette Halo.
+
+## Typography
+
+**Police des titres :** famille de titres Home Assistant, puis famille de corps et héritage.
+**Police de corps :** famille de corps Home Assistant, puis ancienne variable de corps et héritage.
+
+La hiérarchie reste courte et fonctionnelle. Il n’existe pas de police d’affichage propre à Halo. Les tailles et graisses du frontmatter sont des références dynamiques au thème ; les valeurs de repli ne sont pas des dimensions imposées à tous les thèmes.
+
+### Hiérarchie
+
+- **Titre de pièce** : repère principal du détail ; il reprend la taille de titre de page sur mobile.
+- **Titre de page** : pages globales et nom Halo dans l’en-tête sur grand écran.
+- **Titre de section** : groupes de réglages, liste de pièces et courbes.
+- **Corps** : champs, commandes, texte d’aide courant.
+- **Libellé secondaire** : métadonnées, états, compteurs et aides compactes. Les compteurs et valeurs graphiques utilisent des chiffres tabulaires.
+
+Les aides longues sont limitées à une largeur de lecture de (75ch), les explications d’état vide à (65ch). Les noms personnalisés et identifiants longs reviennent à la ligne. Les contrôles reprennent la police du panneau et le sélecteur d’entités hérite de ce même contexte.
+
+**The Typographie hôte Rule.** Les titres et le texte suivent les familles et les tailles Home Assistant. Ne pas ajouter de police décorative ni une hiérarchie d’affiche à ce panneau de pilotage.
+
+### Langues et textes
+
+**Statut : implémenté et testé localement.** Les catalogues anglais et français du panneau et les traductions natives de l’intégration sont présents.
+
+- **L’anglais est la langue de référence.** Tous les textes Halo disposent également d’une traduction française.
+- Le panneau suit la langue effective de l’interface Home Assistant de l’utilisateur : français pour `fr` et ses variantes, anglais pour les autres langues.
+- Les traductions de l’intégration suivent les mécanismes natifs de Home Assistant.
+- Les noms personnalisés de pièces, de profils et de scènes restent inchangés.
+- Les identifiants techniques restent indépendants de la langue ; les catalogues doivent permettre l’ajout ultérieur de langues.
+
+La langue de chaque utilisateur est respectée : le panneau n’impose pas une langue unique au logement. Les textes actuels privilégient des intitulés directs et des aides dépliables ; un glossaire éditorial complet reste à définir. Les libellés français de ce document décrivent les contrôles, sans remplacer l’anglais comme langue produit de référence.
+
+## Layout
+
+Le cadre occupe la hauteur disponible du panneau. L’en-tête et la barre de sauvegarde restent dans ce cadre ; le contenu intermédiaire défile. La barre est ainsi persistante au bas de la fenêtre sans superposition aux derniers champs. Ce comportement est obtenu par la disposition flex, pas par une surcouche `position: fixed`.
+
+### Navigation globale et disposition adaptative
+
+- Trois entrées : **Pièces**, **Profils de lumière naturelle** et **Réglages globaux** ; les deux dernières sont réservées aux administrateurs.
+- Sur grand écran, la colonne des pièces (264px) reste visible à gauche du détail ; elle passe à (224px) jusqu’au seuil intermédiaire (1100px). Elle contient recherche, nombre de pièces, nom, état, nombre de lumières et commande rapide.
+- À (760px) et en dessous, les pièces passent à une liste puis un détail avec retour explicite. Les onglets de pièce défilent horizontalement si nécessaire. Le détail ne juxtapose plus la liste à son contenu.
+- Les profils ont une liste (240px) et un seul éditeur affiché. Sur petit écran, la liste précède l’éditeur dans le même défilement ; elle ne devient pas une seconde pile d’éditeurs.
+- Les réglages globaux, l’éditeur de scène et l’import limitent leur contenu à (980px). Les grilles de courbes et de champs s’adaptent à leur largeur disponible.
+
+Les espacements réutilisés suivent les variables Home Assistant du frontmatter. Les adaptations compactes, rangées et grilles conservent aussi des valeurs structurelles locales : ces mesures ne constituent pas une nouvelle échelle globale. Les cibles passent au minimum à (44px) avec un pointeur tactile ; les cases à cocher conservent leur propre dimension. L’en-tête se replie et la barre de sauvegarde passe sur deux colonnes d’actions sur mobile, en préservant la zone sûre inférieure.
+
+### Pièce : cinq sous-vues
+
+L’état réel, les commandes et les modes précèdent les onglets. Les administrateurs disposent de :
+
+| Onglet | Contenu |
+| --- | --- |
+| Pilotage | Scènes, lancement, import et édition. |
+| Lumières | Affectation explicite et informations de groupes. |
+| Automatisation | Présence, luminosité et pause manuelle. |
+| Ambiances | Associations naturelles et ambiance de base. |
+| Réglages | Transitions locales et suppression de la pièce. |
+
+Les utilisateurs ordinaires conservent le pilotage. La vue d’accueil invite à choisir une pièce ; les pièces non configurées restent visibles et expliquent l’action disponible selon les droits. Aucune option métier n’est supprimée par ce découpage.
+
+## Elevation & Depth
+
+La profondeur provient des surfaces du thème, des lignes de séparation et de la teinte de sélection. Le panneau n’ajoute aucune ombre. Les rangées d’actions, listes et groupes de réglages restent au niveau du contenu ; les aides se déplient dans le flux. Les menus d’actions des scènes reviennent à la ligne lorsqu’ils sont ouverts.
+
+**The Surfaces simples Rule.** Les surfaces restent sans ombre ajoutée par Halo. Les fonds du thème, les séparateurs et la sélection teintée suffisent à distinguer les niveaux.
+
+Le focus utilise un contour visible dans la couleur d’accent, décalé du contrôle. La sélection active du sélecteur d’entités possède aussi un contour interne. Les boutons ne bougent pas au survol : seules leurs couleurs et bordures changent avec la durée courte du thème. La préférence `prefers-reduced-motion` supprime les animations et transitions du panneau. Ce mouvement d’interface est distinct des durées appliquées aux lampes.
+
+## Shapes
+
+Les contrôles, sélecteurs, rangées sélectionnées et conditions reprennent le rayon de contrôle Home Assistant défini dans le frontmatter. Les zones de contenu principales sont des panneaux et sections séparés par des lignes, sans enveloppe arrondie systématique. Les conditions imbriquées réduisent leur cadre à des séparateurs ; les onglets globaux gardent un bord droit et un indicateur inférieur.
+
+Les icônes du panneau sont monochromes et reprennent la couleur de leur contexte ou de leur état. Le lotus est l’icône native `mdi:spa`. Le contrôle de suppression d’une sélection utilise un SVG embarqué ; aucun caractère typographique ne remplace une icône.
+
+## Components
+
+### Boutons, navigation et champs
+
+Les boutons secondaires utilisent la surface et le contour du thème ; les actions principales utilisent l’accent. Le survol des boutons secondaires change le fond et le contour ; celui du bouton principal conserve l’accent avec un léger assombrissement. Les états désactivés utilisent les couleurs prévues par Home Assistant et conservent leur libellé. Les boutons d’icône possèdent un nom accessible.
+
+La navigation globale reprend les couleurs de l’en-tête et souligne la page courante. Les onglets de pièce marquent l’état sélectionné par l’accent et un fond teinté. Ils exposent un `tablist`, un panneau associé et un seul arrêt de tabulation actif ; les flèches, Début et Fin déplacent la sélection et le focus.
+
+Les champs et listes natives reprennent les variables Home Assistant de fond, texte, contour normal et contour de survol. Le champ invalide prend la couleur d’erreur. Les sélecteurs Halo fournissent un champ de recherche, une liste de résultats, un état sélectionné et un état de résultat actif ; leur survol, focus et comportement clavier restent explicites. Les aides détaillées utilisent des sections dépliables nommées par leur sujet.
+
+### Accès, navigation et brouillon
+
+L’ajout de l’unique instance Halo crée automatiquement le panneau, sans carte séparée ni YAML. Les droits sont contrôlés côté serveur ; masquer un contrôle ne suffit pas. Le moteur reste actif sans panneau ouvert, hors libération de la session temporaire d’édition décrite plus bas.
+
+Les changements de pièce, d’onglet ou de profil conservent le brouillon transversal. Une saisie invalide bloque la navigation, ouvre le détail qui la contient si nécessaire et reçoit le focus. La validation serveur reste la garantie finale. Abandonner restaure aussi les champs contenant une saisie invalide ; un conflit de révision garde le brouillon visible et interdit une sauvegarde aveugle.
+
+La barre persistante signale les modifications non enregistrées et propose l’enregistrement ou l’abandon. Avec un brouillon sur une pièce déjà enregistrée, l’allumage et l’extinction restent accessibles ; les modes et la reprise demandent d’enregistrer ou d’abandonner. Pour une nouvelle pièce, les commandes attendent sa première sauvegarde. Le texte d’aide distingue ces deux situations.
+
+L’édition réelle bloque la navigation jusqu’à sa fin. Après import ou édition, le panneau revient au pilotage avec un focus cohérent : nouvelle scène importée, action d’origine après annulation, ou scène réglée après édition.
+
+### Configuration et pilotage d’une pièce
 
 **Statut : implémenté dans la première version de développement ; validation matérielle à réaliser.**
 
-- L’ajout de l’unique instance Halo crée automatiquement un panneau **Halo** dans la barre latérale Home Assistant. Aucune carte séparée ni configuration YAML n’est nécessaire.
-- La vue principale présente les pièces de Home Assistant et distingue celles configurées dans Halo des autres.
-- Chaque pièce ouvre une page donnant accès à ses lumières, à l’automatisation, aux associations de profils naturels, à l’ambiance de base, aux scènes et aux transitions.
-- Une section globale regroupe les profils naturels réutilisables, la sélection de l’entité soleil et les transitions par défaut.
-- Les utilisateurs peuvent piloter les pièces et lancer les scènes. La modification de la configuration est réservée aux administrateurs. Ces droits sont contrôlés côté serveur ; masquer un contrôle dans le panneau ne suffit pas.
-- Le moteur fonctionne indépendamment de l’ouverture du panneau. Fermer le dashboard ne suspend pas l’automatisation, hors libération de la session temporaire d’édition décrite plus bas.
-
-L’implémentation actuelle utilise une liste de pièces, une page par pièce avec sections et une page globale. Cette présentation fonctionnelle reste ajustable lors de la définition esthétique.
-
-Lorsqu’il existe des modifications non enregistrées, la barre d’enregistrement reste visible au bas de la fenêtre du panneau, quel que soit le défilement. Le contenu défile entre l’en-tête et cette barre, sans être masqué par les actions. Sur petit écran, les actions peuvent revenir à la ligne et la zone sûre inférieure est préservée.
-
-## Configuration et pilotage d’une pièce
-
-**Statut : implémenté dans la première version de développement ; validation matérielle à réaliser.**
-
-### Lumières et capacités
+#### Lumières et capacités
 
 Le sélecteur présente d’abord les lumières rattachées à la pièce dans Home Assistant, puis permet de rechercher les autres entités `light`. L’affectation est explicite : aucune lumière n’est ajoutée automatiquement à la configuration Halo.
 
@@ -65,7 +288,7 @@ Les contrôles correspondent aux capacités réellement annoncées par chaque la
 | Température de blanc | Marche/arrêt, luminosité et température dans la plage disponible. | Luminosité et température de blanc. |
 | Couleur sans température de blanc | Marche/arrêt, luminosité et couleur. | Luminosité et approximation du blanc par la couleur disponible. |
 
-### Modes et commandes
+#### Modes et commandes
 
 La page de pièce expose les commandes correspondant à l’appareil Home Assistant : allumer/éteindre la pièce, activer/désactiver les automatismes, activer/désactiver la lumière naturelle, reprendre l’automatisation et lancer les scènes.
 
@@ -75,7 +298,7 @@ La page de pièce expose les commandes correspondant à l’appareil Home Assist
 - L’état allumé/éteint de la pièce reflète les lampes réelles : allumé dès qu’une lampe est allumée, indisponible lorsqu’aucune lampe n’est disponible.
 - L’ambiance de base permet d’enregistrer les réglages de référence par lampe. Pour une lampe sans réglage enregistré, l’interface explique que l’allumage conserve les réglages propres à la lampe.
 
-### Présence, luminosité et pause manuelle
+#### Présence, luminosité et pause manuelle
 
 La configuration de présence permet de choisir une entité de mouvement, de présence ou personnalisée et de renseigner les états signifiant « présent ». Le délai d’absence est modifiable, avec une valeur initiale de **0 seconde**.
 
@@ -91,11 +314,11 @@ La pause manuelle couvre toute la pièce. Elle concerne les modifications de cou
 
 L’affichage distingue cette pause de la désactivation générale de l’automatisation et de la suspension temporaire liée à l’édition d’une scène. Une extinction manuelle ne doit pas faire disparaître immédiatement l’indication de pause.
 
-## Profils de lumière naturelle
+### Profils de lumière naturelle
 
 **Statut : implémenté dans la première version de développement ; validation matérielle à réaliser.**
 
-La configuration globale permet de sélectionner une entité soleil et de créer, nommer et modifier des profils réutilisables. L’éditeur de profil présente séparément :
+La vue dédiée aux profils permet de créer, nommer et modifier les profils réutilisables, avec un seul éditeur affiché à la fois. L’entité soleil se sélectionne dans les réglages globaux. L’éditeur de profil présente séparément :
 
 - La courbe de température de blanc : deux hauteurs solaires et leurs températures en kelvins.
 - La courbe de luminosité : deux hauteurs solaires et leurs luminosités en pourcentage.
@@ -116,13 +339,13 @@ Dans chaque pièce, l’utilisateur peut créer plusieurs associations entre un 
 
 L’indisponibilité du soleil doit apparaître comme une suspension des ajustements naturels, et non comme une hauteur solaire égale à zéro.
 
-## Scènes, conditions et édition en direct
+### Scènes, conditions et édition en direct
 
 **Statut : implémenté dans la première version de développement ; validation matérielle à réaliser.**
 
-### Liste et conditions
+#### Liste et conditions
 
-Les scènes appartiennent à une pièce et utilisent ses lumières sélectionnées. Leur ordre dans la liste définit leur priorité : la première scène dont les conditions sont remplies est sélectionnée, une seule à la fois. La liste permet de déplacer les scènes et propose également des boutons **monter/descendre**.
+Les scènes appartiennent à une pièce et utilisent ses lumières sélectionnées. Leur ordre dans la liste définit leur priorité : la première scène dont les conditions sont remplies est sélectionnée, une seule à la fois. La liste permet de déplacer les scènes et propose également des boutons **monter/descendre**. Les actions de lancement et de réglage restent visibles ; déplacement et suppression sont regroupés dans un menu par ligne. Les conditions et l’option d’allumage se déplient dans l’éditeur.
 
 L’éditeur de conditions propose les états d’entités, les seuils numériques, les horaires et les conditions solaires. Il permet de les combiner avec **ET**, **OU** et **NON**, sans imposer de YAML.
 
@@ -135,13 +358,13 @@ Les deux modes respectent la désactivation générale de l’automatisation et 
 
 Le lancement explicite d’une scène applique son ambiance et déclenche la pause manuelle commune ; ce comportement doit être identifiable depuis le panneau.
 
-### Import d’une scène Home Assistant
+#### Import d’une scène Home Assistant
 
 **Implémenté ; vérifié dans Home Assistant isolé avec des lampes simulées.** Dans une pièce enregistrée, l’action administrateur **« Importer depuis Home Assistant »** ouvre une recherche de scène. Le formulaire présente un nom modifiable, la liste des lampes retenues et le nombre d’entités ignorées. Il explique que les autres lampes restent inchangées et que l’import ne commande aucune lampe. Les scènes inaccessibles, les erreurs de lecture et l’absence de lampes communes ont un retour explicite.
 
 Confirmer ajoute une nouvelle scène au brouillon, en dernière position ; la barre d’enregistrement reste le point de sauvegarde ou d’abandon. Annuler le formulaire conserve le brouillon précédent. Les changements non enregistrés doivent être résolus avant de commencer l’import. Le lancement des scènes est désactivé tant qu’il reste des modifications non enregistrées. L’import ne lance pas l’éditeur en direct ni la scène source ; l’utilisateur peut ensuite modifier la copie avec le parcours habituel.
 
-### Réglage des lampes réelles
+#### Réglage des lampes réelles
 
 L’éditeur présente une liste Halo recherchable des lampes avec leur état réel et leur effet actif, lorsque disponible. Un clic ouvre la fenêtre native Home Assistant, qui fournit les contrôles adaptés à la lampe. Ce parcours est implémenté et vérifié dans le frontend officiel Home Assistant 20260930.2, avec des lampes simulées dans une instance locale. L’ouverture utilise l’action documentée `more-info` ; aucun composant interne Home Assistant n’est copié ou détourné.
 
@@ -156,11 +379,11 @@ L’éditeur indique clairement que les réglages modifient les lampes physiques
 - Une fermeture ou une perte de connexion libère la session après expiration, sans laisser une suspension permanente.
 - L’automatisation ne doit pas être réactivée à la sortie de l’éditeur si elle était désactivée avant l’édition.
 
-Le nom et les conditions de la scène restent dans la vue d’édition Halo. La fenêtre native sert au réglage des lampes ; fermer cette fenêtre ne termine pas la session Halo. L’enregistrement capture côté serveur les états réels après les réglages ; l’annulation restaure l’instantané initial, effets compris. Les contrôles existants de l’ambiance de base restent distincts de ce parcours de scène. La présentation visuelle de Halo reste à affiner.
+Le nom et les conditions de la scène restent dans la vue d’édition Halo. La fenêtre native sert au réglage des lampes ; fermer cette fenêtre ne termine pas la session Halo. L’enregistrement capture côté serveur les états réels après les réglages ; l’annulation restaure l’instantané initial, effets compris. Les contrôles existants de l’ambiance de base restent distincts de ce parcours de scène. Le parcours conserve les mêmes garanties dans la présentation compacte.
 
-## Transitions des lumières
+### Transitions des lumières
 
-**Statut : implémenté dans la première version de développement ; validation matérielle à réaliser.** Ces transitions portent sur les commandes des lampes. Les animations de l’interface restent un sujet esthétique distinct, à définir.
+**Statut : implémenté dans la première version de développement ; validation matérielle à réaliser.** Ces transitions portent sur les commandes des lampes. Les animations d’interface restent distinctes et suivent les règles de mouvement décrites plus haut.
 
 Les réglages présentent cinq catégories avec leurs valeurs en **secondes** :
 
@@ -182,7 +405,7 @@ Sur chaque rangée de catégories, les sélecteurs et les champs de durée sont 
 
 Un champ vide en configuration explicite omet le paramètre de transition. Il se distingue de `0`, qui demande une transition immédiate lorsque la lampe le permet. Une lampe sans prise en charge ne reçoit pas ce paramètre. L’interface doit présenter cette distinction sans faire croire qu’une transition est garantie sur tous les équipements.
 
-## États et retours de fonctionnement
+### États et retours de fonctionnement
 
 **Statut : implémenté dans la première version de développement ; validation matérielle à réaliser.**
 
@@ -194,39 +417,34 @@ La pièce présente son état réel et la raison du comportement courant. Les in
 - L’absence, la luminosité suffisante et les temporisations correspondantes lorsqu’elles s’appliquent.
 - Une donnée ou une lampe indisponible.
 
-Une mesure absente ou inconnue ne doit jamais être affichée comme une valeur zéro valide. Les états affichés ne doivent pas présenter une commande envoyée comme un changement matériel déjà confirmé. Les dispositions visuelles, indicateurs d’attente et messages d’erreur précis restent à concevoir.
+Une mesure absente ou inconnue ne doit jamais être affichée comme une valeur zéro valide. Les états affichés ne doivent pas présenter une commande envoyée comme un changement matériel déjà confirmé. Les états et échéances sont textuels sous le nom de la pièce ; les notifications informatives et les erreurs disposent d’une zone dédiée. Les actions indisponibles ou en cours sont désactivées sans faire disparaître leur libellé. Les vues vides expliquent le contexte et présentent l’action accessible selon les droits.
 
-## Langues et textes
+## Do's and Don'ts
 
-**Statut : implémenté et testé localement.** Les catalogues anglais et français du panneau et les traductions natives de l’intégration sont présents.
+### Do:
 
-- **L’anglais est la langue de référence.** Tous les textes Halo disposent également d’une traduction française.
-- Le panneau suit la langue effective de l’interface Home Assistant de l’utilisateur : français pour `fr` et ses variantes, anglais pour les autres langues.
-- Les traductions de l’intégration suivent les mécanismes natifs de Home Assistant.
-- Les noms personnalisés de pièces, de profils et de scènes restent inchangés.
-- Les identifiants techniques restent indépendants de la langue ; les catalogues doivent permettre l’ajout ultérieur de langues.
+- Do préserver toutes les options métier dans leurs sous-vues et utiliser des aides dépliables pour le détail.
+- Do suivre les variables du thème Home Assistant pour les surfaces, textes, états, champs, en-tête et typographie.
+- Do maintenir des libellés explicites, un focus visible, les parcours clavier et des cibles adaptées au toucher.
+- Do conserver le brouillon entre vues, révéler les erreurs de saisie et maintenir la barre de sauvegarde accessible.
+- Do distinguer état réel, commande envoyée, pause manuelle, automatisation désactivée et édition réelle.
+- Do consigner les écrans, thèmes, langues et états effectivement vérifiés, avec les limites matérielles.
 
-La langue de chaque utilisateur est respectée : le panneau n’impose pas une langue unique au logement. Le ton détaillé des messages et le glossaire restent à définir.
+### Don't:
 
-## Règles à définir
+- Don’t imposer une palette Halo ou une police décorative au thème de Home Assistant.
+- Don’t transformer la compacité en suppression d’option, de libellé utile ou de garantie d’édition.
+- Don’t présenter un sélecteur Halo comme natif ni charger indirectement un composant privé Home Assistant.
+- Don’t remplacer une donnée indisponible par zéro ou un état éteint inventé.
+- Don’t assimiler un aperçu simulé ou un test dans Home Assistant isolé à une validation sur les lampes du logement.
 
-Les rubriques suivantes servent à recueillir les prochaines décisions ; elles n’imposent encore aucun choix.
+### Décisions remplacées et points ouverts
 
-| Sujet | Décisions à documenter | Statut |
-| --- | --- | --- |
-| Mise en page | Disposition des vues actées, hiérarchie visuelle et choix entre onglets, sections ou sous-pages. | À définir |
-| Apparence | Palette, typographie, espacements, formes et iconographie. | À définir |
-| Composants | Forme visuelle des lumières, commandes et réglages dont le rôle est défini ci-dessus. | À définir |
-| Retours d’action | Présentation précise des états actifs, attentes, confirmations et erreurs. | À définir |
-| États particuliers | Présentation des listes vides, de l’indisponibilité et du chargement. | À définir |
-| Écrans et thèmes | Adaptation au mobile, à la tablette, au bureau et aux thèmes. | À définir |
-| Accessibilité | Contrastes, lisibilité, clavier, libellés et zones d’interaction. | À définir |
-| Mouvement de l’interface | Animations et comportement avec mouvement réduit ; distincts des transitions des lumières. | À définir |
-| Textes | Ton, terminologie et messages précis en anglais et en français. | À définir |
+La table historique « Règles à définir » est remplacée par les décisions du 9 octobre 2026 : mise en page compacte, hiérarchie courte, thème Home Assistant, formes des contrôles, retours d’état, adaptation mobile, clavier et mouvement réduit sont désormais implémentés. Le glossaire éditorial détaillé reste ouvert. Les règles fonctionnelles, valeurs initiales et garanties d’édition antérieures sont conservées dans les composants ci-dessus et dans `PROJET.md`.
 
-## Vérifications prévues
+### Vérifications prévues
 
-**Les vérifications complètes dans Home Assistant restent à réaliser.** Les tests locaux et l’aperçu dans Chrome avec données simulées couvrent une partie de ces points ; leurs résultats figurent dans [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md). La liste complète reste la référence de validation :
+**La validation exhaustive et les essais sur les lampes du logement restent à réaliser.** Les vérifications locales et les parcours Home Assistant isolés décrits plus haut couvrent une partie de ces points ; leurs résultats et limites figurent dans [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md). La liste complète reste la référence de validation :
 
 - Accès au panneau après l’installation unique, navigation des pièces et droits utilisateur/administrateur.
 - Sélection des lumières, contraintes d’affectation et contrôles adaptés aux quatre familles de lampes.
@@ -240,7 +458,7 @@ Les rubriques suivantes servent à recueillir les prochaines décisions ; elles 
 - Transitions héritées, propres à la pièce, absentes, égales à zéro ou non prises en charge.
 - Français, anglais, repli anglais et préservation des noms personnalisés.
 
-## Suivi des futures règles
+### Suivi des futures règles
 
 Pour chaque règle, consigner son statut (**proposée**, **actée**, **implémentée**, **vérifiée** ou **remplacée**), son périmètre, la décision précise et un exemple ou une référence visuelle si disponible. Relier la règle à la fonctionnalité concernée dans `PROJET.md`.
 

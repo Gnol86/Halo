@@ -25,7 +25,7 @@ Le cahier des charges fonctionnel est défini et une première implémentation e
 - [x] Définir l’anglais de référence, le français, le suivi de la langue de l’interface et le repli anglais.
 - [x] Documenter les choix d’architecture, les valeurs initiales, les limites des données indisponibles et les scénarios d’acceptation.
 - [x] Consigner l’organisation et les interactions retenues dans `DESIGN.md`.
-- [ ] Définir l’apparence détaillée du dashboard et ses règles visuelles, d’accessibilité, d’adaptation aux écrans et aux thèmes.
+- [x] Définir la direction compacte du dashboard : pilotage prioritaire, liste/détail, sous-vues, accessibilité clavier et adaptation au thème Home Assistant.
 
 ## 3. Première version fonctionnelle
 
@@ -35,15 +35,22 @@ Le cahier des charges fonctionnel est défini et une première implémentation e
 - [x] Implémenter l’ambiance de base, les profils naturels, leurs associations et les adaptations aux capacités des lampes.
 - [x] Implémenter les scènes conditionnelles ordonnées, leur exposition dans Home Assistant et l’édition réelle avec restauration et expiration des sessions.
 - [x] Ajouter les textes anglais et français, la langue par utilisateur et les états explicatifs du dashboard.
+- [x] Refaire le panneau en liste/détail : recherche et commandes des pièces, cinq onglets, profils édités un à un, aides repliables et brouillon conservé entre sous-vues.
+- [x] Suivre le thème Home Assistant pour les contrôles et la typographie, le mode clair/sombre et la réduction des mouvements, sans palette Halo indépendante.
+- [x] Préserver l’édition native des lampes, les effets et scènes partielles, ainsi que l’import des scènes Home Assistant dans le brouillon.
 - [x] Ajouter des tests automatisés des priorités, indisponibilités, accès concurrents, droits côté serveur, stockage et langues.
 - [ ] Achever la validation de tous les scénarios d’acceptation de `PROJET.md` dans une instance Home Assistant avec le matériel cible.
 - [x] Tester localement le rechargement, les pauses persistées, le déchargement, la désactivation et les changements d’état simulés, sans confondre les commandes Halo avec une intervention manuelle.
 - [x] Vérifier plusieurs vues du panneau dans Chrome avec données simulées, en français/anglais, clair/sombre et sur mobile 375 × 812.
+- [x] Vérifier la refonte à 390 et 1 436 pixels de large, en clair, sombre et thème personnalisé avec police à 125 %, et réussir les 52 tests frontend et le contrôle TypeScript.
+- [x] Vérifier des parcours ciblés de la refonte dans Home Assistant 2026.10.0 isolé : scène partielle à deux lampes sur quatre, fenêtre native avec effet « Candle », annulation de session et import filtré jusqu’au brouillon puis à son abandon. Lampes simulées, aucune erreur console relevée pendant ces parcours.
 - [ ] Valider sur une instance Home Assistant de test avec des lampes marche/arrêt, dimmables, à température de blanc et à couleur, y compris les transitions prises en charge ou absentes.
-- [ ] Vérifier l’installation, le panneau, les langues et les interactions sur les écrans et thèmes retenus ; consigner les résultats et leurs limites.
+- [ ] Achever les essais domestiques d’installation, de langues et d’interactions avec les écrans, thèmes et équipements retenus ; les vérifications locales ciblées ne couvrent pas l’ensemble de ce jalon.
 - [x] Actualiser les statuts dans `PROJET.md` et `DESIGN.md`, et présenter uniquement les fonctions réellement livrées comme disponibles dans le [README](../README.md).
 
 ## 4. Publication, en dernier
+
+La refonte est livrée dans le dépôt local ; sa validation ne constitue ni un push ni une activation dans le logement.
 
 - [ ] Suivre la [liste de publication HACS](HACS.md).
 - [ ] Publier une première release utilisable.
