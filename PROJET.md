@@ -2,7 +2,7 @@
 
 Dernière mise à jour : **9 octobre 2026**.
 
-Ce document est le cahier des charges de Halo : objectifs, fonctionnalités, interactions, architecture et critères de validation. Les comportements ci-dessous sont **actés, à développer**, sauf lorsqu’ils sont explicitement identifiés comme déjà implémentés. Leur description au présent exprime le résultat attendu, pas une disponibilité actuelle.
+Ce document est le cahier des charges de Halo : objectifs, fonctionnalités, interactions, architecture et critères de validation. Les comportements ci-dessous sont actés. Une première implémentation de développement existe maintenant ; les statuts et limites de vérification sont précisés ci-dessous. La spécification reste la référence du résultat attendu, et ne prouve pas à elle seule son fonctionnement sur du matériel réel.
 
 Ce document, [DESIGN.md](DESIGN.md) et [README.md](README.md) doivent rester à jour en temps réel, conformément à [AGENTS.md](AGENTS.md). `DESIGN.md` détaille l’organisation et les interactions du dashboard ; ses choix esthétiques restent à définir. Le README présente les capacités effectivement disponibles. Les jalons se trouvent dans [docs/ROADMAP.md](docs/ROADMAP.md).
 
@@ -12,17 +12,17 @@ Halo est une intégration personnalisée Home Assistant destinée à gérer tout
 
 Le socle initial est implémenté : ajout depuis l’interface Home Assistant, entrée de configuration unique, chargement/déchargement/rechargement, textes de configuration anglais et français, icônes locales, tests et workflows préparés. Les vérifications historiques et leurs limites sont consignées dans [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
-**Aucun dashboard Halo ni aucune fonction de pilotage des lumières n’est encore implémenté.** Cette étape formalise leur spécification ; elle ne les livre pas.
+**Une première implémentation du panneau et du moteur d’éclairage est disponible dans le dépôt.** Les tests locaux utilisent Home Assistant avec des lampes simulées ; les essais matériels et la validation finale du dashboard dans une instance Home Assistant restent à effectuer. Les résultats sont consignés dans [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 | Ensemble | Statut actuel |
 | --- | --- |
 | Socle d’intégration et configuration unique | Implémenté ; vérifications initiales décrites dans la documentation de développement. |
-| Panneau, configuration des pièces et appareils | Acté — à développer. |
-| Présence, luminosité, pause manuelle et reprise | Acté — à développer. |
-| Ambiance de base et profils naturels | Acté — à développer. |
-| Scènes, conditions, priorités et édition en direct | Acté — à développer. |
-| Transitions globales et par pièce | Acté — à développer. |
-| Localisation complète et sélection de langue du panneau | Acté — à développer ; seuls les textes du socle existent. |
+| Panneau, configuration des pièces et appareils | Première implémentation ; tests de cycle de vie, API et appareils locaux. |
+| Présence, luminosité, pause manuelle et reprise | Implémenté ; tests avec capteurs et lampes simulés. |
+| Ambiance de base et profils naturels | Implémenté ; calculs et adaptation aux capacités testés localement. |
+| Scènes, conditions, priorités et édition en direct | Implémenté ; tests locaux des priorités, sessions et restaurations. |
+| Transitions globales et par pièce | Implémenté ; paramètres et concurrence testés, comportement matériel à vérifier. |
+| Localisation complète et sélection de langue du panneau | Catalogues anglais/français et sélection de langue implémentés ; tests locaux. |
 | Direction esthétique du dashboard | À définir dans `DESIGN.md`. |
 | Publication et référencement HACS | Jalon final, après développement et validation. |
 
@@ -105,7 +105,7 @@ Ces décisions sont soumises au mode automatique, aux pauses et à la priorité 
 
 ### Luminosité et hystérésis
 
-Le capteur de luminosité est facultatif. Lorsqu’il est configuré, l’utilisateur renseigne un seuil fixe et une hystérésis. Le dashboard affiche les seuils effectifs bas et haut ; entre ces seuils, la décision précédente est conservée.
+Le capteur de luminosité est facultatif. Lorsqu’il est configuré, l’utilisateur renseigne un seuil fixe et une hystérésis. Le dashboard affiche les seuils effectifs bas et haut ; entre ces seuils, la décision précédente est conservée. Dans l’implémentation, le seuil bas est le seuil renseigné et le seuil haut est ce seuil augmenté de l’hystérésis : la pièce est sombre sous le seuil bas et suffisamment lumineuse à partir du seuil haut.
 
 Chaque pièce choisit si la luminosité :
 
@@ -238,6 +238,8 @@ L’utilisateur règle les lampes réelles depuis le dashboard et voit le résul
 
 L’état d’édition, la suspension et les éventuelles indisponibilités sont visibles dans le dashboard.
 
+La première implémentation utilise une expiration de **120 secondes** sans renouvellement de la connexion propriétaire. L’enregistrement final verrouille la session pendant la sauvegarde, afin qu’une expiration concurrente ne provoque pas une restauration après un enregistrement réussi.
+
 ## 11. Transitions
 
 ### Cinq catégories
@@ -272,7 +274,7 @@ Une nouvelle commande remplace les anciennes intentions encore en attente. Une t
 
 ## 12. Architecture retenue
 
-**Architecture actée, à développer.**
+**Architecture actée et implémentée dans cette première version de développement.** Les contrats techniques figurent dans [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 - Un moteur par pièce fonctionne dans l’intégration Python Home Assistant. Il reste actif indépendamment de l’ouverture du panneau.
 - Le panneau embarqué est développé en TypeScript avec Lit. Les ressources distribuables accompagnent l’intégration, sans installation séparée.
@@ -283,11 +285,11 @@ Une nouvelle commande remplace les anciennes intentions encore en attente. Une t
 - Les pauses manuelles sont conservées avec leur échéance pour survivre à un redémarrage.
 - Les indisponibilités des entités sont distinguées des valeurs valides et présentées à l’utilisateur.
 
-Les conventions de développement existantes restent applicables. Le socle actuel n’implémente encore ni ce moteur, ni ce panneau, ni leurs interfaces.
+Les conventions de développement existantes restent applicables. Les changements sont couverts par des tests locaux ; l’installation et les essais réels restent un jalon distinct.
 
 ## 13. Valeurs initiales
 
-Ces valeurs sont les valeurs par défaut retenues pour l’implémentation ; elles ne décrivent pas des réglages déjà disponibles.
+Ces valeurs sont les valeurs par défaut retenues et appliquées dans la première implémentation.
 
 | Paramètre | Valeur initiale |
 | --- | --- |
@@ -307,7 +309,7 @@ Ces valeurs sont les valeurs par défaut retenues pour l’implémentation ; ell
 
 ## 14. Scénarios d’acceptation
 
-**Tous les scénarios ci-dessous restent à valider lors du développement.** Ils ne remplacent pas les résultats des tests du socle et ne sont pas présentés comme déjà réussis.
+**Ces scénarios restent la référence d’acceptation complète.** Les tests automatisés couvrent notamment le moteur, les entités, la persistance, les droits, la concurrence et les langues. Leur réussite locale ne vaut pas validation matérielle ou validation de tous les parcours dans une instance Home Assistant ; ces dernières restent à réaliser.
 
 | Référence | Scénario | Résultat attendu |
 | --- | --- | --- |
@@ -352,5 +354,6 @@ Chaque évolution met à jour dans la même tâche la spécification, le statut 
 | 9 octobre 2026 | Unifier la pause manuelle et rendre son extinction automatique configurable par pièce. | Le réglage est activé par défaut ; scènes et ajustements naturels restent suspendus pendant la pause. |
 | 9 octobre 2026 | Adopter les profils réutilisables, les scènes prioritaires éditables en direct et les transitions globales avec réglages locaux. | Configuration centralisée dans le futur panneau. |
 | 9 octobre 2026 | Utiliser l’anglais comme référence, avec français selon la langue de l’interface Home Assistant. | Localisation complète à développer et catalogues extensibles. |
+| 9 octobre 2026 | Lancer le développement du cahier des charges. | Première implémentation du moteur, des entités et du panneau ; validation locale et essais matériels distingués. |
 
 Le développement et les essais précèdent toute publication. La release et la demande d’inclusion HACS suivent ensuite la [procédure documentée](docs/HACS.md). Aucun référencement n’est déclenché par la rédaction de ce cahier des charges.

@@ -9,6 +9,7 @@ package = false
 
 [dependency-groups]
 dev = [
+    "home-assistant-frontend==20260930.2",
     "homeassistant==2026.10.0",
     "pytest-homeassistant-custom-component==0.13.371",
     "ruff==0.16.10",

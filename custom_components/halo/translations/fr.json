@@ -6,7 +6,27 @@
     "step": {
       "user": {
         "title": "Configurer Halo",
-        "description": "Halo réunira la gestion des lumières de ton logement. Cette version de développement prépare uniquement l’intégration : elle ne commande encore aucune lumière."
+        "description": "Halo ajoute un panneau pour configurer et piloter les lumières de ton logement. Après la configuration, ouvre Halo dans la barre latérale pour choisir les pièces et leurs lumières."
+      }
+    }
+  },
+  "entity": {
+    "light": {
+      "room": {
+        "name": "Éclairage"
+      }
+    },
+    "switch": {
+      "automation": {
+        "name": "Éclairage automatique"
+      },
+      "natural": {
+        "name": "Lumière naturelle"
+      }
+    },
+    "button": {
+      "resume": {
+        "name": "Reprendre l’automatisation"
       }
     }
   }

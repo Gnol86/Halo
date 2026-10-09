@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halo — isolated UI test harness</title>
+<link rel="icon" href="data:,">
+<style>
+  body { margin: 0; --primary-color:#03a9f4; --primary-text-color:#212121; --secondary-text-color:#666; --primary-background-color:#fafafa; --card-background-color:#fff; --secondary-background-color:#eee; --divider-color:#ddd; --text-primary-color:#fff; }
+  body.dark { color-scheme:dark; --primary-text-color:#eee; --secondary-text-color:#bbb; --primary-background-color:#111; --card-background-color:#1c1c1c; --secondary-background-color:#2c2c2c; --divider-color:#454545; }
+  .harness { background:#e6edf3; color:#111; padding:8px; font:12px system-ui; display:flex; gap:8px; align-items:center; }
+  halo-panel { height:calc(100dvh - 36px); }
+</style>
+<div class="harness">Simulated Home Assistant <button id="language">EN / FR</button><button id="theme">Light / dark</button><button id="admin">Admin / user</button></div>
+<halo-panel></halo-panel>
+<script type="module">
+import "../custom_components/halo/frontend/halo-panel.js";
+const transitions = { turn_on:null, lux_on:null, natural:null, scene:null, turn_off:null };
+const morning = { brightness:{low_elevation:-6.5,high_elevation:45.5,low:20,high:100},temperature:{low_elevation:-6.5,high_elevation:45.5,low:2200,high:6000} };
+const room = {id:"lounge",lights:["light.sofa","light.ceiling","light.table"],presence_entity_id:"binary_sensor.presence",presence_states:["on"],lux_entity_id:"sensor.illuminance",lux_threshold:50,lux_hysteresis:20,lux_off:false,absence_delay:120,manual_pause:900,lux_off_delay:30,allow_off_during_pause:true,automation_enabled:false,natural_enabled:true,transitions:Object.fromEntries(Object.keys(transitions).map(key=>[key,"inherit"])),base:{},associations:[{profile_id:"warm",lights:["light.sofa","light.ceiling"],brightness_offset:-30}],scenes:[{id:"cinema",name:"Cinéma",can_turn_on:false,conditions:{type:"state",entity_id:"media_player.tv",state:"on"},lights:{"light.sofa":{state:"on",brightness_pct:20,rgb_color:[230,140,40]},"light.ceiling":{state:"on",brightness_pct:15,color_temp_kelvin:2500},"light.table":{state:"off"}}}]};
+let snapshot={revision:1,is_admin:true,config:{sun_entity_id:"sun.sun",transitions,profiles:{warm:{id:"warm",name:"Blanc chaleureux",linked:true,morning,evening:structuredClone(morning)}},rooms:{lounge:room}},areas:[{id:"lounge",name:"Salon"},{id:"kitchen",name:"Cuisine"},{id:"bedroom",name:"Chambre"}],lights:[{entity_id:"light.sofa",name:"Lampadaire",area_id:"lounge",available:true,supported_color_modes:["rgb"],supported_features:32},{entity_id:"light.ceiling",name:"Plafonnier",area_id:"lounge",available:true,supported_color_modes:["color_temp"],min_color_temp_kelvin:2000,max_color_temp_kelvin:6500,supported_features:32},{entity_id:"light.table",name:"Lampe de table",area_id:"lounge",available:true,supported_color_modes:["onoff"],supported_features:0},{entity_id:"light.kitchen",name:"Cuisine",area_id:"kitchen",available:true,supported_color_modes:["brightness"],supported_features:0}],entities:[{entity_id:"sun.sun",name:"Soleil",state:"above_horizon",attributes:{elevation:15}},{entity_id:"binary_sensor.presence",name:"Présence du salon",state:"on",attributes:{}},{entity_id:"sensor.illuminance",name:"Luminosité du salon",state:"30",attributes:{unit_of_measurement:"lx"}},{entity_id:"media_player.tv",name:"Télévision",state:"off",attributes:{}}],status:{lounge:{reason:"disabled",is_on:true,available:true,pause_until:null}}};
+let callback;
+window.haloCalls=[];
+const panel=document.querySelector("halo-panel");
+const send=()=>callback?.(structuredClone(snapshot));
+const hass={locale:{language:"fr-BE"},states:{"light.sofa":{state:"on",attributes:{brightness:128,rgb_color:[255,255,255]}},"light.ceiling":{state:"on",attributes:{brightness:128,color_mode:"color_temp",color_temp_kelvin:3000}},"light.table":{state:"off",attributes:{}}},connection:{async subscribeMessage(cb){callback=cb;return()=>callback=undefined;}},async callWS(message){
+  window.haloCalls.push(structuredClone(message));
+  if(message.type==="halo/save"){if(message.revision!==snapshot.revision)throw{code:"conflict"};snapshot.config=structuredClone(message.config);snapshot.revision++;send();}
+  if(message.type==="halo/edit/begin"){snapshot.status[message.room_id].reason="editing";send();return{token:"mock-token"};}
+  if(message.type==="halo/edit/end"){if(message.save){const room=snapshot.config.rooms[message.room_id];room.scenes=room.scenes.filter(scene=>scene.id!==message.scene.id);room.scenes.push(message.scene);snapshot.revision++;}snapshot.status[message.room_id].reason="disabled";send();}
+  if(message.type==="halo/command"){const room=snapshot.config.rooms[message.room_id];if(["automation","natural"].includes(message.command)){room[message.command+"_enabled"]=message.enabled;snapshot.revision++;}if(message.command==="turn_on")snapshot.status[room.id].is_on=true;if(message.command==="turn_off")snapshot.status[room.id].is_on=false;send();}
+  return structuredClone(snapshot);
+}};
+panel.hass=hass;
+document.querySelector("#language").onclick=()=>{hass.locale={language:hass.locale.language.startsWith("fr")?"en":"fr-BE"};panel.hass={...hass};};
+document.querySelector("#theme").onclick=()=>document.body.classList.toggle("dark");
+document.querySelector("#admin").onclick=()=>{snapshot.is_admin=!snapshot.is_admin;send();};
+</script>
+</html>

@@ -6,7 +6,27 @@
     "step": {
       "user": {
         "title": "Set up Halo",
-        "description": "Halo will bring your home's lighting together. This development version only prepares the integration: it does not control any lights yet."
+        "description": "Halo adds a panel to configure and control lighting throughout your home. After setup, open Halo in the sidebar to choose rooms and their lights."
+      }
+    }
+  },
+  "entity": {
+    "light": {
+      "room": {
+        "name": "Lighting"
+      }
+    },
+    "switch": {
+      "automation": {
+        "name": "Automatic lighting"
+      },
+      "natural": {
+        "name": "Natural lighting"
+      }
+    },
+    "button": {
+      "resume": {
+        "name": "Resume automation"
       }
     }
   }

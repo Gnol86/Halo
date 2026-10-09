@@ -4,7 +4,7 @@ Dernière mise à jour : **9 octobre 2026**.
 
 Cette feuille de route suit les jalons. Les fonctionnalités et décisions produit sont détaillées dans [PROJET.md](../PROJET.md), et les règles du dashboard dans [DESIGN.md](../DESIGN.md). Ces deux documents sont mis à jour en temps réel.
 
-Le cahier des charges fonctionnel est défini et documenté. Le pilotage des lumières et le dashboard restent **à développer** ; une case cochée dans le jalon de définition ne signifie pas qu’une fonction est implémentée ou validée dans Home Assistant.
+Le cahier des charges fonctionnel est défini et une première implémentation existe. Les cases d’implémentation ou de tests locaux ne constituent pas une validation sur une instance domestique et des lampes réelles.
 
 ## 1. Socle
 
@@ -29,17 +29,19 @@ Le cahier des charges fonctionnel est défini et documenté. Le pilotage des lum
 
 ## 3. Première version fonctionnelle
 
-- [ ] Construire le moteur Python par pièce, le stockage versionné et les commandes WebSocket authentifiées.
-- [ ] Ajouter le panneau embarqué TypeScript/Lit, les pièces Home Assistant, la sélection des lumières et les entités des appareils Halo.
-- [ ] Implémenter la présence, la luminosité, les pauses manuelles, la reprise et les transitions.
-- [ ] Implémenter l’ambiance de base, les profils naturels, leurs associations et les adaptations aux capacités des lampes.
-- [ ] Implémenter les scènes conditionnelles ordonnées, leur exposition dans Home Assistant et l’édition réelle avec restauration et expiration des sessions.
-- [ ] Ajouter les textes anglais et français, la langue par utilisateur et les états explicatifs du dashboard.
-- [ ] Couvrir les scénarios d’acceptation de `PROJET.md`, notamment les priorités, les indisponibilités, les accès concurrents et les droits côté serveur.
-- [ ] Tester le redémarrage, les pauses persistées, le déchargement, la désactivation et les changements d’état externes, sans confondre les commandes Halo avec une intervention manuelle.
+- [x] Construire le moteur Python par pièce, le stockage versionné et les commandes WebSocket authentifiées.
+- [x] Ajouter le panneau embarqué TypeScript/Lit, les pièces Home Assistant, la sélection des lumières et les entités des appareils Halo.
+- [x] Implémenter la présence, la luminosité, les pauses manuelles, la reprise et les transitions.
+- [x] Implémenter l’ambiance de base, les profils naturels, leurs associations et les adaptations aux capacités des lampes.
+- [x] Implémenter les scènes conditionnelles ordonnées, leur exposition dans Home Assistant et l’édition réelle avec restauration et expiration des sessions.
+- [x] Ajouter les textes anglais et français, la langue par utilisateur et les états explicatifs du dashboard.
+- [x] Ajouter des tests automatisés des priorités, indisponibilités, accès concurrents, droits côté serveur, stockage et langues.
+- [ ] Achever la validation de tous les scénarios d’acceptation de `PROJET.md` dans une instance Home Assistant avec le matériel cible.
+- [x] Tester localement le rechargement, les pauses persistées, le déchargement, la désactivation et les changements d’état simulés, sans confondre les commandes Halo avec une intervention manuelle.
+- [x] Vérifier plusieurs vues du panneau dans Chrome avec données simulées, en français/anglais, clair/sombre et sur mobile 375 × 812.
 - [ ] Valider sur une instance Home Assistant de test avec des lampes marche/arrêt, dimmables, à température de blanc et à couleur, y compris les transitions prises en charge ou absentes.
 - [ ] Vérifier l’installation, le panneau, les langues et les interactions sur les écrans et thèmes retenus ; consigner les résultats et leurs limites.
-- [ ] Actualiser les statuts dans `PROJET.md` et `DESIGN.md`, et présenter uniquement les fonctions réellement livrées comme disponibles dans le [README](../README.md).
+- [x] Actualiser les statuts dans `PROJET.md` et `DESIGN.md`, et présenter uniquement les fonctions réellement livrées comme disponibles dans le [README](../README.md).
 
 ## 4. Publication, en dernier
 

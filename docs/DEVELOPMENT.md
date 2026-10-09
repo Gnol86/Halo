@@ -2,7 +2,7 @@
 
 ## Périmètre initial
 
-Le domaine est `halo`. L’intégration expose pour l’instant un parcours de configuration et un cycle de vie sans logique d’éclairage. Les futures fonctions s’appuieront sur les lumières déjà connues de Home Assistant. Leur comportement et l’architecture retenue sont définis dans [PROJET.md](../PROJET.md), et les interactions du panneau dans [DESIGN.md](../DESIGN.md). Ces fonctions restent à développer ; les choix esthétiques du dashboard restent à définir.
+Le domaine est `halo`. Une première implémentation comprend le moteur d’éclairage, les appareils par pièce, le stockage, l’API et le panneau embarqué. Le comportement attendu est défini dans [PROJET.md](../PROJET.md), les interactions dans [DESIGN.md](../DESIGN.md) et les contrats de code dans [ARCHITECTURE.md](ARCHITECTURE.md). Les essais matériels et les choix esthétiques définitifs restent à réaliser.
 
 `manifest.json` déclare une intégration de type `service`, une seule entrée de configuration et une classe IoT `calculated` : Halo ne communique pas directement avec un équipement ou un cloud. Réévaluer ces déclarations si le périmètre change.
 
@@ -10,6 +10,8 @@ Le domaine est `halo`. L’intégration expose pour l’instant un parcours de c
 
 - Python 3.14.5, compatible avec le minimum Python 3.14.2 de Home Assistant 2026.10.0.
 - Home Assistant 2026.10.0 et son environnement de tests figés dans `uv.lock`.
+- Frontend officiel Home Assistant 20260930.2 installé comme dépendance de développement pour tester le chargement réel du panneau et de ses dépendances.
+- Node.js 24, npm et dépendances TypeScript/Lit figées dans `package-lock.json` pour construire le bundle du panneau.
 - `uv sync --frozen` installe l’environnement local dans `.venv/`.
 - Les tests utilisent le gestionnaire de configuration réel de Home Assistant et des lumières fictives, sans réseau ni instance domestique.
 
@@ -32,11 +34,36 @@ uv run --frozen ruff format --check .
 uv run --frozen pytest
 ```
 
-Le workflow `Validate` prépare ces contrôles et Hassfest pour les futurs pushes et PR. `HACS readiness` s’exécute uniquement à la demande et ne publie rien. Son succès dépend aussi des métadonnées GitHub, à compléter au jalon de publication.
+Le workflow `Validate` prépare ces contrôles, Hassfest, les tests TypeScript et la cohérence du bundle pour les futurs pushes et PR. `HACS readiness` s’exécute uniquement à la demande et ne publie rien. Son succès dépend aussi des métadonnées GitHub, à compléter au jalon de publication.
 
-Les tests couvrent la confirmation de création, le refus d’une seconde instance, deux configurations simultanées et le cycle chargement/déchargement/rechargement/suppression.
+Les tests couvrent la configuration unique, le cycle de vie, le service du bundle, les appareils dynamiques, les décisions du moteur, les profils naturels, les conditions, les transitions, les sessions d’édition, les permissions, la concurrence des écritures et la persistance des pauses. Les lampes et capteurs sont simulés ; l’API WebSocket et les plateformes Home Assistant sont réelles dans l’environnement de test.
 
-Avant la première version fonctionnelle, effectuer également un essai dans une instance Home Assistant de test : installation manuelle, affichage du lotus en thèmes clair et sombre, textes français et anglais, redémarrage, suppression. Les tests Python ne valident pas le rendu de l’interface.
+Pour le panneau :
+
+```sh
+npm ci
+npm run check
+npm test
+npm run build
+```
+
+Le bundle dans `custom_components/halo/frontend/` doit rester synchronisé avec `frontend/src/`. Le [guide du panneau](../frontend/README.md) explique l’aperçu local avec données simulées. Un contrôle de types ou un test DOM ne remplace pas un essai intégré dans Home Assistant.
+
+Avant une release utilisable, effectuer également un essai dans une instance Home Assistant de test : installation manuelle, rendu du panneau et du lotus en thèmes clair et sombre, textes français et anglais, pilotage des lampes réelles, redémarrage et suppression. Les tests Python ne valident pas le rendu intégré de l’interface.
+
+## Vérifications de la première implémentation — 9 octobre 2026
+
+- Tests Python : **99 réussis**, avec Home Assistant 2026.10.0 et des lampes/capteurs simulés.
+- Ruff : analyse et formatage conformes.
+- Hassfest : **1 intégration, 0 invalide**, exécuté localement avec les mêmes sources officielles que lors de l’initialisation, sans contrôle ignoré.
+- API : contrôles d’accès, conflits de révision, verrou d’édition entre connexions, sauvegarde, restauration et abonnement après rechargement testés.
+- Panneau : contrôle TypeScript et bundle local construits ; aperçu dans Chrome avec données simulées en français/anglais, clair/sombre et à 375 × 812. Aucun débordement horizontal sur les vues examinées.
+- Tests frontend : **16 réussis**, couvrant également les sélections de formulaires, la conservation de la saisie pendant les mises à jour, la reconnexion et l’ordre des aperçus avant enregistrement ou annulation.
+- Non vérifiés : installation du nouveau panneau dans une instance domestique, rendu intégré avec tous les thèmes Home Assistant et comportement des lampes réelles.
+
+Sans contexte restitué par la lampe, une intervention physique produisant exactement la même progression qu’une transition attendue ne peut pas être distinguée avec certitude. Ce comportement et les capteurs lumineux exposés aux lampes nécessitent une validation sur les équipements cibles.
+
+La publication HACS reste un jalon futur. Les vérifications ci-dessus n’ont installé ni activé Halo dans le logement.
 
 ## Vérifications de l’initialisation — 9 octobre 2026
 

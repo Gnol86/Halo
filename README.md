@@ -6,7 +6,7 @@
 
 Une intégration Home Assistant destinée à gérer l’ensemble des lumières du logement.
 
-**Statut : socle de développement.** Halo peut être ajouté dans l’interface de Home Assistant, mais ne pilote encore aucune lumière et ne fournit pas encore de dashboard. Le cahier des charges fonctionnel est défini ; son implémentation reste à réaliser. La publication et le référencement dans HACS sont prévus à la fin du projet.
+**Statut : première version de développement.** Halo dispose d’un panneau embarqué, d’appareils par pièce et d’un moteur d’éclairage. Les vérifications locales utilisent Home Assistant avec des lampes simulées et un navigateur avec des données simulées. Les essais sur une instance domestique et des lampes réelles restent à réaliser. La publication et le référencement dans HACS sont prévus à la fin du projet.
 
 ## Ce qui existe
 
@@ -16,9 +16,9 @@ Une intégration Home Assistant destinée à gérer l’ensemble des lumières d
 - Textes en français et en anglais, icône de lotus embarquée.
 - Tests avec Home Assistant et workflows de validation préparés.
 
-## Fonctionnalités prévues — à développer
+## Première implémentation fonctionnelle
 
-Les comportements retenus sont détaillés dans [PROJET.md](PROJET.md), et les règles d’interface dans [DESIGN.md](DESIGN.md). Aucune des fonctions suivantes n’est encore disponible :
+Les comportements retenus sont détaillés dans [PROJET.md](PROJET.md), et les règles d’interface dans [DESIGN.md](DESIGN.md). Le code et le panneau comprennent maintenant :
 
 - Un panneau **Halo** ajouté automatiquement à la barre latérale après l’installation unique, pour toute la configuration ; pilotage accessible aux utilisateurs et configuration réservée aux administrateurs.
 - Les pièces de Home Assistant, avec sélection explicite des lumières et un appareil par pièce regroupant la commande d’éclairage, les modes automatique et naturel, la reprise et les scènes.
@@ -29,7 +29,9 @@ Les comportements retenus sont détaillés dans [PROJET.md](PROJET.md), et les r
 - Des transitions par type de changement, définies globalement et personnalisables ou désactivables par pièce.
 - L’anglais comme langue de référence, une traduction française suivant la langue de l’interface Home Assistant et un repli en anglais pour les autres langues. Les noms personnalisés restent inchangés.
 
-Les choix esthétiques du dashboard restent à définir. Les étapes d’implémentation et de validation figurent dans la [feuille de route](docs/ROADMAP.md).
+Les pièces nouvellement configurées ont leurs automatismes **désactivés** jusqu’à leur activation. L’interface actuelle utilise une présentation fonctionnelle et les couleurs du thème Home Assistant ; la direction esthétique définitive reste à définir. Les étapes de validation figurent dans la [feuille de route](docs/ROADMAP.md).
+
+Les transitions dépendent des capacités annoncées par chaque lampe. Sur les équipements qui ne restituent pas le contexte des commandes, la distinction entre une transition et une intervention physique repose sur les changements d’état observés et doit encore être vérifiée sur le matériel utilisé.
 
 ## Essai manuel en développement
 
@@ -40,7 +42,10 @@ La version de référence et le minimum déclaré sont **Home Assistant 2026.10.
 3. Ouvrir **Paramètres → Appareils et services → Ajouter une intégration**.
 4. Rechercher **Halo**, puis confirmer la configuration.
 
-Cette étape crée seulement l’entrée d’intégration. Il est normal de ne voir aucune nouvelle entité ni action. Pour la retirer, supprimer son entrée dans **Appareils et services**, puis son dossier si nécessaire.
+5. Ouvrir **Halo** dans la barre latérale, configurer une pièce, sélectionner ses lampes puis enregistrer. La configuration est réservée aux administrateurs.
+6. Vérifier les commandes de la pièce, renseigner les capteurs et profils souhaités, puis activer les automatismes lorsque les réglages sont prêts.
+
+Le dossier à copier contient déjà le bundle du panneau ; aucune compilation ni carte supplémentaire n’est nécessaire dans Home Assistant. Après remplacement du bundle pendant le développement, recharger également la page du navigateur. Pour retirer Halo, supprimer son entrée dans **Appareils et services**, puis son dossier si nécessaire.
 
 ## Développement
 
@@ -53,6 +58,17 @@ uv run --frozen ruff format --check .
 uv run --frozen pytest
 ```
 
+Pour modifier le panneau, utiliser Node.js 24 et npm :
+
+```sh
+npm ci
+npm run check
+npm test
+npm run build
+```
+
+Le bundle généré doit accompagner toute modification des sources TypeScript. Le [guide du panneau](frontend/README.md) fournit un aperçu local avec des données simulées.
+
 Le fichier `.python-version` fixe Python 3.14.5 ; `uv.lock` fixe les dépendances des tests. Aucune dépendance Python externe n’est requise par Halo dans l’instance Home Assistant.
 
 Ce README, `PROJET.md` et `DESIGN.md` sont maintenus à jour en temps réel. Toute évolution doit être répercutée dans les documents concernés au cours de la même tâche, selon les consignes d’`AGENTS.md`.
@@ -61,6 +77,7 @@ Ce README, `PROJET.md` et `DESIGN.md` sont maintenus à jour en temps réel. Tou
 - [Projet et fonctionnalités](PROJET.md)
 - [Design du dashboard](DESIGN.md)
 - [Conventions de développement](docs/DEVELOPMENT.md)
+- [Architecture et API du panneau](docs/ARCHITECTURE.md)
 - [Documentation HACS étudiée et publication future](docs/HACS.md)
 - [Feuille de route](docs/ROADMAP.md)
 - [Icône et source graphique](assets/branding/README.md)

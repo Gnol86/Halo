@@ -1,0 +1,13 @@
+{
+  "name": "halo-panel",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "build": "esbuild frontend/src/halo-panel.ts --bundle --minify --format=esm --target=es2022 --legal-comments=eof --outfile=custom_components/halo/frontend/halo-panel.js",
+    "check": "tsc --noEmit",
+    "test": "tsx --test frontend/tests/*.test.ts"
+  },
+  "dependencies": { "lit": "^3.3.1" },
+  "devDependencies": { "@types/node": "^24.0.0", "esbuild": "^0.25.0", "happy-dom": "^20.0.0", "tsx": "^4.20.0", "typescript": "^5.9.0" }
+}

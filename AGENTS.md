@@ -10,9 +10,9 @@
 
 Halo est une intégration personnalisée Home Assistant destinée à gérer toutes les lumières du logement. Son domaine est `halo` et son symbole est une fleur de lotus.
 
-Le socle initial contient la configuration depuis l’interface, une seule instance par logement, le cycle de vie de l’intégration, les traductions françaises et anglaises, les icônes et les validations. La logique de gestion des lumières et le dashboard restent à construire. Relire l’état courant du code et des documents avant toute intervention.
+Le projet contient une première implémentation du moteur d’éclairage, des entités par pièce et du panneau embarqué TypeScript/Lit, en plus du socle d’installation unique et des traductions. Des tests locaux couvrent le moteur, les plateformes, la persistance, l’API et le panneau. Les essais sur une instance domestique et les lampes réelles restent à faire. Relire l’état courant du code et des documents avant toute intervention.
 
-Le cahier des charges fonctionnel est désormais acté dans `PROJET.md` : panneau unique, appareils par pièce, présence et luminosité, pause manuelle, profils naturels, scènes et transitions. Les règles d’interface actées se trouvent dans `DESIGN.md` ; la direction esthétique reste à définir. Ne pas confondre cette spécification avec une implémentation.
+Le cahier des charges fonctionnel est acté dans `PROJET.md` : panneau unique, appareils par pièce, présence et luminosité, pause manuelle, profils naturels, scènes et transitions. Les règles d’interface actées se trouvent dans `DESIGN.md` ; la direction esthétique reste à définir. La présentation fonctionnelle actuelle n’est pas une charte esthétique définitivement validée. Les contrats de code sont décrits dans [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 L’anglais est la langue de référence du produit. Le panneau doit suivre la langue effective de l’interface Home Assistant : français pour `fr` et ses variantes, anglais autrement, avec des catalogues extensibles. Préserver les noms personnalisés et les identifiants techniques. Cette règle produit ne change pas la communication avec Arnaud, qui reste en français.
 
@@ -49,6 +49,7 @@ Ces mises à jour font partie du travail demandé ; elles ne nécessitent pas un
 - Métadonnées Home Assistant : `custom_components/halo/manifest.json` ; métadonnées HACS : `hacs.json`.
 - Tests : `tests/` ; environnement de développement : `pyproject.toml`, `.python-version` et `uv.lock`.
 - Icônes embarquées : `custom_components/halo/brand/` ; source et prompt : `assets/branding/`.
+- Sources du panneau : `frontend/src/` ; bundle à reconstruire et distribuer : `custom_components/halo/frontend/halo-panel.js`.
 - Workflows de validation : `.github/workflows/`. Leur présence ne prouve pas leur exécution ni une publication.
 
 Inspecter l’état Git et préserver les changements existants. Pour une modification de code, exécuter les vérifications adaptées :
@@ -59,5 +60,7 @@ uv run --frozen ruff check .
 uv run --frozen ruff format --check .
 uv run --frozen pytest
 ```
+
+Pour le panneau (Node.js 24), exécuter `npm ci`, `npm run check`, `npm test` et `npm run build`. Conserver le bundle synchronisé avec les sources ; le workflow vérifie sa reproductibilité. Les aperçus avec données simulées ne doivent pas être présentés comme un essai dans Home Assistant.
 
 Pour une modification uniquement documentaire, vérifier les liens, la cohérence et le contenu ; ne pas relancer les tests applicatifs sans raison. Les résultats historiques sont consignés dans `docs/DEVELOPMENT.md` et ne remplacent pas une validation des changements ultérieurs.

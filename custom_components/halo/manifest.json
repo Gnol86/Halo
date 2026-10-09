@@ -3,6 +3,7 @@
   "name": "Halo",
   "codeowners": ["@Gnol86"],
   "config_flow": true,
+  "dependencies": ["frontend", "http", "panel_custom", "websocket_api"],
   "documentation": "https://github.com/Gnol86/Halo",
   "integration_type": "service",
   "iot_class": "calculated",

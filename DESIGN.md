@@ -6,7 +6,7 @@ Ce document est la référence des règles de design du dashboard de Halo : appa
 
 ## État actuel
 
-**Le dashboard n’est pas encore implémenté.** Son organisation, ses contrôles et les interactions décrites ci-dessous sont **actés, à développer**. Ils n’ont pas été vérifiés dans une interface Halo ou sur des lampes réelles.
+**Une première version fonctionnelle du dashboard est implémentée.** Son organisation et ses interactions reprennent les règles actées ci-dessous. Des tests DOM et un aperçu dans Chrome avec données simulées vérifient plusieurs parcours, langues, tailles d’écran et thèmes. L’intégration complète du rendu dans Home Assistant et les essais sur des lampes réelles restent à réaliser.
 
 Les choix esthétiques détaillés restent à définir dans la section « Règles à définir ». Les textes français de ce document décrivent les contrôles attendus ; la langue de référence de l’interface sera l’anglais.
 
@@ -21,7 +21,7 @@ L’icône actuelle emploie des tons chauds. Ces couleurs ne constituent pas, à
 
 ## Accès, navigation et droits
 
-**Statut : acté, à développer.**
+**Statut : implémenté dans la première version de développement ; validation matérielle à réaliser.**
 
 - L’ajout de l’unique instance Halo crée automatiquement un panneau **Halo** dans la barre latérale Home Assistant. Aucune carte séparée ni configuration YAML n’est nécessaire.
 - La vue principale présente les pièces de Home Assistant et distingue celles configurées dans Halo des autres.
@@ -30,11 +30,11 @@ L’icône actuelle emploie des tons chauds. Ces couleurs ne constituent pas, à
 - Les utilisateurs peuvent piloter les pièces et lancer les scènes. La modification de la configuration est réservée aux administrateurs. Ces droits sont contrôlés côté serveur ; masquer un contrôle dans le panneau ne suffit pas.
 - Le moteur fonctionne indépendamment de l’ouverture du panneau. Fermer le dashboard ne suspend pas l’automatisation, hors libération de la session temporaire d’édition décrite plus bas.
 
-Le choix entre onglets, sous-pages ou sections au sein d’une page reste une décision de mise en page à définir.
+L’implémentation actuelle utilise une liste de pièces, une page par pièce avec sections et une page globale. Cette présentation fonctionnelle reste ajustable lors de la définition esthétique.
 
 ## Configuration et pilotage d’une pièce
 
-**Statut : acté, à développer.**
+**Statut : implémenté dans la première version de développement ; validation matérielle à réaliser.**
 
 ### Lumières et capacités
 
@@ -77,7 +77,7 @@ L’affichage distingue cette pause de la désactivation générale de l’autom
 
 ## Profils de lumière naturelle
 
-**Statut : acté, à développer.**
+**Statut : implémenté dans la première version de développement ; validation matérielle à réaliser.**
 
 La configuration globale permet de sélectionner une entité soleil et de créer, nommer et modifier des profils réutilisables. L’éditeur de profil présente séparément :
 
@@ -95,7 +95,7 @@ L’indisponibilité du soleil doit apparaître comme une suspension des ajustem
 
 ## Scènes, conditions et édition en direct
 
-**Statut : acté, à développer.**
+**Statut : implémenté dans la première version de développement ; validation matérielle à réaliser.**
 
 ### Liste et conditions
 
@@ -123,11 +123,11 @@ L’éditeur ajuste les lampes en temps réel à partir de contrôles adaptés �
 - Une fermeture ou une perte de connexion libère la session après expiration, sans laisser une suspension permanente.
 - L’automatisation ne doit pas être réactivée à la sortie de l’éditeur si elle était désactivée avant l’édition.
 
-Le nom et les conditions de la scène se configurent dans ce parcours. L’organisation précise des champs et des étapes reste à définir.
+Le nom et les conditions de la scène se configurent dans ce parcours. L’implémentation actuelle les présente avec les contrôles de lampe dans une vue d’édition dédiée ; sa présentation visuelle reste à affiner.
 
 ## Transitions des lumières
 
-**Statut : acté, à développer.** Ces transitions portent sur les commandes des lampes. Les animations de l’interface restent un sujet esthétique distinct, à définir.
+**Statut : implémenté dans la première version de développement ; validation matérielle à réaliser.** Ces transitions portent sur les commandes des lampes. Les animations de l’interface restent un sujet esthétique distinct, à définir.
 
 Les réglages présentent cinq catégories avec leurs valeurs en **secondes** :
 
@@ -149,7 +149,7 @@ Un champ vide en configuration explicite omet le paramètre de transition. Il se
 
 ## États et retours de fonctionnement
 
-**Statut : acté, à développer.**
+**Statut : implémenté dans la première version de développement ; validation matérielle à réaliser.**
 
 La pièce présente son état réel et la raison du comportement courant. Les informations à rendre explicites comprennent :
 
@@ -163,7 +163,7 @@ Une mesure absente ou inconnue ne doit jamais être affichée comme une valeur z
 
 ## Langues et textes
 
-**Statut : acté, à développer pour le panneau.** Les traductions françaises et anglaises du socle de l’intégration existent déjà.
+**Statut : implémenté et testé localement.** Les catalogues anglais et français du panneau et les traductions natives de l’intégration sont présents.
 
 - **L’anglais est la langue de référence.** Tous les textes Halo disposent également d’une traduction française.
 - Le panneau suit la langue effective de l’interface Home Assistant de l’utilisateur : français pour `fr` et ses variantes, anglais pour les autres langues.
@@ -191,7 +191,7 @@ Les rubriques suivantes servent à recueillir les prochaines décisions ; elles 
 
 ## Vérifications prévues
 
-**Aucune des vérifications du futur dashboard ci-dessous n’est encore réalisée.** Elles complètent les scénarios fonctionnels de `PROJET.md` :
+**Les vérifications complètes dans Home Assistant restent à réaliser.** Les tests locaux et l’aperçu dans Chrome avec données simulées couvrent une partie de ces points ; leurs résultats figurent dans [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md). La liste complète reste la référence de validation :
 
 - Accès au panneau après l’installation unique, navigation des pièces et droits utilisateur/administrateur.
 - Sélection des lumières, contraintes d’affectation et contrôles adaptés aux quatre familles de lampes.

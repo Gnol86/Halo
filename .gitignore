@@ -12,3 +12,4 @@ coverage.xml
 !.env.example
 config/
 tmp/
+node_modules/
