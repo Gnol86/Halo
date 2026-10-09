@@ -1,0 +1,13 @@
+{
+  "config": {
+    "abort": {
+      "already_configured": "Halo est déjà configuré pour ce logement."
+    },
+    "step": {
+      "user": {
+        "title": "Configurer Halo",
+        "description": "Halo réunira la gestion des lumières de ton logement. Cette version de développement prépare uniquement l’intégration : elle ne commande encore aucune lumière."
+      }
+    }
+  }
+}

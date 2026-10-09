@@ -1,0 +1,13 @@
+{
+  "config": {
+    "abort": {
+      "already_configured": "Halo is already configured for this home."
+    },
+    "step": {
+      "user": {
+        "title": "Set up Halo",
+        "description": "Halo will bring your home's lighting together. This development version only prepares the integration: it does not control any lights yet."
+      }
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "domain": "halo",
+  "name": "Halo",
+  "codeowners": ["@Gnol86"],
+  "config_flow": true,
+  "documentation": "https://github.com/Gnol86/Halo",
+  "integration_type": "service",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/Gnol86/Halo/issues",
+  "requirements": [],
+  "single_config_entry": true,
+  "version": "0.0.1.dev0"
+}

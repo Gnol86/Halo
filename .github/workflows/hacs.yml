@@ -1,0 +1,17 @@
+name: HACS readiness
+
+# Run manually at the publication milestone. Validation does not publish Halo.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: hacs/action@main
+        with:
+          category: integration
+          comment: false
