@@ -4,11 +4,23 @@ Les comportements produit restent définis dans [PROJET.md](../PROJET.md). Cette
 
 ## Cycle de vie et stockage
 
-`async_setup_entry` charge un `HaloManager` dans `ConfigEntry.runtime_data`, démarre les moteurs des pièces enregistrées, inscrit le panneau et charge les plateformes `light`, `switch`, `button` et `scene`. Le déchargement libère les abonnements, les temporisations et le panneau.
+`async_setup_entry` charge un `HaloManager` dans `ConfigEntry.runtime_data`, démarre les moteurs des pièces enregistrées, inscrit le panneau et charge les plateformes `light`, `switch`, `button`, `scene` et `sensor`. Le déchargement libère les abonnements, les temporisations et le panneau.
 
 La configuration et les échéances de pause sont enregistrées avec `homeassistant.helpers.storage.Store`, version 1, sous la clé `halo.<entry_id>`. Les écritures sont atomiques ; un état inchangé ne provoque pas une nouvelle écriture. La suppression de l’intégration supprime son stockage. Une erreur de lecture ou de validation ne doit pas remplacer la sauvegarde par une configuration vide.
 
 Le document enregistré contient `config`, `revision` et `runtime`. La révision évite qu’une sauvegarde provenant d’un ancien écran écrase une modification plus récente. Les noms de pièces proviennent du registre des zones Home Assistant ; leurs identifiants assurent la stabilité des appareils.
+
+### Capteur d’état de la pièce
+
+**Implémenté ; tests locaux du moteur et des plateformes Home Assistant avec lampes simulées.** La plateforme `sensor` ajoute un capteur `Status` par pièce au même appareil que les autres entités Halo, avec une identité liée à l’identifiant stable de zone. Il suit les notifications du moteur sans scrutation ni dépendance au panneau. Le cycle de vie commun assure l’ajout et le retrait dynamiques, le rechargement et la libération de son abonnement.
+
+Le capteur rapporte `off`, `manual`, `natural` ou le nom d’une scène active. Les trois valeurs fixes utilisent les traductions natives anglaises/françaises ; les noms personnalisés ne sont pas traduits. L’absence totale de lampe disponible rend l’entité indisponible. Sinon, l’absence de lampe allumée impose `off`, puis une session d’édition impose `manual`. Un nom de scène n’est exposé que pour une scène conditionnelle effectivement appliquée ou une scène explicitement lancée pendant sa pause ; une scène dont les conditions sont simplement vraies ne suffit pas. Le lancement explicite peut rester nommé avec l’automatisation désactivée, jusqu’à une nouvelle intervention manuelle ou à la fin de son application.
+
+Hors scène, `natural` exige une application naturelle active et au moins une lampe allumée dans une association concernée. Les autres cas allumés utilisent `manual`, notamment la pause sans scène, le mode automatique désactivé et l’ambiance de base seule. Cette synthèse ne change pas le contrat de statut détaillé envoyé au panneau.
+
+Les attributs `mode`, `scene_id` et `scene_name` permettent de consommer cet état sans dépendre du nom affiché : `mode` vaut `off`, `manual`, `natural` ou `scene` ; les deux attributs de scène valent `null` hors scène. Un nom exactement égal à `off`, `manual`, `natural`, `unknown` ou `unavailable` est préfixé par `scene: ` dans la valeur du capteur pour éviter les traductions des états fixes et les sentinelles Home Assistant. `scene_name` conserve le nom exact dans tous les cas.
+
+Le capteur utilise le contrat officiel de [l’entité Sensor](https://developers.home-assistant.io/docs/core/entity/sensor/) et les [traductions d’états d’entités](https://developers.home-assistant.io/docs/internationalization/core/#state-of-entities). L’ajout n’a pas encore fait l’objet d’un essai navigateur ou domestique.
 
 ## Configuration
 

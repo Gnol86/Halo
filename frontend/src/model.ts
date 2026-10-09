@@ -19,8 +19,8 @@ export function newRoom(id: string): Room {
     base: {}, associations: [], scenes: [] };
 }
 export function newProfile(id: string, name: string): Profile {
-  const morning: Profile["morning"] = { brightness: { low_elevation: -6, high_elevation: 45, low: 20, high: 100, interpolation: "linear" },
-    temperature: { low_elevation: -6, high_elevation: 45, low: 2200, high: 6500, interpolation: "linear" } };
+  const morning: Profile["morning"] = { brightness: { low_elevation: -20, high_elevation: 20, low: 40, high: 100, interpolation: "linear" },
+    temperature: { low_elevation: 0, high_elevation: 20, low: 2000, high: 5500, interpolation: "linear" } };
   return { id, name, linked: true, morning, evening: structuredClone(morning) };
 }
 export function curveInterpolation(curve: Curve): CurveInterpolation {

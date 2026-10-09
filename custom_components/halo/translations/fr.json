@@ -28,6 +28,16 @@
       "resume": {
         "name": "Reprendre l’automatisation"
       }
+    },
+    "sensor": {
+      "room_status": {
+        "name": "État",
+        "state": {
+          "off": "Éteint",
+          "manual": "Manuel",
+          "natural": "Lumière naturelle"
+        }
+      }
     }
   }
 }

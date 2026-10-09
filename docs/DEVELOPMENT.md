@@ -51,6 +51,15 @@ Le bundle dans `custom_components/halo/frontend/` doit rester synchronisé avec 
 
 Avant une release utilisable, effectuer également un essai dans une instance Home Assistant de test : installation manuelle, rendu du panneau et du lotus en thèmes clair et sombre, textes français et anglais, pilotage des lampes réelles, redémarrage et suppression. Les tests Python ne valident pas le rendu intégré de l’interface.
 
+## Capteur d’état par pièce — 9 octobre 2026
+
+Chaque appareil de pièce comprend maintenant un capteur `Status` / `État`. Il expose `off`, `manual`, `natural` avec traductions natives ou le nom de la scène active ; les attributs `mode`, `scene_id` et `scene_name` permettent d’identifier une scène indépendamment de son nom. Les lampes réellement éteintes et leur indisponibilité priment sur le mode d’éclairage. Cet ajout ne modifie pas les décisions du moteur ni les commandes aux lampes.
+
+- `uv sync --frozen`, Ruff (analyse et format) et **232 tests Python réussis** dans l’environnement Home Assistant 2026.10.0, avec lampes simulées.
+- Nouveaux cas : transitions naturel/scène/manuel/éteint, scène simplement sélectionnée, scène explicite avec effet et pause conservée après redémarrage, édition, pause nulle, capteur amont indisponible, lampes indisponibles puis disponibles, renommages, cycle de vie des entités et traductions anglaises/françaises. Les noms de scène correspondant aux états réservés sont également couverts.
+- Les tests de plateformes et du gestionnaire vérifient l’ajout au même appareil, la mise à jour événementielle sans panneau, le rechargement avec identité conservée et le retrait des entités.
+- Aucun changement frontend pour cet ajout ; le bundle et le tri des pièces issus de la tâche précédente sont conservés. Aucun nouvel essai navigateur, déploiement domestique ni commande sur du matériel réel n’a été effectué pour ce capteur.
+
 ## Refonte compacte du dashboard — 9 octobre 2026
 
 La navigation adopte une liste de pièces et un panneau de détail, avec pilotage prioritaire, cinq rubriques par pièce et un éditeur de profil naturel à la fois. Sur mobile, la liste et le détail se succèdent. Le moteur, le stockage et les contrats API restent inchangés.

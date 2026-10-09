@@ -350,7 +350,7 @@ test("profile details preserve separate drafts and block leaving an invalid sola
   profileLinks()[0].click(); await settle(panel);
   assert.equal(inputByLabel(panel, "Nom").value, "Chaud personnalisé");
   const high = inputByLabel(panel, "Hauteur solaire haute");
-  high.value = "-10"; high.dispatchEvent(new Event("input", { bubbles: true })); await settle(panel);
+  high.value = "-30"; high.dispatchEvent(new Event("input", { bubbles: true })); await settle(panel);
   for (const target of [profileLinks()[1], button(panel, "Nouveau profil"), button(panel, "Pièces"), button(panel, "Enregistrer les modifications")]) {
     target.click(); await settle(panel);
     assert.equal(inputByLabel(panel, "Nom").value, "Chaud personnalisé");

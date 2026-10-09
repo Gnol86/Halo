@@ -206,7 +206,7 @@ Le cadre occupe la hauteur disponible du panneau. L’en-tête et la barre de sa
 ### Navigation globale et disposition adaptative
 
 - Trois entrées : **Pièces**, **Profils de lumière naturelle** et **Réglages globaux** ; les deux dernières sont réservées aux administrateurs.
-- Sur grand écran, la colonne des pièces (264px) reste visible à gauche du détail ; elle passe à (224px) jusqu’au seuil intermédiaire (1100px). Elle contient recherche, nombre de pièces, nom, état, nombre de lumières et commande rapide.
+- Sur grand écran, la colonne des pièces (264px) reste visible à gauche du détail ; elle passe à (224px) jusqu’au seuil intermédiaire (1100px). Elle contient recherche, nombre de pièces, nom, état, nombre de lumières et commande rapide. Sur tous les écrans, les pièces configurées dans le brouillon courant précèdent les autres, avec l’ordre fourni par Home Assistant préservé dans chaque catégorie, y compris pendant la recherche.
 - À (760px) et en dessous, les pièces passent à une liste puis un détail avec retour explicite. Les onglets de pièce défilent horizontalement si nécessaire. Le détail ne juxtapose plus la liste à son contenu.
 - Les profils ont une liste (240px) et un seul éditeur affiché. Sur petit écran, la liste précède l’éditeur dans le même défilement ; elle ne devient pas une seconde pile d’éditeurs.
 - Les réglages globaux, l’éditeur de scène et l’import limitent leur contenu à (980px). Les grilles de courbes et de champs s’adaptent à leur largeur disponible.
@@ -298,6 +298,8 @@ La page de pièce expose les commandes correspondant à l’appareil Home Assist
 - L’état allumé/éteint de la pièce reflète les lampes réelles : allumé dès qu’une lampe est allumée, indisponible lorsqu’aucune lampe n’est disponible.
 - L’ambiance de base permet d’enregistrer les réglages de référence par lampe. Pour une lampe sans réglage enregistré, l’interface explique que l’allumage conserve les réglages propres à la lampe.
 
+L’appareil Home Assistant de chaque pièce expose également un capteur **État** (`Status`). Cet affichage synthétique distingue **Éteint**, **Manuel**, **Lumière naturelle** et le nom de la scène active, sans traduire les noms personnalisés. L’indisponibilité de toutes les lampes reste un état indisponible, jamais une extinction supposée. L’extinction réelle prime sur le mode ; l’édition en direct apparaît comme manuelle. Une scène explicitement lancée reste identifiable pendant sa pause, y compris lorsque les automatismes sont désactivés. Les états fixes suivent les traductions natives anglaises/françaises de Home Assistant. Le capteur ne remplace pas les retours détaillés du panneau sur les pauses, l’absence, la luminosité et les données indisponibles. Il est implémenté, avec des tests locaux du moteur et des plateformes Home Assistant utilisant des lampes simulées ; aucun essai navigateur ou matériel n’est revendiqué pour cet ajout.
+
 #### Présence, luminosité et pause manuelle
 
 La configuration de présence permet de choisir une entité de mouvement, de présence ou personnalisée et de renseigner les états signifiant « présent ». Le délai d’absence est modifiable, avec une valeur initiale de **0 seconde**.
@@ -317,6 +319,8 @@ L’affichage distingue cette pause de la désactivation générale de l’autom
 ### Profils de lumière naturelle
 
 **Statut : implémenté dans la première version de développement ; validation matérielle à réaliser.**
+
+L’action **Nouveau profil** préremplit la luminosité à **40 % pour −20°** et **100 % pour 20°**, et la température à **2 000 K pour 0°** et **5 500 K pour 20°**. Les courbes sont linéaires, avec matin et soir liés. Ces valeurs restent modifiables et n’écrasent pas celles des profils existants.
 
 La vue dédiée aux profils permet de créer, nommer et modifier les profils réutilisables, avec un seul éditeur affiché à la fois. L’entité soleil se sélectionne dans les réglages globaux. L’éditeur de profil présente séparément :
 

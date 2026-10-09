@@ -20,6 +20,7 @@ Limite vérifiée le 9 octobre 2026 : HACS 2.0.5 ne charge pas les icônes embar
 | --- | --- |
 | Socle d’intégration et configuration unique | Implémenté ; vérifications initiales décrites dans la documentation de développement. |
 | Panneau, configuration des pièces et appareils | Refonte compacte implémentée ; tests de navigation et de brouillons, essais ciblés dans Home Assistant isolé et aperçus adaptatifs. |
+| Capteur d’état de chaque pièce | Implémenté ; tests locaux du moteur et des plateformes Home Assistant avec lampes simulées ; validation sur les équipements du logement à réaliser. |
 | Présence, luminosité, pause manuelle et reprise | Implémenté ; tests avec capteurs et lampes simulés. |
 | Ambiance de base et profils naturels | Implémenté ; calculs et adaptation aux capacités testés localement. |
 | Scènes, conditions, priorités et édition en direct | Implémenté ; tests locaux des priorités, sessions et restaurations. |
@@ -40,7 +41,7 @@ Home Assistant fournit un mécanisme de panneau personnalisé pour cette interfa
 
 Le panneau propose trois entrées : **Pièces**, **Profils de lumière naturelle** et **Réglages globaux**. Les deux dernières sont réservées aux administrateurs.
 
-- Les pièces récupérées depuis Home Assistant sont regroupées dans une liste recherchable, avec état, nombre de lumières et commande d’allumage/extinction. Les pièces non configurées restent identifiables et accessibles pour leur configuration.
+- Les pièces récupérées depuis Home Assistant sont regroupées dans une liste recherchable, avec état, nombre de lumières et commande d’allumage/extinction. Les pièces non configurées restent identifiables et accessibles pour leur configuration. La liste place les pièces configurées dans le brouillon courant avant les autres, conserve l’ordre fourni par Home Assistant dans chaque catégorie et maintient ce classement pendant la recherche.
 - Sur grand écran, la liste reste visible à gauche du détail sélectionné ; sur mobile, la liste et le détail se succèdent avec un retour explicite. L’accueil invite à choisir une pièce.
 - Le détail donne d’abord accès à l’état réel, aux commandes et aux modes de la pièce. Ses cinq onglets sont **Pilotage** (scènes), **Lumières** (affectation), **Automatisation** (présence, luminosité, pause), **Ambiances** (associations naturelles et ambiance de base) et **Réglages** (transitions locales et suppression). Les utilisateurs ordinaires conservent le pilotage ; les réglages restent administrateurs.
 - Les profils naturels disposent d’une liste et d’un seul éditeur affiché à la fois. L’entité soleil et les transitions par défaut restent dans les réglages globaux.
@@ -101,12 +102,28 @@ Tous les sélecteurs d’entités proposent une recherche immédiate par nom ou 
 | Entité | Fonction attendue |
 | --- | --- |
 | Lumière de la pièce | Allumer selon l’ambiance applicable ; éteindre toutes les lumières sélectionnées. |
+| Capteur d’état | Afficher « Éteint », « Manuel », « Lumière naturelle » ou le nom de la scène active. |
 | Interrupteur d’éclairage automatique | Autoriser ou suspendre tous les automatismes Halo de la pièce. |
 | Interrupteur de lumière naturelle | Activer ou désactiver l’application des profils naturels, sous réserve du mode automatique et des pauses. |
 | Bouton de reprise | Réactiver l’automatisation, annuler la pause manuelle et réévaluer la pièce. |
 | Entités scène Halo | Permettre le lancement explicite des scènes depuis Home Assistant, notamment d’autres dashboards ou automatisations. |
 
 La lumière de commande reflète les états réels : allumée si au moins une lampe est allumée, éteinte si aucune lampe disponible n’est allumée, indisponible si aucune lampe n’est disponible.
+
+Le capteur **État** (`Status` en anglais) appartient au même appareil. Il se met à jour avec les événements de la pièce, même lorsque le panneau est fermé. Son identité suit l’identifiant stable de la pièce ; un renommage ne le recrée pas. Son ajout, son retrait et son rechargement suivent ceux des autres entités de la pièce.
+
+Son affichage applique les priorités suivantes :
+
+1. **Indisponible** lorsqu’aucune lampe n’est disponible.
+2. **Éteint** lorsqu’aucune lampe disponible n’est allumée, même si une pause ou une scène est encore sélectionnée.
+3. **Manuel** pendant l’édition réelle d’une scène.
+4. Le **nom de la scène active** lorsqu’une scène conditionnelle est effectivement appliquée ou lorsqu’une scène a été lancée explicitement pendant la pause manuelle. Ce dernier cas reste nommé même si l’automatisation générale est désactivée ; une nouvelle intervention manuelle met fin à cette attribution.
+5. **Lumière naturelle** lorsque le moteur applique les profils naturels et qu’au moins une lampe concernée est allumée.
+6. **Manuel** dans les autres cas allumés, notamment une pause hors scène, l’automatisation désactivée ou l’ambiance de base sans profil naturel actif.
+
+Les états fixes `off`, `manual` et `natural` disposent de traductions natives Home Assistant en anglais et en français. Les noms de scène sont conservés sans traduction. Ce capteur synthétique peut être utilisé dans les autres dashboards et automatisations ; il ne remplace pas le statut détaillé du panneau, qui continue à expliquer présence, luminosité, pauses et indisponibilités.
+
+Pour les automatisations, l’attribut `mode` conserve une valeur stable (`off`, `manual`, `natural` ou `scene`), accompagnée de `scene_id` et `scene_name` pour une scène active. Si le nom est exactement `off`, `manual`, `natural`, `unknown` ou `unavailable`, la valeur du capteur devient `scene: <nom>` afin d’éviter une traduction accidentelle ou un état réservé Home Assistant. L’attribut `scene_name` conserve toujours le nom exact.
 
 Couper l’éclairage automatique conserve les réglages et l’état courant des lampes. Cela suspend la présence, les scènes conditionnelles, les ajustements naturels et les extinctions automatiques. Les commandes explicites restent utilisables. Le choix de lumière naturelle est conservé pour une réactivation ultérieure.
 
@@ -177,6 +194,8 @@ Chaque profil définit deux courbes indépendantes :
 
 - Une courbe de température de blanc : deux hauteurs solaires et les valeurs associées en kelvins.
 - Une courbe de luminosité : deux hauteurs solaires et les valeurs associées en pourcentage.
+
+À la création d’un profil, la luminosité va de **40 % à −20°** à **100 % à 20°**, et la température de **2 000 K à 0°** à **5 500 K à 20°**. Ces valeurs reprennent celles de l’ancien script avec le minimum de luminosité arrondi à 40 %. Les deux courbes sont linéaires et le matin/soir reste lié par défaut ; ces nouveaux défauts ne modifient aucun profil déjà enregistré.
 
 Chaque courbe propose un **type de courbe** :
 
@@ -347,6 +366,8 @@ Ces valeurs sont les valeurs par défaut retenues et appliquées dans la premiè
 | Transitions globales | Allumage habituel : 0 s ; baisse de luminosité : 10 s ; ajustement naturel : 60 s ; scène : 10 s ; extinction : 2 s. |
 | Transitions par pièce | Héritage des valeurs globales. |
 | Courbes matin/soir d’un profil | Liées. |
+| Luminosité d’un nouveau profil | 40 % à −20° ; 100 % à 20° ; courbe linéaire. |
+| Température d’un nouveau profil | 2 000 K à 0° ; 5 500 K à 20° ; courbe linéaire. |
 | Extinction sur forte luminosité | Désactivée. |
 | Extinction automatique pendant la pause manuelle | Autorisée ; configurable par pièce. |
 | Délai d’absence | 0 seconde, modifiable. |
@@ -414,6 +435,7 @@ Pour la refonte du 9 octobre 2026, les **52 tests frontend** (43 du panneau, 9 d
 | A45 | Modifier plusieurs sous-vues ou profils avant une sauvegarde ; saisir une valeur invalide puis naviguer ou abandonner. | Brouillon conservé ; navigation bloquée sur une erreur révélée et focalisée ; abandon restaurant les valeurs enregistrées. |
 | A46 | Parcourir les onglets au clavier puis importer ou éditer une scène. | Flèches, Début et Fin déplacent l’onglet actif et le focus ; navigation bloquée pendant l’édition réelle ; retour au pilotage et focus approprié. |
 | A47 | Changer le thème Home Assistant, agrandir la police et activer la réduction des mouvements. | Couleurs, typographie et contrôles suivent le thème ; aucune palette Halo imposée ; contenu accessible et animations supprimées lorsque demandé. |
+| A48 | Observer le capteur d’état pendant un allumage naturel, une scène conditionnelle ou explicite, une intervention manuelle, une édition, une extinction et une indisponibilité ; renommer et recharger la pièce. | État conforme aux priorités ci-dessus, nom de scène conservé avec préfixe pour les noms réservés, attributs stables, traductions anglaises/françaises des états fixes, mises à jour sans panneau ouvert et identité conservée. |
 
 Pour chaque scénario réalisé, consigner son résultat, la version examinée et le périmètre : test automatisé, essai d’interface ou essai sur des lumières réelles. Une fonctionnalité implémentée n’est pas automatiquement validée dans Home Assistant.
 

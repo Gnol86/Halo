@@ -94,6 +94,39 @@ class HaloRoomEngine:
             for entity_id in self.room["lights"]
         )
 
+    @property
+    def lighting_status(self) -> dict[str, str | None] | None:
+        """Describe the current ambience, distinct from a pending decision.
+
+        Real lamp availability and power take precedence. A condition matching
+        a scene alone is not enough to report that scene as the active ambience.
+        This is the engine's operating mode, not a measurement of lamp colors.
+        """
+        if not self.available:
+            return None
+        if not self.is_on:
+            return {"mode": "off", "scene_id": None}
+        manual = {"mode": "manual", "scene_id": None}
+        if self._edit:
+            return manual
+        paused = self._runtime.get("pause_until", 0) > dt_util.utcnow().timestamp()
+        scene_id = (
+            self._runtime.get("manual_scene_id")
+            if paused
+            else self._applied_scene
+            if self.room.get("automation_enabled") and self._reason == "scene"
+            else None
+        )
+        if scene_id and any(
+            scene["id"] == scene_id for scene in self.room.get("scenes", [])
+        ):
+            return {"mode": "scene", "scene_id": scene_id}
+        if paused or not self.room.get("automation_enabled"):
+            return manual
+        if self._natural_targets(only_on=True):
+            return {"mode": "natural", "scene_id": None}
+        return manual
+
     @staticmethod
     def _iso(timestamp: float | None) -> str | None:
         return dt_util.utc_from_timestamp(timestamp).isoformat() if timestamp else None

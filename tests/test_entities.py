@@ -10,11 +10,18 @@ from homeassistant.core import Context, HomeAssistant
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.translation import async_get_translations
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.halo.const import DOMAIN
 
-PLATFORMS = [Platform.LIGHT, Platform.SWITCH, Platform.BUTTON, Platform.SCENE]
+PLATFORMS = [
+    Platform.LIGHT,
+    Platform.SWITCH,
+    Platform.BUTTON,
+    Platform.SCENE,
+    Platform.SENSOR,
+]
 
 
 class RoomManagerStub:
@@ -51,13 +58,18 @@ class RoomManagerStub:
             "natural_enabled": True,
             "scenes": [{"id": "cinema", "name": "Cinéma personnel"}],
         }
-        self.engines[room_id] = SimpleNamespace(available=True, is_on=False, status={})
+        self.engines[room_id] = SimpleNamespace(
+            available=True,
+            is_on=False,
+            status={},
+            lighting_status={"mode": "off", "scene_id": None},
+        )
         self.notify()
 
 
 @pytest.fixture
 async def platforms(hass: HomeAssistant):
-    """Run all four real HA entity platforms with a controlled manager."""
+    """Run all five real HA entity platforms with a controlled manager."""
     entry = MockConfigEntry(domain=DOMAIN, unique_id=DOMAIN, title="Halo", data={})
     entry.add_to_hass(hass)
     manager = RoomManagerStub(hass, entry)
@@ -100,7 +112,7 @@ async def test_native_entities_device_and_real_state(
     await hass.async_block_till_done()
 
     entries = er.async_entries_for_config_entry(registry, platforms.entry.entry_id)
-    assert len(entries) == 5
+    assert len(entries) == 6
     assert len({entry.device_id for entry in entries}) == 1
     device = dr.async_get(hass).async_get_device_by_identifier(
         (DOMAIN, area.id), platforms.entry.entry_id
@@ -234,7 +246,7 @@ async def test_scenes_rename_delete_and_room_recreate(
     platforms.add_room(area.id)
     await hass.async_block_till_done()
     assert (
-        len(er.async_entries_for_config_entry(registry, platforms.entry.entry_id)) == 5
+        len(er.async_entries_for_config_entry(registry, platforms.entry.entry_id)) == 6
     )
     assert hass.states.get(entity_id(hass, "light", area.id, "light")).state == "off"
 
@@ -255,7 +267,7 @@ async def test_rapid_room_configuration_changes(
     await hass.async_block_till_done()
     registry = er.async_get(hass)
     entries = er.async_entries_for_config_entry(registry, platforms.entry.entry_id)
-    assert len(entries) == 5
+    assert len(entries) == 6
     assert (
         registry.async_get_entity_id("scene", DOMAIN, f"{area.id}_scene_cinema") is None
     )
@@ -282,3 +294,78 @@ async def test_entity_labels_translated_and_custom_names_preserved(
     assert light.attributes["friendly_name"] == f"Ma pièce {expected}"
     scene = hass.states.get(entity_id(hass, "scene", area.id, "scene_cinema"))
     assert scene.attributes["friendly_name"] == "Ma pièce Cinéma personnel"
+    sensor = hass.states.get(entity_id(hass, "sensor", area.id, "status"))
+    expected = "État" if language == "fr" else "Status"
+    assert sensor.attributes["friendly_name"] == f"Ma pièce {expected}"
+    translations = await async_get_translations(hass, language, "entity", {DOMAIN})
+    prefix = "component.halo.entity.sensor.room_status.state."
+    assert translations[prefix + "off"] == ("Éteint" if language == "fr" else "Off")
+    assert translations[prefix + "manual"] == (
+        "Manuel" if language == "fr" else "Manual"
+    )
+    assert translations[prefix + "natural"] == (
+        "Lumière naturelle" if language == "fr" else "Natural lighting"
+    )
+
+
+async def test_room_status_updates_and_scene_rename(hass, platforms):
+    """The read-only sensor follows notifications and keeps a stable identity."""
+    area = ar.async_get(hass).async_create("Office")
+    platforms.add_room(area.id)
+    await hass.async_block_till_done()
+    sensor_id = entity_id(hass, "sensor", area.id, "status")
+    engine = platforms.engines[area.id]
+    assert hass.states.get(sensor_id).state == "off"
+
+    for mode in ("natural", "manual", "off"):
+        engine.lighting_status = {"mode": mode, "scene_id": None}
+        platforms.notify()
+        state = hass.states.get(sensor_id)
+        assert state.state == mode
+        assert state.attributes["mode"] == mode
+        assert state.attributes["scene_id"] is None
+        assert state.attributes["scene_name"] is None
+
+    engine.lighting_status = {"mode": "scene", "scene_id": "cinema"}
+    platforms.notify()
+    assert hass.states.get(sensor_id).state == "Cinéma personnel"
+    assert hass.states.get(sensor_id).attributes["mode"] == "scene"
+    assert hass.states.get(sensor_id).attributes["scene_id"] == "cinema"
+    platforms.config["rooms"][area.id]["scenes"][0]["name"] = "Mon cinéma"
+    platforms.notify()
+    assert hass.states.get(sensor_id).state == "Mon cinéma"
+    assert hass.states.get(sensor_id).attributes["scene_name"] == "Mon cinéma"
+
+    ar.async_get(hass).async_update(area.id, name="Bureau")
+    platforms.notify()
+    assert entity_id(hass, "sensor", area.id, "status") == sensor_id
+    engine.available = False
+    engine.lighting_status = None
+    platforms.notify()
+    assert hass.states.get(sensor_id).state == "unavailable"
+    assert hass.states.get(sensor_id).attributes.get("scene_id") is None
+    engine.available = True
+    engine.lighting_status = {"mode": "off", "scene_id": None}
+    platforms.notify()
+    assert hass.states.get(sensor_id).state == "off"
+    platforms.async_room_command.assert_not_called()
+    platforms.async_activate_scene.assert_not_called()
+
+    await hass.config_entries.async_reload(platforms.entry.entry_id)
+    await hass.async_block_till_done()
+    assert entity_id(hass, "sensor", area.id, "status") == sensor_id
+    assert hass.states.get(sensor_id).state == "off"
+
+
+@pytest.mark.parametrize("name", ["off", "manual", "natural", "unknown", "unavailable"])
+async def test_scene_names_cannot_impersonate_sensor_states(hass, platforms, name):
+    """Reserved names remain scenes, never HA sentinels or translated modes."""
+    area = ar.async_get(hass).async_create("Office")
+    platforms.add_room(area.id)
+    platforms.config["rooms"][area.id]["scenes"][0]["name"] = name
+    platforms.engines[area.id].lighting_status = {"mode": "scene", "scene_id": "cinema"}
+    await hass.async_block_till_done()
+    sensor = hass.states.get(entity_id(hass, "sensor", area.id, "status"))
+    assert sensor.state == f"scene: {name}"
+    assert sensor.attributes["scene_name"] == name
+    assert sensor.attributes["mode"] == "scene"

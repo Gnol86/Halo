@@ -348,6 +348,7 @@ export class HaloPanel extends LitElement {
   private renderRooms() {
     const areas = [...this.snapshot!.areas];
     for (const roomId of Object.keys(this.draft!.rooms)) if (!areas.some((area) => area.id === roomId)) areas.push({ id: roomId, name: roomId });
+    areas.sort((left, right) => Number(Boolean(this.draft!.rooms[right.id])) - Number(Boolean(this.draft!.rooms[left.id])));
     const filtered = areas.filter((area) => matchesEntity({ entity_id: area.id, name: area.name }, this.roomSearch));
     return html`<aside class="room-rail" aria-label=${this.t("rooms")}><div class="rail-heading"><h2 tabindex="-1">${this.t("rooms")}</h2><span class="count">${areas.length}</span></div>
       <label class="rail-search"><span>${this.t("searchRooms")}</span><input type="search" .value=${this.roomSearch} @input=${(event: Event) => { this.roomSearch = (event.target as HTMLInputElement).value; }}></label>

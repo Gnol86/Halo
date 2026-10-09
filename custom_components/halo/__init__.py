@@ -10,7 +10,13 @@ from .manager import HaloManager
 from .panel import async_register_panel, async_remove_panel
 from .websocket import async_register
 
-PLATFORMS = (Platform.LIGHT, Platform.SWITCH, Platform.BUTTON, Platform.SCENE)
+PLATFORMS = (
+    Platform.LIGHT,
+    Platform.SWITCH,
+    Platform.BUTTON,
+    Platform.SCENE,
+    Platform.SENSOR,
+)
 type HaloConfigEntry = ConfigEntry[HaloManager]
 
 

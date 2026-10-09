@@ -36,7 +36,7 @@ test("curve preview preserves fractional elevation, interpolates and clamps", ()
   assert.equal(interpolate(curve, 50), 4000);
   const profile = newProfile("a", "My profile");
   profile.evening.brightness.low = 80;
-  assert.equal(profile.morning.brightness.low, 20);
+  assert.equal(profile.morning.brightness.low, 40);
   for (const period of [profile.morning, profile.evening]) {
     assert.equal(period.brightness.interpolation, "linear");
     assert.equal(period.temperature.interpolation, "linear");

@@ -863,3 +863,161 @@ async def test_unknown_presence_does_not_count_as_absence(hass, freezer, room_en
     assert engine.status["presence"] is None
     assert engine.status["absence_deadline"] is None
     assert engine.status["reason"] == "unavailable"
+
+
+async def test_lighting_status_uses_actual_power_before_selected_scene(
+    hass, room_engine
+):
+    """A matching condition alone is not an applied scene or an illuminated room."""
+    engine, _, room, _ = room_engine
+    room["scenes"] = [scene()]
+    await engine.async_reconfigure()
+    hass.states.async_set("media_player.tv", "on")
+    await hass.async_block_till_done()
+    assert engine.status["scene_id"] == "cinema"
+    assert engine.lighting_status == {"mode": "off", "scene_id": None}
+
+    hass.states.async_set("light.one", "on")
+    await hass.async_block_till_done()
+    assert engine.lighting_status == {"mode": "manual", "scene_id": None}
+
+    hass.states.async_set("light.one", "unavailable")
+    await hass.async_block_till_done()
+    assert engine.lighting_status == {"mode": "off", "scene_id": None}
+    hass.states.async_set("light.two", "unavailable")
+    await hass.async_block_till_done()
+    assert engine.lighting_status is None
+
+
+async def test_lighting_status_follows_natural_scene_and_natural_return(
+    hass, room_engine
+):
+    """A scene takes precedence over natural lighting only while it is applied."""
+    engine, manager, room, _ = room_engine
+    room["scenes"] = [scene(autonomous=True)]
+    room["associations"] = [
+        {"profile_id": "day", "lights": room["lights"], "brightness_offset": 0}
+    ]
+    manager.config["profiles"]["day"] = natural_profile()
+    await engine.async_reconfigure()
+    hass.states.async_set("binary_sensor.presence", "on")
+    await hass.async_block_till_done()
+    await enable(hass, engine)
+    assert engine.lighting_status == {"mode": "natural", "scene_id": None}
+
+    hass.states.async_set("media_player.tv", "on")
+    await hass.async_block_till_done()
+    assert engine.lighting_status == {"mode": "scene", "scene_id": "cinema"}
+
+    hass.states.async_set("media_player.tv", "off")
+    await hass.async_block_till_done()
+    assert engine.lighting_status == {"mode": "natural", "scene_id": None}
+
+    await engine.async_set_mode("natural", False)
+    assert engine.lighting_status == {"mode": "manual", "scene_id": None}
+
+
+async def test_lighting_status_sensor_failure_is_not_lamp_unavailability(
+    hass, room_engine
+):
+    """Natural targets continue without mistaking a missing input for no lamps."""
+    engine, manager, room, _ = room_engine
+    room["associations"] = [
+        {"profile_id": "day", "lights": room["lights"], "brightness_offset": 0}
+    ]
+    manager.config["profiles"]["day"] = natural_profile()
+    await engine.async_reconfigure()
+    hass.states.async_set("binary_sensor.presence", "on")
+    await hass.async_block_till_done()
+    await enable(hass, engine)
+    hass.states.async_set("binary_sensor.presence", "unavailable")
+    await hass.async_block_till_done()
+    assert engine.status["reason"] == "unavailable"
+    assert engine.lighting_status == {"mode": "natural", "scene_id": None}
+
+    hass.states.async_set("sun.sun", "unavailable")
+    await hass.async_block_till_done()
+    assert engine.available
+    assert engine.lighting_status == {"mode": "manual", "scene_id": None}
+
+
+async def test_lighting_status_keeps_explicit_scene_after_restart(hass, room_engine):
+    """An explicit scene remains identified during its persisted manual hold."""
+    engine, manager, room, _ = room_engine
+    room["scenes"] = [scene("explicit")]
+    room["scenes"][0]["lights"]["light.one"]["effect"] = "candle"
+    state = hass.states.get("light.one")
+    hass.states.async_set(
+        "light.one",
+        "off",
+        {
+            **state.attributes,
+            "supported_features": LightEntityFeature.EFFECT,
+            "effect_list": ["candle", "off"],
+        },
+    )
+    await engine.async_reconfigure()
+    await engine.async_activate_scene("explicit")
+    await hass.async_block_till_done()
+    assert hass.states.get("light.one").attributes["effect"] == "candle"
+    assert engine.lighting_status == {"mode": "scene", "scene_id": "explicit"}
+    deadline = engine.status["pause_until"]
+
+    await engine.async_stop()
+    replacement = HaloRoomEngine(hass, manager, "living")
+    await replacement.async_start()
+    try:
+        assert replacement.status["pause_until"] == deadline
+        assert replacement.lighting_status == {
+            "mode": "scene",
+            "scene_id": "explicit",
+        }
+        state = hass.states.get("light.one")
+        hass.states.async_set(
+            "light.one",
+            "on",
+            {**state.attributes, "effect": "off"},
+            context=Context(user_id="test-user"),
+        )
+        await hass.async_block_till_done()
+        assert replacement.lighting_status == {"mode": "manual", "scene_id": None}
+        await replacement.async_turn_off()
+        assert replacement.lighting_status == {"mode": "off", "scene_id": None}
+    finally:
+        await replacement.async_stop()
+
+
+async def test_lighting_status_does_not_report_scene_during_edit(hass, room_engine):
+    """Preview changes no longer describe the explicitly launched scene."""
+    engine, _, room, _ = room_engine
+    room["scenes"] = [scene()]
+    await engine.async_reconfigure()
+    await engine.async_activate_scene("cinema")
+    assert engine.lighting_status == {"mode": "scene", "scene_id": "cinema"}
+    token = await engine.async_begin_edit("owner")
+    assert engine.lighting_status == {"mode": "manual", "scene_id": None}
+    await engine.async_end_edit(token, save=False)
+    assert engine.lighting_status == {"mode": "scene", "scene_id": "cinema"}
+
+
+@pytest.mark.parametrize("automation_enabled", [False, True])
+async def test_lighting_status_zero_pause_does_not_keep_manual_scene(
+    hass, room_engine, automation_enabled
+):
+    """A zero-length pause immediately returns to the existing engine policy."""
+    engine, _, room, _ = room_engine
+    room["scenes"] = [scene("conditional"), scene("explicit")]
+    room["scenes"][1]["conditions"] = None
+    room["manual_pause"] = 0
+    room["automation_enabled"] = automation_enabled
+    hass.states.async_set("binary_sensor.presence", "on")
+    hass.states.async_set("media_player.tv", "on")
+    await engine.async_reconfigure()
+    await hass.async_block_till_done()
+    await engine.async_activate_scene("explicit")
+    assert engine.status["pause_until"] is None
+    assert engine.lighting_status == (
+        {"mode": "scene", "scene_id": "conditional"}
+        if automation_enabled
+        else {"mode": "manual", "scene_id": None}
+    )

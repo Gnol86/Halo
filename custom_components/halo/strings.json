@@ -28,6 +28,16 @@
       "resume": {
         "name": "Resume automation"
       }
+    },
+    "sensor": {
+      "room_status": {
+        "name": "Status",
+        "state": {
+          "off": "Off",
+          "manual": "Manual",
+          "natural": "Natural lighting"
+        }
+      }
     }
   }
 }

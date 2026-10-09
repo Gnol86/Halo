@@ -40,8 +40,15 @@ async def test_room_creation_rename_reload_remove(hass):
     assert device is not None
     assert device.area_id == area.id
     assert (
-        len(er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id)) == 4
+        len(er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id)) == 5
     )
+    status_sensor = er.async_get(hass).async_get_entity_id(
+        "sensor", DOMAIN, f"{area.id}_status"
+    )
+    assert hass.states.get(status_sensor).state == "off"
+    hass.states.async_set("light.bulb", "on", {"supported_color_modes": ["brightness"]})
+    await hass.async_block_till_done()
+    assert hass.states.get(status_sensor).state == "manual"
     ar.async_get(hass).async_update(area.id, name="Salon")
     await hass.async_block_till_done()
     assert devices.async_get(device.id).name == "Salon"
@@ -53,6 +60,11 @@ async def test_room_creation_rename_reload_remove(hass):
     manager = entry.runtime_data
     assert manager.config["rooms"][area.id]["lights"] == ["light.bulb"]
     assert manager.runtime_state[area.id]["pause_until"] == 4102444800
+    assert (
+        er.async_get(hass).async_get_entity_id("sensor", DOMAIN, f"{area.id}_status")
+        == status_sensor
+    )
+    assert hass.states.get(status_sensor).state == "manual"
     assert (
         devices.async_get_device_by_identifier((DOMAIN, area.id), entry.entry_id).id
         == device.id
