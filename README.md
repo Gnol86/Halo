@@ -12,6 +12,14 @@ Halo is a custom Home Assistant integration that brings presence, ambient light,
 
 One integration covers your home. The panel is included, follows your Home Assistant theme and works on desktop and mobile. No YAML or separate dashboard card is required to configure Halo. Its lighting engine runs inside Home Assistant and keeps working when the panel is closed.
 
+<a href="https://raw.githubusercontent.com/Gnol86/Halo/main/docs/images/room-control-en.png">
+  <img src="https://raw.githubusercontent.com/Gnol86/Halo/main/docs/images/room-control-en.png" alt="Halo room controls: seven rooms with live lighting states, Movie night active in the living room, and an ordered list of Halo and Home Assistant scenes" width="1000">
+</a>
+
+*Control every room from one panel. See which rooms use a scene, natural light, a manual pause or a nightlight, and launch an ambience with one click.*
+
+Screenshots show Halo running in Home Assistant with fictional rooms and simulated devices. Select a screenshot to view it at full size.
+
 > **Project status:** Halo is in early development, with published GitHub releases for installation through a HACS custom repository. Automated tests and targeted checks in an isolated Home Assistant instance use simulated lights; validation across real household hardware remains to be completed. The [default HACS catalog submission](https://github.com/hacs/default/pull/11771) is open and awaiting review; Halo is not yet listed.
 
 ## What Halo can do
@@ -67,16 +75,36 @@ Update Halo through HACS, or replace the `custom_components/halo` folder with th
 
 ## Set up your first room
 
+**Starting with 0.2.1:** a fresh installation creates a reusable **Natural light** profile automatically. It starts with linear curves: brightness from **40% at −20°** to **100% at 20°**, and white temperature from **2,000 K at 0°** to **5,500 K at 20°**, with morning and evening linked. You can rename, adjust or delete it in **Natural light profiles**, then assign it to lights in each room's **Ambiences** tab. Existing installations keep their profiles, including an empty list; a deleted profile does not return after a restart.
+
 1. Open **Halo → Rooms** and select a Home Assistant area.
 2. In **Lights**, choose the lights Halo may control. Each light belongs to one Halo room; newly discovered lights are never added automatically.
 3. In **Automation**, select your presence source and absence delay. Add an illuminance sensor and thresholds, or choose **Always**, **Time range** or **Sun elevation** when no sensor is configured.
 4. Select **Save changes** to save the room. Automation starts disabled for newly configured rooms.
-5. In **Ambiences**, optionally configure a base ambience, assign natural light profiles, or set up nightlights. Create reusable profiles in **Natural light profiles** and select the sun entity in **Global settings**. Save pending changes before opening the nightlight editor, then enable the nightlight after configuring its lights.
+5. In **Ambiences**, optionally configure a base ambience, assign natural light profiles, or set up nightlights. Adjust or create reusable profiles in **Natural light profiles** and select the sun entity in **Global settings**. Save pending changes before opening the nightlight editor, then enable the nightlight after configuring its lights.
 6. Save any remaining changes, then enable the room's **Automation** switch when ready.
 
 Use **Control** to create or launch scenes, and **Settings** to customize room transitions. Changes remain in a shared draft as you move between tabs, rooms and profiles, until you save or discard them.
 
 Each configured room also exposes Home Assistant entities: a room light, a status sensor, automatic-lighting and natural-light switches, a resume button, and its scenes. Use them in your own dashboards and automations.
+
+## A closer look
+
+### Presence and ambient light
+
+Choose a presence source, allow time before switching off an empty room, and set the illuminance threshold and hysteresis. Live readings help you understand when Halo permits lighting.
+
+<a href="https://raw.githubusercontent.com/Gnol86/Halo/main/docs/images/room-automation-en.png">
+  <img src="https://raw.githubusercontent.com/Gnol86/Halo/main/docs/images/room-automation-en.png" alt="Living room automation settings with a presence sensor, a 300-second absence delay, a 120-lux turn-on threshold and 10-lux hysteresis" width="1000">
+</a>
+
+### Natural light profiles
+
+Shape brightness and white temperature around the sun's elevation, then reuse the profile across rooms. The rising-sun curves below use a smooth progression; morning and evening can be configured separately.
+
+<a href="https://raw.githubusercontent.com/Gnol86/Halo/main/docs/images/natural-profiles-en.png">
+  <img src="https://raw.githubusercontent.com/Gnol86/Halo/main/docs/images/natural-profiles-en.png" alt="Natural light profile editor showing reusable profiles and rising-sun curves from 25 to 95 percent brightness and 2700 to 5500 kelvins" width="1000">
+</a>
 
 ## How the lighting rules work
 

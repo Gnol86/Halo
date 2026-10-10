@@ -8,7 +8,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.halo.const import DOMAIN
 
 
-async def test_user_setup(hass: HomeAssistant) -> None:
+async def test_user_setup(hass: HomeAssistant, hass_storage) -> None:
     """Setup requires confirmation and creates a loaded, unique entry."""
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": SOURCE_USER}
@@ -25,6 +25,37 @@ async def test_user_setup(hass: HomeAssistant) -> None:
     assert entry.title == "Halo"
     assert entry.unique_id == DOMAIN
     assert entry.state is ConfigEntryState.LOADED
+    config = entry.runtime_data.config
+    assert config["rooms"] == {}
+    assert config["sun_entity_id"] == "sun.sun"
+    assert set(config["profiles"]) == {"default"}
+    profile = config["profiles"]["default"]
+    assert profile["id"] == "default"
+    assert profile["name"] == "Natural light"
+    assert profile["linked"] is True
+    assert profile["morning"] == {
+        "brightness": {
+            "low_elevation": -20,
+            "high_elevation": 20,
+            "low": 40,
+            "high": 100,
+            "interpolation": "linear",
+        },
+        "temperature": {
+            "low_elevation": 0,
+            "high_elevation": 20,
+            "low": 2000,
+            "high": 5500,
+            "interpolation": "linear",
+        },
+    }
+    assert profile["evening"] == profile["morning"]
+    # The preset is durable before any browser opens or a room is configured.
+    assert hass_storage[f"{DOMAIN}.{entry.entry_id}"]["data"] == {
+        "config": config,
+        "revision": 0,
+        "runtime": {},
+    }
 
 
 async def test_existing_instance(hass: HomeAssistant) -> None:

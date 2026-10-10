@@ -1,6 +1,7 @@
 """Validate and preserve independent natural-curve modes across storage reloads."""
 
 from copy import deepcopy
+from unittest.mock import patch
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -8,6 +9,81 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.halo.const import DOMAIN
 from custom_components.halo.manager import HaloError
 from custom_components.halo.models import default_config, validate_config
+
+
+async def test_initial_profile_is_saved_once_and_stays_editable(hass, hass_storage):
+    entry = MockConfigEntry(domain=DOMAIN, unique_id=DOMAIN, title="Halo", data={})
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    original = deepcopy(entry.runtime_data.config)
+    assert set(original["profiles"]) == {"default"}
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    assert entry.runtime_data.config == original
+
+    manager = entry.runtime_data
+    changed = deepcopy(manager.config)
+    profile = changed["profiles"]["default"]
+    profile["name"] = "Mon rythme"
+    profile["linked"] = False
+    profile["evening"]["brightness"]["low"] = 15
+    assert profile["morning"]["brightness"]["low"] == 40
+    await manager.async_save_config(changed, manager.revision)
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    assert entry.runtime_data.config == changed
+
+    manager = entry.runtime_data
+    deleted = deepcopy(manager.config)
+    deleted["profiles"].clear()
+    await manager.async_save_config(deleted, manager.revision)
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    assert entry.runtime_data.config == deleted
+
+    # Removing the integration removes its settings; reinstalling seeds afresh.
+    storage_key = f"{DOMAIN}.{entry.entry_id}"
+    assert await hass.config_entries.async_remove(entry.entry_id)
+    assert storage_key not in hass_storage
+    replacement = MockConfigEntry(
+        domain=DOMAIN, unique_id=DOMAIN, title="Halo", data={}
+    )
+    replacement.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(replacement.entry_id)
+    assert replacement.runtime_data.config == original
+
+
+@pytest.mark.parametrize("include_profiles", [False, True])
+async def test_existing_empty_profiles_are_not_seeded(
+    hass, hass_storage, include_profiles
+):
+    entry = MockConfigEntry(domain=DOMAIN, unique_id=DOMAIN, title="Halo", data={})
+    entry.add_to_hass(hass)
+    config = default_config()
+    if not include_profiles:
+        del config["profiles"]
+    saved = {"config": config, "revision": 4, "runtime": {}}
+    storage_key = f"{DOMAIN}.{entry.entry_id}"
+    hass_storage[storage_key] = {
+        "version": 1,
+        "minor_version": 1,
+        "key": storage_key,
+        "data": deepcopy(saved),
+    }
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    assert entry.runtime_data.config["profiles"] == {}
+    assert entry.runtime_data.revision == 4
+    assert hass_storage[storage_key]["data"] == saved
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    assert entry.runtime_data.config["profiles"] == {}
+
+
+async def test_failed_initial_profile_save_does_not_complete_setup(hass):
+    entry = MockConfigEntry(domain=DOMAIN, unique_id=DOMAIN, title="Halo", data={})
+    entry.add_to_hass(hass)
+    with patch("custom_components.halo.manager.Store", autospec=True) as store:
+        store.return_value.async_load.return_value = None
+        store.return_value.async_save.side_effect = OSError
+        assert not await hass.config_entries.async_setup(entry.entry_id)
+        store.return_value.async_save.assert_awaited_once()
+    assert "manager" not in hass.data[DOMAIN]
 
 
 def profile_config(*, legacy=False, curved_mode="ease_in_out"):

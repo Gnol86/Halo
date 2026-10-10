@@ -12,6 +12,14 @@ Halo est une intégration personnalisée Home Assistant qui réunit présence, l
 
 Une seule intégration couvre ton logement. Le panneau est inclus, suit le thème Home Assistant et s'adapte aux ordinateurs comme aux mobiles. La configuration de Halo ne nécessite ni YAML ni carte de dashboard séparée. Son moteur d'éclairage fonctionne dans Home Assistant et reste actif lorsque le panneau est fermé.
 
+<a href="https://raw.githubusercontent.com/Gnol86/Halo/main/docs/images/room-control-fr.png">
+  <img src="https://raw.githubusercontent.com/Gnol86/Halo/main/docs/images/room-control-fr.png" alt="Pilotage de Halo : sept pièces avec leur état d'éclairage, la scène Cinéma active dans le salon et une liste ordonnée de scènes Halo et Home Assistant" width="1000">
+</a>
+
+*Pilote toutes tes pièces depuis un seul panneau. Repère celles qui suivent une scène, la lumière naturelle, une pause manuelle ou une veilleuse, puis lance une ambiance en un clic.*
+
+Les captures montrent Halo dans Home Assistant, avec des pièces fictives et des appareils simulés. Clique sur une capture pour l’afficher en pleine taille.
+
 > **État du projet :** Halo est en début de développement, avec des releases GitHub publiées pour une installation comme dépôt personnalisé HACS. Les tests automatisés et les essais ciblés dans une instance Home Assistant isolée utilisent des lampes simulées ; la validation sur les équipements réels du logement reste à compléter. La [demande d'inclusion au catalogue HACS par défaut](https://github.com/hacs/default/pull/11771) est ouverte et attend son examen ; Halo n'est pas encore référencé.
 
 ## Ce que Halo peut faire
@@ -67,16 +75,36 @@ Mets Halo à jour avec HACS ou remplace le dossier `custom_components/halo` par 
 
 ## Configurer ta première pièce
 
+**À partir de la version 0.2.1 :** une nouvelle installation crée automatiquement un profil réutilisable **Natural light**. Ses courbes sont linéaires : luminosité de **40 % à −20°** à **100 % à 20°**, température du blanc de **2 000 K à 0°** à **5 500 K à 20°**, avec matin et soir liés. Tu peux le renommer, le régler ou le supprimer dans **Profils de lumière naturelle**, puis l'associer aux lampes dans l'onglet **Ambiances** de chaque pièce. Les installations existantes conservent leurs profils, y compris une liste vide ; un profil supprimé ne revient pas au redémarrage.
+
 1. Ouvre **Halo → Pièces** et sélectionne une pièce Home Assistant.
 2. Dans **Lumières**, choisis les lampes que Halo peut piloter. Une lampe appartient à une seule pièce Halo ; les nouvelles lampes découvertes ne sont jamais ajoutées automatiquement.
 3. Dans **Automatisation**, sélectionne la source de présence et le délai d'absence. Ajoute un capteur lumineux et ses seuils, ou choisis **Toujours**, **Plage horaire** ou **Hauteur du soleil** sans capteur configuré.
 4. Sélectionne **Enregistrer les modifications** pour sauvegarder la pièce. Les automatismes sont désactivés à la création d'une pièce.
-5. Dans **Ambiances**, configure si tu le souhaites une ambiance de base, des associations de profils naturels ou des veilleuses. Crée les profils réutilisables dans **Profils de lumière naturelle** et sélectionne l'entité soleil dans **Réglages globaux**. Enregistre les modifications en attente avant d'ouvrir l'éditeur de veilleuse, puis active la veilleuse après avoir configuré ses lampes.
+5. Dans **Ambiances**, configure si tu le souhaites une ambiance de base, des associations de profils naturels ou des veilleuses. Règle ou crée les profils réutilisables dans **Profils de lumière naturelle** et sélectionne l'entité soleil dans **Réglages globaux**. Enregistre les modifications en attente avant d'ouvrir l'éditeur de veilleuse, puis active la veilleuse après avoir configuré ses lampes.
 6. Enregistre les dernières modifications, puis active l'interrupteur **Automatisation** de la pièce quand tu es prêt.
 
 Utilise **Pilotage** pour créer ou lancer des scènes et **Réglages** pour personnaliser les transitions de la pièce. Tes modifications restent dans un brouillon commun lorsque tu changes d'onglet, de pièce ou de profil, jusqu'à leur enregistrement ou leur abandon.
 
 Chaque pièce configurée expose aussi des entités Home Assistant : une lumière de commande, un capteur d'état, des interrupteurs d'éclairage automatique et de lumière naturelle, un bouton de reprise et ses scènes. Tu peux les utiliser dans tes propres dashboards et automatisations.
+
+## Le panneau en détail
+
+### Présence et luminosité ambiante
+
+Choisis une source de présence, laisse un délai avant d'éteindre une pièce vide et règle le seuil lumineux ainsi que l'hystérésis. Les valeurs actuelles des capteurs t'aident à comprendre quand Halo autorise l'éclairage.
+
+<a href="https://raw.githubusercontent.com/Gnol86/Halo/main/docs/images/room-automation-fr.png">
+  <img src="https://raw.githubusercontent.com/Gnol86/Halo/main/docs/images/room-automation-fr.png" alt="Automatisation du salon avec un capteur de présence, un délai d'absence de 300 secondes, un seuil d'allumage de 120 lux et une hystérésis de 10 lux" width="1000">
+</a>
+
+### Profils de lumière naturelle
+
+Définis la luminosité et la température du blanc selon la hauteur du soleil, puis réutilise le profil dans plusieurs pièces. Les courbes du soleil montant ci-dessous suivent une progression douce ; le matin et le soir peuvent être configurés séparément.
+
+<a href="https://raw.githubusercontent.com/Gnol86/Halo/main/docs/images/natural-profiles-fr.png">
+  <img src="https://raw.githubusercontent.com/Gnol86/Halo/main/docs/images/natural-profiles-fr.png" alt="Éditeur de profils naturels montrant les profils réutilisables et les courbes du soleil montant, de 25 à 95 pour cent de luminosité et de 2700 à 5500 kelvins" width="1000">
+</a>
 
 ## Comprendre les règles d'éclairage
 

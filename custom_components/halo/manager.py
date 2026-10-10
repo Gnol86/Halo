@@ -23,6 +23,7 @@ from .engine import HaloRoomEngine
 from .external_scenes import composition, feedback_lights, inspect_scene, scene_problem
 from .models import (
     default_config,
+    initial_config,
     validate_config,
     validate_lamp_states,
     validate_nightlight,
@@ -84,11 +85,15 @@ class HaloManager:
 
     async def async_load(self) -> None:
         """Load versioned settings and start one engine per saved room."""
-        if stored := await self._store.async_load():
+        stored = await self._store.async_load()
+        if stored is not None:
             self.config = validate_config(stored["config"])
             self.runtime_state = stored.get("runtime", {})
             self.revision = stored.get("revision", 0)
             self._last_stored = deepcopy(stored)
+        else:
+            self.config = initial_config()
+            await self.async_persist_runtime()
         self._loaded = True
         for room_id in self.config["rooms"]:
             engine = self.engines[room_id] = HaloRoomEngine(self.hass, self, room_id)

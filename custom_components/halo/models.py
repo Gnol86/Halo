@@ -47,7 +47,7 @@ ROOM_DEFAULTS = {
 
 
 def default_config() -> dict[str, Any]:
-    """Return a fresh configuration, never sharing mutable defaults."""
+    """Return empty configuration defaults, also used to normalize saved data."""
     return {
         "sun_entity_id": "sun.sun",
         "presence_return_window": DEFAULT_PRESENCE_RETURN_WINDOW,
@@ -55,6 +55,35 @@ def default_config() -> dict[str, Any]:
         "profiles": {},
         "rooms": {},
     }
+
+
+def initial_config() -> dict[str, Any]:
+    """Seed a new installation without adding profiles to existing settings."""
+    config = default_config()
+    morning = {
+        "brightness": {
+            "low_elevation": -20,
+            "high_elevation": 20,
+            "low": 40,
+            "high": 100,
+            "interpolation": "linear",
+        },
+        "temperature": {
+            "low_elevation": 0,
+            "high_elevation": 20,
+            "low": 2000,
+            "high": 5500,
+            "interpolation": "linear",
+        },
+    }
+    config["profiles"]["default"] = {
+        "id": "default",
+        "name": "Natural light",
+        "linked": True,
+        "morning": morning,
+        "evening": deepcopy(morning),
+    }
+    return config
 
 
 def _mapping(value: Any, label: str) -> dict:
