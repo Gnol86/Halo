@@ -1,4 +1,4 @@
-import type { Condition, Curve, CurveInterpolation, Light, Profile, Room, Transition } from "./types";
+import type { Condition, Curve, CurveInterpolation, Light, LightingFallback, Profile, Room, Transition } from "./types";
 
 export const categories: Transition[] = ["turn_on", "lux_on", "natural", "scene", "turn_off"];
 
@@ -11,12 +11,15 @@ export function createId(): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
+export function newLightingFallback(): LightingFallback {
+  return { mode: "always", start: "18:00", end: "08:00", linked: true, morning_below: 0, evening_below: 0, turn_off: false };
+}
 export function newRoom(id: string): Room {
   return { id, lights: [], presence_entity_id: null, presence_states: ["on"], lux_entity_id: null,
-    lux_threshold: null, lux_hysteresis: 0, lux_off: false, absence_delay: 0, manual_pause: 7200,
+    lux_threshold: null, lux_hysteresis: 0, lux_off: false, lighting_fallback: newLightingFallback(), absence_delay: 0, manual_pause: 7200,
     lux_off_delay: 30, allow_off_during_pause: true, automation_enabled: false, natural_enabled: true,
     transitions: { turn_on: "inherit", lux_on: "inherit", natural: "inherit", scene: "inherit", turn_off: "inherit" },
-    base: {}, associations: [], scenes: [] };
+    base: {}, nightlight: { enabled: false, lights: {} }, associations: [], scenes: [] };
 }
 export function newProfile(id: string, name: string): Profile {
   const morning: Profile["morning"] = { brightness: { low_elevation: -20, high_elevation: 20, low: 40, high: 100, interpolation: "linear" },

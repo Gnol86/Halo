@@ -164,9 +164,9 @@ const curves=(low,high,warm,cool,interpolation="ease_in_out")=>({
 });
 const morning=curves(20,100,2200,6000);
 const room=(id,lights,overrides={})=>({
-  id,lights,presence_entity_id:null,presence_states:["on"],lux_entity_id:null,lux_threshold:null,lux_hysteresis:0,lux_off:false,
+  id,lights,presence_entity_id:null,presence_states:["on"],lux_entity_id:null,lux_threshold:null,lux_hysteresis:0,lux_off:false,lighting_fallback:{mode:"always",start:"18:00",end:"08:00",linked:true,morning_below:0,evening_below:0,turn_off:false},
   absence_delay:0,manual_pause:7200,lux_off_delay:30,allow_off_during_pause:true,automation_enabled:true,natural_enabled:true,
-  transitions:inherited(),base:{},associations:[],scenes:[],...overrides,
+  transitions:inherited(),base:{},nightlight:{enabled:false,lights:{}},associations:[],scenes:[],...overrides,
 });
 const scenes=[
   {id:"cinema",name:"Cinéma",can_turn_on:false,conditions:{type:"state",entity_id:"media_player.tv",state:"on"},lights:{"light.sofa":{state:"on",brightness:51,color_mode:"rgb",rgb_color:[230,140,40]},"light.ceiling":{state:"off"},"light.table":{state:"off"}}},
@@ -174,7 +174,7 @@ const scenes=[
   {id:"welcome",name:"Accueil",can_turn_on:true,conditions:{type:"state",entity_id:"input_boolean.guests",state:"on"},lights:{"light.sofa":{state:"on",brightness:180},"light.ceiling":{state:"on",brightness:200},"light.table":{state:"on"}}},
 ];
 const rooms={
-  lounge:room("lounge",["light.sofa","light.ceiling","light.table"],{presence_entity_id:"binary_sensor.presence",lux_entity_id:"sensor.illuminance",lux_threshold:50,lux_hysteresis:20,associations:[{profile_id:"warm",lights:["light.sofa"],brightness_offset:-30},{profile_id:"daylight",lights:["light.ceiling"],brightness_offset:0}],scenes}),
+  lounge:room("lounge",["light.sofa","light.ceiling","light.table"],{presence_entity_id:"binary_sensor.presence",lux_entity_id:"sensor.illuminance",lux_threshold:50,lux_hysteresis:20,nightlight:{enabled:false,lights:{"light.sofa":{state:"on",brightness:30,color_mode:"rgb",rgb_color:[255,180,100],effect:"Candle"}}},associations:[{profile_id:"warm",lights:["light.sofa"],brightness_offset:-30},{profile_id:"daylight",lights:["light.ceiling"],brightness_offset:0}],scenes}),
   kitchen:room("kitchen",["light.kitchen","light.worktop"],{associations:[{profile_id:"daylight",lights:["light.kitchen","light.worktop"],brightness_offset:0}]}),
   bedroom:room("bedroom",["light.bed_left","light.bed_right"],{automation_enabled:false,associations:[{profile_id:"rhythm",lights:["light.bed_left","light.bed_right"],brightness_offset:-15}]}),
   office:room("office",["light.desk","light.office_ceiling"],{associations:[{profile_id:"daylight",lights:["light.desk","light.office_ceiling"],brightness_offset:0}]}),
@@ -209,8 +209,8 @@ const entities=[
   {entity_id:"input_boolean.presence",name:"Présence personnalisée",state:"off",attributes:{}},
   {entity_id:"input_boolean.guests",name:"Invités à la maison",state:"off",attributes:{}},
   {entity_id:"media_player.tv",name:"Télévision",state:"off",attributes:{}},
-  {entity_id:"scene.reading",name:"Lecture du soir",state:"unknown",attributes:{id:"reading"}},
-  {entity_id:"scene.hue_ambience",name:"Ambiance Hue",state:"unknown",attributes:{}},
+  {entity_id:"scene.reading",name:"Lecture du soir",state:"unknown",platform:"homeassistant",attributes:{id:"reading",entity_id:["light.sofa","light.ceiling","light.kitchen","media_player.tv"]}},
+  {entity_id:"scene.hue_ambience",name:"Ambiance Hue",state:"unknown",platform:"hue",attributes:{}},
 ];
 let snapshot={revision:1,is_admin:true,config:{sun_entity_id:"sun.sun",presence_return_window:30,transitions,profiles:{
   warm:{id:"warm",name:"Blanc chaleureux",linked:true,morning,evening:structuredClone(morning)},
@@ -237,6 +237,13 @@ const hass={locale:{language:"fr-BE"},themes:{darkMode:false},states:Object.from
   throw {status_code:404};
 },async callWS(message){
   window.haloCalls.push(structuredClone(message));
+  if(message.type==="halo/scene/inspect"){
+    const room=snapshot.config.rooms[message.room_id];const source=entities.find(entity=>entity.entity_id===message.entity_id);
+    const complete=Array.isArray(source?.attributes.entity_id);const targets=source?.attributes.entity_id??[];
+    const sceneLights=targets.filter(id=>id.startsWith("light."));
+    return{entity_id:message.entity_id,name:source?.name??message.entity_id,available:!!source,complete,blocked:false,lights:sceneLights,
+      outside_lights:sceneLights.filter(id=>!room.lights.includes(id)),missing_lights:complete?room.lights.filter(id=>!sceneLights.includes(id)):[],other_entities:targets.filter(id=>!id.startsWith("light."))};
+  }
   if(message.type==="halo/scene/import"){
     const room=snapshot.config.rooms[message.room_id];
     const entries=Object.entries(message.config.entities).filter(([id])=>room.lights.includes(id));
@@ -256,9 +263,10 @@ const hass={locale:{language:"fr-BE"},themes:{darkMode:false},states:Object.from
   if(message.type==="halo/edit/preview")applyTargets(message.lights);
   if(message.type==="halo/edit/end"){
     if(message.save){
-      const room=snapshot.config.rooms[message.room_id];const scene=structuredClone(message.scene);
+      const room=snapshot.config.rooms[message.room_id];const scene=structuredClone(message.target==="nightlight"?message.nightlight:message.scene);
       if(message.capture){const included=message.capture_entities??room.lights;scene.lights=Object.fromEntries(Object.entries(scene.lights).filter(([id])=>included.includes(id)));for(const id of included){const current=hass.states[id];if(current&&["on","off"].includes(current.state))scene.lights[id]={state:current.state,...current.attributes};}}
-      const index=room.scenes.findIndex(item=>item.id===scene.id);if(index===-1)room.scenes.push(scene);else room.scenes[index]=scene;
+      if(message.target==="nightlight")room.nightlight=scene;
+      else {const index=room.scenes.findIndex(item=>item.id===scene.id);if(index===-1)room.scenes.push(scene);else room.scenes[index]=scene;}
       snapshot.revision++;
     }else if(initialStates){hass.states=initialStates;panel.hass={...hass};}
     initialStates=undefined;snapshot.status[message.room_id]={...initialStatus,editing:false};initialStatus=undefined;send();
@@ -271,7 +279,10 @@ const hass={locale:{language:"fr-BE"},themes:{darkMode:false},states:Object.from
       status.reason="manual_pause";status.pause_until=Math.floor(Date.now()/1000)+room.manual_pause;
     }
     if(message.command==="scene"){
-      const scene=room.scenes.find(item=>item.id===message.scene_id);if(scene){applyTargets(scene.lights);status.scene_id=scene.id;status.reason="manual_pause";status.pause_until=Math.floor(Date.now()/1000)+room.manual_pause;status.is_on=room.lights.some(id=>hass.states[id]?.state==="on");}
+      const scene=room.scenes.find(item=>item.id===message.scene_id);if(scene){
+        const targets=scene.type==="home_assistant"?(scene.scene_entity_id==="scene.reading"?sourceScene.entities:{"light.sofa":{state:"on",brightness:180,effect:"Candle"}}):scene.lights;
+        applyTargets(Object.fromEntries(Object.entries(targets).map(([id,target])=>[id,typeof target==="string"?{state:target}:target])));
+        status.scene_id=scene.id;status.reason="manual_pause";status.pause_until=Math.floor(Date.now()/1000)+room.manual_pause;status.is_on=room.lights.some(id=>hass.states[id]?.state==="on");}
     }
     if(message.command==="resume"){room.automation_enabled=true;status.pause_until=null;status.scene_id=null;status.reason=room.natural_enabled?"natural":"base";snapshot.revision++;}
     send();

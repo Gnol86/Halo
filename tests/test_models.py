@@ -235,3 +235,18 @@ def test_native_light_validation_rejects_ambiguous_or_read_only_data(settings):
         validate_lamp_states(
             {"light.floor": {"state": "on", **settings}}, ["light.floor"]
         )
+
+
+@pytest.mark.parametrize("value", [10**1000, -(10**1000)], ids=["huge", "negative"])
+def test_extreme_integer_is_rejected_as_validation_error(value):
+    """Valid JSON integers outside the allowed range cannot escape as overflow."""
+    with pytest.raises(ValueError, match="finite number"):
+        validate_config({"presence_return_window": value})
+
+
+@pytest.mark.parametrize("profile_id", [[], {}, 123])
+def test_invalid_association_profile_identifier_is_validation_error(profile_id):
+    with pytest.raises(ValueError):
+        validate_config(
+            {"rooms": {"room": {"associations": [{"profile_id": profile_id}]}}}
+        )

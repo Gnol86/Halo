@@ -1,5 +1,7 @@
 # Architecture de la première version de développement
 
+Dernière mise à jour : **10 octobre 2026**.
+
 Les comportements produit restent définis dans [PROJET.md](../PROJET.md). Cette page décrit les contrats du code, sans constituer une validation sur les équipements du logement.
 
 ## Cycle de vie et stockage
@@ -10,21 +12,47 @@ La configuration et les échéances de pause sont enregistrées avec `homeassist
 
 Le document enregistré contient `config`, `revision` et `runtime`. La révision évite qu’une sauvegarde provenant d’un ancien écran écrase une modification plus récente. Les noms de pièces proviennent du registre des zones Home Assistant ; leurs identifiants assurent la stabilité des appareils.
 
+Les changements de mode et la reprise utilisent un commit durable sous le verrou de la pièce, avant publication de la nouvelle configuration/révision ou commande aux lampes. La reprise sauvegarde dans cette transaction l’activation et la suppression de `pause_until`, `manual_scene_id` et `nightlight_blocked`. Un échec d’écriture conserve les valeurs précédentes. Les événements du détecteur peuvent encore enregistrer `absent_since` pendant l’attente du stockage : la publication retire seulement les clés de pause, sans réinjecter un ancien instantané de runtime qui effacerait cet événement. La persistance suivante conserve les données les plus récentes.
+
+Une demande de mode ou de reprise invalide les commandes anciennes avant d’attendre le verrou. Si son commit échoue après avoir interrompu une séquence locale automatique, le moteur réévalue l’ancienne politique uniquement lorsque la génération ayant interrompu la séquence est encore celle de cette demande. Une intention manuelle plus récente interdit cette récupération. Celle-ci ne termine pas la pause existante et ne masque jamais l’exception de stockage initiale ; aucune relance n’est ajoutée en l’absence de séquence locale interrompue.
+
+La suppression d’une pièce filtre également son runtime dans la même écriture. Si l’arrêt de son moteur ou le commit échoue, ses abonnements sont rétablis afin que la pièce encore configurée continue de fonctionner. Deux sauvegardes concurrentes de la même révision ne peuvent pas être acceptées toutes les deux. La suppression du seul appareil Halo utilise l’API `async_remove_device` de la version Home Assistant prise en charge.
+
 ### Capteur d’état de la pièce
 
 **Implémenté ; tests locaux du moteur et des plateformes Home Assistant avec lampes simulées.** La plateforme `sensor` ajoute un capteur `Status` par pièce au même appareil que les autres entités Halo, avec une identité liée à l’identifiant stable de zone. Il suit les notifications du moteur sans scrutation ni dépendance au panneau. Le cycle de vie commun assure l’ajout et le retrait dynamiques, le rechargement et la libération de son abonnement.
 
-Le capteur rapporte `off`, `manual`, `natural` ou le nom d’une scène active. Les trois valeurs fixes utilisent les traductions natives anglaises/françaises ; les noms personnalisés ne sont pas traduits. L’absence totale de lampe disponible rend l’entité indisponible. Sinon, l’absence de lampe allumée impose `off`, puis une session d’édition impose `manual`. Un nom de scène n’est exposé que pour une scène conditionnelle effectivement appliquée ou une scène explicitement lancée pendant sa pause ; une scène dont les conditions sont simplement vraies ne suffit pas. Le lancement explicite peut rester nommé avec l’automatisation désactivée, jusqu’à une nouvelle intervention manuelle ou à la fin de son application.
+Le capteur rapporte `off`, `manual`, `natural`, `nightlight` ou le nom d’une scène active. Les quatre valeurs fixes utilisent les traductions natives anglaises/françaises ; les noms personnalisés ne sont pas traduits. L’absence totale de lampe disponible rend l’entité indisponible. Sinon, l’absence de lampe allumée impose `off`, puis une session d’édition impose `manual`. Un nom de scène n’est exposé que pour une scène conditionnelle effectivement appliquée ou une scène explicitement lancée pendant sa pause ; une scène dont les conditions sont simplement vraies ne suffit pas. Le lancement explicite peut rester nommé avec l’automatisation désactivée, jusqu’à une nouvelle intervention manuelle ou à la fin de son application.
 
-Hors scène, `natural` exige une application naturelle active et au moins une lampe allumée dans une association concernée. Les autres cas allumés utilisent `manual`, notamment la pause sans scène, le mode automatique désactivé et l’ambiance de base seule. Cette synthèse ne change pas le contrat de statut détaillé envoyé au panneau.
+L’extension veilleuse ajoute `nightlight` lorsque cette ambiance est effectivement appliquée à au moins une lampe allumée, y compris pendant une pause autorisant ce fonctionnement. Les états indisponible, éteint et édition restent prioritaires. Hors scène ou veilleuse, `natural` exige une application naturelle active et au moins une lampe allumée dans une association concernée. Les autres cas allumés utilisent `manual`, notamment la pause sans scène, le mode automatique désactivé et l’ambiance de base seule. Cette synthèse ne change pas le contrat de statut détaillé envoyé au panneau.
 
-Les attributs `mode`, `scene_id` et `scene_name` permettent de consommer cet état sans dépendre du nom affiché : `mode` vaut `off`, `manual`, `natural` ou `scene` ; les deux attributs de scène valent `null` hors scène. Un nom exactement égal à `off`, `manual`, `natural`, `unknown` ou `unavailable` est préfixé par `scene: ` dans la valeur du capteur pour éviter les traductions des états fixes et les sentinelles Home Assistant. `scene_name` conserve le nom exact dans tous les cas.
+Les attributs `mode`, `scene_id` et `scene_name` permettent de consommer cet état sans dépendre du nom affiché : `mode` vaut `off`, `manual`, `natural`, `nightlight` ou `scene` ; les deux attributs de scène valent `null` hors scène. Un nom exactement égal à `off`, `manual`, `natural`, `nightlight`, `unknown` ou `unavailable` est préfixé par `scene: ` dans la valeur du capteur pour éviter les traductions des états fixes et les sentinelles Home Assistant. `scene_name` conserve le nom exact dans tous les cas.
 
-Le capteur utilise le contrat officiel de [l’entité Sensor](https://developers.home-assistant.io/docs/core/entity/sensor/) et les [traductions d’états d’entités](https://developers.home-assistant.io/docs/internationalization/core/#state-of-entities). L’ajout n’a pas encore fait l’objet d’un essai navigateur ou domestique.
+Le capteur utilise le contrat officiel de [l’entité Sensor](https://developers.home-assistant.io/docs/core/entity/sensor/) et les [traductions d’états d’entités](https://developers.home-assistant.io/docs/internationalization/core/#state-of-entities). L’extension veilleuse a fait l’objet d’un parcours dans Home Assistant 2026.10.0 isolé avec des lampes simulées ; les essais domestiques restent distincts.
 
 ## Configuration
 
 La configuration regroupe `sun_entity_id`, `presence_return_window`, `transitions`, `profiles` et `rooms`. Les profils sont indexés par identifiant stable. Les pièces sont indexées par identifiant de zone Home Assistant. Les scènes sont une liste ordonnée dans chaque pièce.
+
+**Extension des scènes implémentée le 10 octobre 2026 :** le modèle Python/TypeScript distingue `type: "halo"` et `type: "home_assistant"`. Les anciennes scènes sans type sont interprétées comme `halo`. Les deux types conservent identifiant stable, nom, conditions et `can_turn_on` ; les scènes Halo utilisent leurs états `lights`, les scènes liées référencent une entité `scene.*` dans `scene_entity_id`. Cette normalisation reste compatible avec le stockage version 1 et les révisions existantes.
+
+**Extension veilleuse implémentée le 10 octobre 2026 :** chaque pièce porte `nightlight: { enabled, lights }`, avec défaut `{ "enabled": false, "lights": {} }` lorsqu’il manque, y compris dans un document existant. `lights` reprend les états reproductibles indexés par entité des scènes Halo. Aucun renommage des champs existants ni changement du stockage version 1 n’est nécessaire. Une activation exige une source de présence et au moins une lampe `on`, avec luminosité non nulle lorsqu’elle est renseignée. Les entités doivent appartenir à la pièce ; retirer une lampe retire son réglage de veilleuse. Les conflits connus où un groupe destiné à l’extinction contient une veilleuse sont refusés ; les groupes opaques restent explicitement signalés par le panneau.
+
+**Autorisation sans capteur — implémentée et vérifiée localement le 10 octobre 2026 :** chaque pièce reçoit `lighting_fallback` avec les champs et défauts suivants, y compris lorsqu’ils manquent dans une configuration existante :
+
+```json
+{
+  "mode": "always",
+  "start": "18:00",
+  "end": "08:00",
+  "linked": true,
+  "morning_below": 0,
+  "evening_below": 0,
+  "turn_off": false
+}
+```
+
+`mode` accepte `always`, `time` et `sun`. Les heures sont strictement au format `HH:MM`, valides sur 24 heures et distinctes. `linked` et `turn_off` sont des booléens ; les deux seuils sont des nombres finis de −90 à 90 degrés, booléens exclus. Les champs inconnus ou mal typés sont refusés. Les valeurs des modes inactifs sont conservées et validées ; la liaison matin/soir n’efface pas le seuil du soir. La normalisation ne modifie pas l’objet fourni ni les autres pièces. Le stockage version 1, les révisions et les commandes de configuration restent utilisés sans nouvelle API d’écriture.
 
 Le champ global `presence_return_window` exprime en secondes la durée commune de protection contre les pertes de présence : nombre fini de 0 à 604 800, avec défaut de 30 pour une nouvelle configuration ou un ancien document qui ne contient pas le champ. Il fixe la fenêtre de rallumage rapide après extinction et le minimum supplémentaire d’absence continue avant qu’un retour termine la pause. Zéro désactive le rallumage rapide et ce minimum supplémentaire, sans supprimer le délai d’absence local ; une valeur explicitement enregistrée est conservée. Le champ utilise les commandes de configuration et le stockage version 1 existants, avec validation serveur, droits administrateur et contrôle de révision ; aucune nouvelle commande API n’est nécessaire. L’interface exige une valeur renseignée.
 
@@ -33,6 +61,8 @@ Chaque courbe naturelle contient `low_elevation`, `high_elevation`, `low`, `high
 Le moteur Python et l’aperçu TypeScript utilisent le même calcul : `t = clamp((elevation - low_elevation) / (high_elevation - low_elevation), 0, 1)`, puis `low + (high - low) × t` en linéaire ou `low + (high - low) × t² × (3 − 2t)` pour la courbe en S (smoothstep). La pente s’annule aux deux bornes. L’ancien identifiant `ease_in` est aussi interprété ainsi par le lecteur et l’aperçu. Les corrections relatives et limites des lampes s’appliquent ensuite. Le temps écoulé n’intervient pas dans cette interpolation : les transitions des commandes restent indépendantes.
 
 Les réglages sont validés côté serveur avant enregistrement : appartenance unique des lampes, exclusion des lumières Halo, références aux profils, bornes solaires, valeurs numériques finies, capacités de variation et portée des états de scène. Les données indisponibles restent distinctes des valeurs numériques valides.
+
+Les nombres hors limites, y compris les entiers JSON trop grands pour une conversion flottante, et les identifiants de profil de type incorrect sont rejetés comme erreurs de validation. Le parcours des compositions de groupes utilise une pile itérative, un ensemble de nœuds visités et une pile active : les branches partagées ne sont développées qu’une fois, une profondeur élevée n’épuise pas la pile Python et les cycles restent signalés comme incomplets.
 
 Les cinq clés de transition sont `turn_on`, `lux_on`, `natural`, `scene` et `turn_off`. Globalement, une valeur est un nombre de secondes ou `null`. Par pièce, `"inherit"` demande l’héritage, `null` omet le paramètre et un nombre définit la durée locale, y compris zéro.
 
@@ -46,15 +76,31 @@ Les conditions sont des arbres de types `state`, `numeric`, `time`, `sun`, `and`
 
 Chaque moteur écoute ses lampes, ses capteurs, le soleil et les entités de ses conditions. Les échéances utilisent des temporisations dédiées ; un passage toutes les 30 secondes couvre notamment les conditions horaires. La fermeture du panneau n’interrompt pas le moteur.
 
+Le délai planifié est calculé depuis l’heure réelle en fin d’évaluation, après les éventuels appels lents. Une échéance dépassée pendant ces appels déclenche une réévaluation immédiate au lieu de recevoir un délai supplémentaire. Les erreurs de commandes de lampes sont conservées par entité et contribuent à `status.error` : la réussite d’une autre lampe ne les efface pas. Une commande réussie sur l’entité concernée, son retrait de la pièce ou une application native réussie qui la couvre peut les libérer.
+
+Une scène locale déjà appliquée n’est pas rappelée uniquement parce que ses propres réglages laissent la pièce éteinte. Une modification de sélection, une reprise ou un nouveau cycle admissible de présence peut en revanche l’appliquer à nouveau. Les états réels restent prioritaires pour le capteur d’état et pour la décision d’allumage.
+
 Les commandes portent un contexte Home Assistant propre à Halo, relié au contexte utilisateur lorsque disponible. Le moteur suit aussi les valeurs attendues pendant une transition pour les équipements qui ne restituent pas ce contexte. Ce dernier comportement exige encore des essais sur les intégrations de lampes réelles.
+
+### Autorisation d’éclairage sans capteur
+
+**Implémenté et vérifié localement, avec lampes simulées.** La résolution choisit d’abord le capteur lumineux lorsque `lux_entity_id` est configuré. Une mesure inaccessible, non numérique, `unknown` ou `unavailable` reste indisponible ; elle ne sélectionne jamais `lighting_fallback`. En l’absence de capteur, `always` autorise sans mesure, `time` compare l’heure locale Home Assistant à la plage quotidienne `[start, end[`, y compris à travers minuit, et `sun` compare strictement `elevation < seuil` avec la source solaire globale. Lorsque `linked` est vrai, le seuil du matin est partagé ; sinon `rising` sélectionne le matin ou le soir. Les attributs solaires requis absents ou invalides suspendent la décision correspondante.
+
+Cette autorisation reste séparée de la valeur `lux` et de sa mémoire d’hystérésis. Le statut expose `lighting_source`, `lighting_allowed` et `lighting_off_deadline` (date ISO ou `null` pour l’échéance), sans fabriquer une mesure lumineuse. Les changements de présence, de soleil et les bornes horaires réévaluent la pièce ; les bornes horaires disposent d’une échéance dédiée, sans dépendre du passage périodique de 30 secondes. Le calcul emploie le fuseau de Home Assistant plutôt que celui du navigateur ou de l’hôte de test.
+
+Une ouverture pendant une présence ou une absence déjà établie utilise `lux_on`, selon qu’elle déclenche l’ambiance normale ou la veilleuse. Un allumage sur présence utilise `turn_on`, y compris pour reprendre l’ambiance normale complète après la veilleuse. Une fermeture utilise `turn_off` : immédiatement à la fin horaire, ou après `lux_off_delay` de fermeture solaire continue. L’option `lighting_fallback.turn_off` limite l’extinction de l’éclairage normal ; elle ne limite pas celle des veilleuses, toujours soumises à la fermeture. Le mode `always` n’a pas de fermeture.
+
+Les scènes conditionnelles autorisées à allumer conservent leur priorité ; les pauses, l’édition, la désactivation et la priorité des intentions manuelles restent protégées. Les réévaluations ne doivent pas répéter les commandes déjà appliquées. Après reconfiguration ou redémarrage, les décisions et échéances sont recalculées depuis les paramètres et les données disponibles. Les tests et limites propres à ce contrat sont suivis dans [QA-LIGHTING-FALLBACK-2026-10-10.md](QA-LIGHTING-FALLBACK-2026-10-10.md), indépendamment de la recette antérieure.
+
+Sans capteur lumineux, un retour rapide exige une autorisation alternative valide et ouverte lors de l’événement de présence puis au moment de l’application ; il ne contourne ni une fermeture ni une indisponibilité survenue entre les deux. Le réglage `lux_off` conservé après retrait du capteur n’intervient plus dans cette protection : les réglages lumineux inactifs restent mémorisés mais n’influencent pas les décisions sans capteur. La protection historique vis-à-vis d’une mesure lumineuse périmée reste inchangée lorsqu’un capteur est configuré.
 
 ### Fenêtre de rallumage après absence
 
-**Implémenté et testé localement ; validation matérielle et déploiement domestique non réalisés pour cet ajout.** Pour une pièce où `lux_off` est faux, le moteur mémorise en mémoire le début de l’extinction pour absence s’il reste une lampe allumée. Les réévaluations répétées ne repoussent pas cet instant. La fenêtre n’est ni persistée dans `runtime`, ni restaurée après redémarrage.
+**Implémenté et testé localement ; validation matérielle et déploiement domestique non réalisés pour cet ajout.** Avec un capteur configuré et `lux_off` faux, ou sans capteur sous réserve de l’autorisation alternative, le moteur mémorise en mémoire le début de l’extinction pour absence s’il reste une lampe allumée. Les réévaluations répétées ne repoussent pas cet instant. La fenêtre n’est ni persistée dans `runtime`, ni restaurée après redémarrage.
 
 Un événement de présence doit passer d’un état connu absent à un état présent configuré, strictement avant l’expiration. Un changement d’attributs ou un rétablissement depuis `unknown`/`unavailable` ne suffit pas. La reprise contourne le contrôle lumineux pour cet allumage seulement, sans modifier la mesure ni l’hystérésis. Elle réapplique l’ambiance applicable avec `turn_on`, même si une scène est sélectionnée ou si un fondu d’extinction laisse les lampes temporairement allumées. Les intentions d’extinction encore en attente deviennent caduques ; un événement lumineux ultérieur ne déclenche pas un nouvel allumage avec `lux_on`.
 
-La fenêtre est consommée lors de la reprise. Extinction manuelle, extinction par une scène et extinction sur luminosité ne l’ouvrent pas. Intervention manuelle, session d’édition, désactivation et reconfiguration l’annulent. Les protections d’automatisation, d’édition et de pause restent prioritaires ; le retour ne termine la pause que selon la durée minimale d’absence continue décrite ci-dessous. Une nouvelle commande manuelle doit aussi pouvoir invalider le rallumage en attente.
+La fenêtre est consommée lors de la reprise. Extinction manuelle, extinction par une scène, extinction sur luminosité et passage en veilleuse ne l’ouvrent pas. Le retour depuis une veilleuse n’utilise pas cette protection pour contourner le seuil lumineux. Intervention manuelle, session d’édition, désactivation et reconfiguration l’annulent. Les protections d’automatisation, d’édition et de pause restent prioritaires ; le retour ne termine la pause que selon la durée minimale d’absence continue décrite ci-dessous. Une nouvelle commande manuelle doit aussi pouvoir invalider le rallumage en attente.
 
 ### Retour de présence pendant une pause manuelle
 
@@ -62,13 +108,39 @@ La fenêtre est consommée lors de la reprise. Extinction manuelle, extinction p
 
 Les états personnalisés du détecteur déterminent présence et absence. `unknown` ou `unavailable` rompt la continuité et ne prolonge pas artificiellement une absence connue. Zéro comme valeur globale retire seulement le minimum supplémentaire : `absence_delay` reste exigé pour le retour. L’extinction automatique utilise toujours son délai local et la fenêtre de rallumage reste comptée depuis l’envoi de cette extinction. Si un retour intervient alors que la pause est encore protégée, cette pause conserve sa priorité ; aucun instantané d’ambiance manuelle n’est ajouté ou réappliqué par ce mécanisme.
 
+### Veilleuse pendant l’absence
+
+**Implémenté ; tests automatisés et parcours Home Assistant isolé avec des lampes simulées.** Le moteur distingue l’application d’une veilleuse (`nightlight`) de celle d’une ambiance normale. Après absence confirmée, sans scène prioritaire autorisée à allumer, il applique les états fixes configurés et éteint les autres lampes. Si la luminosité baisse pendant une absence déjà confirmée, il allume les seules veilleuses. Sans capteur et en mode `always`, l’absence suffit ; l’extension `lighting_fallback` décrite ci-dessus soumet cette autorisation au mode horaire ou solaire choisi. Une source lumineuse configurée mais indisponible suspend les nouvelles décisions qui dépendent de sa mesure.
+
+Le seuil, l’hystérésis et le délai de confirmation existants sont réutilisés. L’extinction lumineuse de la veilleuse n’est pas soumise à `lux_off` : elle s’applique après confirmation du seuil haut, même lorsque ce réglage est faux. La présence inconnue n’est jamais une absence et la luminosité inconnue n’est jamais zéro. Les ajustements naturels ne commandent pas les veilleuses pendant ce mode.
+
+Au retour présent, l’ambiance normale complète est réappliquée si le seuil le permet, même si une veilleuse se déclare déjà allumée. Sinon, le moteur conserve l’attente lumineuse et éteint les veilleuses après confirmation ; une baisse ultérieure peut appliquer l’ambiance normale. Il utilise `turn_off` pour le passage de l’ambiance normale à la veilleuse et pour son extinction, `lux_on` pour son allumage après baisse lumineuse, `turn_on` pour la reprise normale immédiate sur présence, ou `lux_on` si cette reprise attend la luminosité. Les générations de commandes rendent caduques les intentions remplacées par un retour ou une nouvelle commande manuelle.
+
+Édition et désactivation suspendent la veilleuse. Une pause autorisant les extinctions permet de remplacer celle d’absence par la veilleuse sans terminer la pause ; une extinction manuelle explicite de toute la pièce bloque son rallumage pour la durée de cette pause. Le blocage est persisté dans `runtime` avec l’échéance de pause puis supprimé à sa fin ou à la reprise explicite. Le mode veilleuse lui-même est recalculé depuis les données disponibles au redémarrage ; les réévaluations n’envoient pas les mêmes réglages en boucle.
+
 ### Session d’édition
 
 Une session d’édition possède un jeton aléatoire, une seule connexion propriétaire et un instantané initial. Le panneau renouvelle sa session ; l’expiration intervient après 120 secondes sans renouvellement. Enregistrement et restauration sont traités côté serveur. Une autre connexion ne peut pas utiliser le jeton pour commander les lampes.
 
+### Application d’une scène Home Assistant liée
+
+**Implémenté et vérifié localement.** Un chemin commun d’application choisit entre les commandes de lampes d’une scène Halo et l’action native `scene.turn_on` sur `scene_entity_id`. Il sert à l’arbitrage automatique, à l’allumage de la pièce et au lancement explicite d’une scène. Le lien ne lit ni `scenes.yaml` ni les objets internes du fournisseur et n’utilise aucune activation pour découvrir sa configuration. Home Assistant exécute la source entière, effets compris. [Action native et scènes d’intégrations](https://www.home-assistant.io/integrations/scene/).
+
+La catégorie de transition provient du déclencheur existant (`turn_on`, `lux_on` ou `scene`). Une durée explicite est plafonnée à 6 553 secondes avant l’appel ; `null` omet le paramètre, `0` reste explicite. La prise en charge matérielle dépend de la scène et du fournisseur. La scène n’est marquée appliquée qu’après réussite de l’appel. Les réévaluations périodiques et changements de timestamp de la source ne doivent pas provoquer de réactivation.
+
+Une source absente ou `unavailable` est inéligible, tandis que `unknown` est valide pour une scène jamais activée. L’arbitrage automatique signale une source inaccessible ou un échec d’activation et poursuit avec la suivante, sinon l’ambiance normale, sans boucle de relance immédiate. Un lancement explicite échoué renvoie une erreur. À la sortie de scène, le moteur reprend uniquement les lumières de sa pièce ; il ne restaure pas les équipements extérieurs affectés par la source.
+
+Avant un lancement explicite, les droits de contrôle sur la source sont vérifiés en plus des droits existants de la pièce. L’appel natif transmet le contexte utilisateur. Les entités scène Halo et les sources connues pour commander des entités Halo sont refusées. Une garde contre les appels récursifs intervient avant les verrous des moteurs pour éviter un interblocage. Une désactivation autorisée invalide les intentions et suspend temporairement les réévaluations en file avant d’attendre le verrou de configuration ; cette suspension est libérée même si la demande est annulée. Cela ne peut annuler rétroactivement une commande déjà reçue par un fournisseur.
+
+`status.scene_errors` associe les identifiants Halo des scènes aux codes `external_scene_unavailable`, `external_scene_recursive` ou `external_scene_failed`. Les erreurs sont traduites dans la liste. Un échec automatique reste écarté jusqu’à un changement de conditions, au rétablissement de la source ou à une reprise/reconfiguration ; son timestamp seul ne le réarme pas.
+
+Le contexte de la commande est reconnu prioritairement. Une tolérance distincte couvre ensuite les retours sans origine identifiable pendant la transition réellement transmise + 5 secondes depuis le lancement, ou 5 secondes si aucune transition n’est demandée. Elle porte sur les lampes concernées dans la pièce ; si la composition est inconnue, elle couvre toutes les lampes de cette pièce. Elle ne masque pas les commandes manuelles identifiées et ne s’étend pas aux autres pièces. Une intervention physique sans contexte pendant ce délai peut ne pas déclencher de pause. Échec, intervention manuelle, édition, désactivation et reconfiguration annulent cette tolérance temporaire.
+
 ## Panneau et WebSocket
 
 Les sources sont dans `frontend/src/`. Le bundle Lit autonome est distribué dans `custom_components/halo/frontend/halo-panel.js`, servi localement sous `/halo_frontend/halo-panel.js`. Aucun CDN ni carte supplémentaire n’est nécessaire.
+
+Une sauvegarde transmet une copie du brouillon et mémorise son compteur de modification. Son acquittement conserve les saisies faites entre-temps et fournit la révision du prochain enregistrement ; une révision distante plus récente déclenche toujours le contrôle de conflit. Les réponses asynchrones d’une connexion ou de droits précédents ne remplacent pas la configuration courante. Changer de connexion invalide l’éditeur, son renouvellement et ses réponses ; perdre les droits administrateur retire les formulaires privilégiés. La révision d’une session d’édition est figée avant l’acquisition du verrou : si elle change pendant l’attente, le verrou est annulé sans aperçu. La sécurité des écritures reste contrôlée côté serveur.
 
 | Commande | Accès | Rôle |
 | --- | --- | --- |
@@ -77,10 +149,11 @@ Les sources sont dans `frontend/src/`. Le bundle Lit autonome est distribué dan
 | `halo/command` | Utilisateur autorisé à piloter les lampes | Allumer, éteindre, changer un mode, reprendre ou lancer une scène. |
 | `halo/save` | Administrateur | Enregistrer une configuration avec sa révision. |
 | `halo/scene/import` | Administrateur | Filtrer et normaliser une configuration de scène Home Assistant en brouillon, sans stockage ni commande matérielle. |
+| `halo/scene/inspect` | Administrateur | Inspecter les métadonnées d’une source et leur portée dans la pièce, sans stockage ni activation. |
 | `halo/edit/begin` | Administrateur | Verrouiller l’édition d’une pièce et obtenir son jeton. |
 | `halo/edit/preview` | Administrateur propriétaire | Appliquer l’aperçu aux lampes de la pièce. |
 | `halo/edit/touch` | Administrateur propriétaire | Renouveler la session. |
-| `halo/edit/end` | Administrateur propriétaire | Enregistrer la scène ou annuler puis libérer l’édition. |
+| `halo/edit/end` | Administrateur propriétaire | Enregistrer la scène ou la veilleuse ciblée, ou annuler puis libérer l’édition. |
 
 Les permissions Home Assistant filtrent les états lisibles et contrôlent les commandes de lampes. Les erreurs possèdent un code traduit par le panneau, notamment `invalid_config`, `conflict`, `edit_locked` et `invalid_edit`.
 
@@ -90,9 +163,15 @@ La refonte compacte ne change aucun contrat WebSocket, REST ni stockage. L’ét
 
 Le brouillon et sa révision restent indépendants des sous-vues. Les champs valides alimentent le modèle dès la saisie. Une entrée numérique invalide est conservée dans le contrôle, sans valeur de remplacement artificielle ; la validation empêche de quitter la sous-vue et focalise le champ. Les sections `details` contenant une erreur sont ouvertes avant sa présentation, y compris pour une condition d’édition. Les bornes solaires sont aussi contrôlées côté panneau. L’abandon utilise une nouvelle clé Lit pour remonter le contenu et effacer les saisies invalides absentes du modèle. Le serveur demeure responsable de la validation complète et des conflits de révision.
 
-Les onglets utilisent les rôles `tablist`, `tab`, `tabpanel`, un seul arrêt de tabulation et les touches fléchées, Début et Fin. La navigation est bloquée pendant une session d’édition réelle. Une annulation d’import redonne le focus au bouton d’import ; sa confirmation cible la nouvelle ligne de scène, car les actions de cette scène ne deviennent disponibles qu’après sauvegarde. La fin d’une édition revient à son bouton de réglage ou à la création d’une scène.
+Les onglets utilisent les rôles `tablist`, `tab`, `tabpanel`, un seul arrêt de tabulation et les touches fléchées, Début et Fin. La navigation est bloquée pendant une session d’édition réelle. Une annulation d’import redonne le focus au bouton d’import ; sa confirmation cible la nouvelle ligne de scène, car les actions de cette scène ne deviennent disponibles qu’après sauvegarde. La fin d’une édition revient à son bouton de réglage ou à la création d’une scène. Une édition de veilleuse revient à Ambiances et à son bouton Configurer ; elle n’ajoute pas d’onglet ni de scène.
 
 Les styles du panneau et du sélecteur Halo lisent les variables Home Assistant pour les couleurs, états, police, tailles, espacements, bordures, rayons, en-tête et champs. Les valeurs de repli restent locales aux propriétés manquantes ; aucune palette claire/sombre séparée n’est définie par Halo. Le panneau règle `color-scheme` selon `hass.themes.darkMode` lorsqu’il est présent et retire cette surcharge sinon. Les icônes passent par `ha-icon` ; la réduction des mouvements supprime les animations et transitions CSS. Ces choix ne supposent pas le chargement de composants privés de formulaire.
+
+### Inspection et configuration d’une scène liée
+
+`halo/scene/inspect` reçoit `room_id` et `entity_id` (entité scène source). Il retourne `entity_id`, `name`, `available`, `complete`, `lights`, `outside_lights`, `missing_lights`, `other_entities` et `blocked`. La réponse distingue les lampes extérieures, les lampes de la pièce non concernées et la complétude de la composition connue. Seules les métadonnées exposées par Home Assistant sont utilisées. Les groupes sont développés pour la comparaison lorsque leurs membres sont connus ; un groupe sans membres exposés ou une source opaque empêche de présenter cette comparaison comme exhaustive. Aucun identifiant inaccessible ne doit être divulgué.
+
+Le panneau utilise le sélecteur Halo existant et exclut les entités de scène Halo. Le menu « Ajouter une scène » distingue création, lien et import ; le formulaire de lien édite uniquement source, nom et règles. La confirmation alimente le brouillon, puis `halo/save` applique les droits, la validation et les contrôles de révision habituels. L’ajout d’une scène manuelle sans condition et les changements de nom seuls rafraîchissent les dépendances sans rappel matériel ; les modifications de source ou de règles enregistrées réévaluent normalement les automatismes. `halo/command` et les entités scène des appareils Halo utilisent le même chemin de lancement pour les deux types. La configuration d’un lien n’ouvre aucune session `halo/edit/*` et n’applique aucun aperçu.
 
 ### Import de scènes Home Assistant
 
@@ -105,6 +184,12 @@ La normalisation suit la [reproduction des états `light` de Home Assistant](htt
 Le résultat possède un nouvel identifiant, sans condition et sans autorisation d’allumage automatique. Il est ajouté au brouillon, puis sauvegardé avec `halo/save` et sa révision. La lecture, la normalisation et l’ajout ne commandent aucune lampe. La sauvegarde d’un simple ajout de scènes manuelles n’impose pas de réapplication de l’ambiance. Une copie ne conserve aucune liaison fonctionnelle avec la scène source.
 
 Les scènes sans `id`, absentes de `scenes.yaml` ou fournies par une intégration tierce sans configuration lisible ne sont pas récupérées par activation/capture. Le panneau explique leur indisponibilité et conserve son brouillon en cas d’erreur, de réponse tardive ou de conflit de révision. Une scène native porte souvent un attribut `entity_id` ; cela ne la classe pas parmi les groupes de lampes. Ses références d’entités restent filtrées selon les droits de lecture de l’utilisateur.
+
+### Édition et sauvegarde de la veilleuse
+
+Le contrat étend `halo/edit/end` avec `target: "scene" | "nightlight"`, facultatif et égal à `"scene"` par défaut pour les clients existants. Pour enregistrer, la cible `"nightlight"` reçoit `save: true`, `nightlight: { enabled, lights }`, `revision` et, pour la capture réelle, `capture: true` avec `capture_entities` contenant la sélection explicite du panneau. Aucun identifiant, nom ou condition de scène n’est créé. La sélection doit être valide, sans doublon et limitée aux lampes de la pièce. Comme pour les scènes, l’absence de `capture_entities` conserve la capture de toute la pièce pour compatibilité ; le nouveau panneau transmet toujours sa sélection.
+
+La capture, la validation et la persistance atomique interviennent sous les mêmes droits, révision et verrou de session que les scènes. La session n’est libérée qu’après succès. Annulation et expiration restaurent l’instantané initial ; une erreur ne laisse pas une sauvegarde partielle. Les états indisponibles ne remplacent pas un réglage reproductible déjà connu. L’activation et la configuration ordinaire restent enregistrées par le brouillon transversal ; démarrer une édition réelle exige d’avoir enregistré ou abandonné ce brouillon.
 
 ### Contrôles natifs des lampes dans les scènes
 
@@ -145,4 +230,6 @@ Les identifiants des nouveaux profils et scènes sont des UUID v4 générés ave
 
 ## Vérification
 
-Les tests Python emploient Home Assistant et son API WebSocket authentifiée avec des lampes simulées. Les 52 tests frontend de la refonte et le contrôle TypeScript réussissent, avec couverture de la navigation, de la conservation des brouillons, de la validation, des droits et du focus. Des essais ciblés d’import et d’édition native ont également été réalisés dans Home Assistant 2026.10.0 isolé. Les preuves, le build et les limites sont décrits dans [DEVELOPMENT.md](DEVELOPMENT.md). Ces vérifications ne remplacent pas l’installation domestique et les essais matériels prévus dans le cahier des charges.
+La [recette transversale du 10 octobre 2026](QA-2026-10-10.md) complète les validations historiques ci-dessous. Elle inventorie les 68 critères d’acceptation en séparant tests automatisés, essais de services dans Home Assistant isolé, parcours navigateur et limites matérielles ; elle ne revendique pas 68 parcours complets sur des équipements physiques. Les échecs disque, commandes lentes, réponses tardives et autres régressions corrigées y sont rattachés à leurs tests.
+
+Les tests Python emploient Home Assistant et son API WebSocket authentifiée avec des lampes simulées. À l’issue de l’ajout veilleuse le 10 octobre 2026, les **437 tests Python**, les **73 tests frontend**, les contrôles Ruff et TypeScript et la construction du panneau réussissent. La couverture comprend notamment navigation, brouillons, validation, droits, focus, capture des réglages et comportements de la veilleuse. Des essais ciblés d’import, d’édition native et de veilleuse ont également été réalisés dans Home Assistant 2026.10.0 isolé. Pour la veilleuse, les parcours sur ordinateur et mobile couvrent la fenêtre native, la sélection et l’annulation ; les états simulés vérifient aussi l’absence, la luminosité, le retour, l’absence de capteur lumineux et la conservation du blocage manuel au rechargement de l’intégration. Les preuves, le build et les limites sont décrits dans [DEVELOPMENT.md](DEVELOPMENT.md). Ces vérifications ne remplacent pas l’installation domestique et les essais matériels prévus dans le cahier des charges.

@@ -21,12 +21,31 @@ export type Condition =
   | { type: "numeric"; entity_id: string; attribute?: string; above?: number; below?: number }
   | { type: "time"; after?: string; before?: string }
   | { type: "sun"; above?: number; below?: number };
-export interface Scene {
+interface SceneSettings {
   id: string;
   name: string;
   can_turn_on: boolean;
   conditions: Condition | null;
+}
+export interface HaloScene extends SceneSettings {
+  type?: "halo";
   lights: Record<string, LampState>;
+}
+export interface HomeAssistantScene extends SceneSettings {
+  type: "home_assistant";
+  scene_entity_id: string;
+}
+export type Scene = HaloScene | HomeAssistantScene;
+export interface SceneInspection {
+  entity_id: string;
+  name: string;
+  available: boolean;
+  complete: boolean;
+  lights: string[];
+  outside_lights: string[];
+  missing_lights: string[];
+  other_entities: string[];
+  blocked: boolean;
 }
 export type CurveInterpolation = "linear" | "ease_in_out";
 // ease_in is accepted when reading a profile saved before the S-curve correction.
@@ -34,6 +53,16 @@ export interface Curve { low_elevation: number; high_elevation: number; low: num
 export interface Curves { brightness: Curve; temperature: Curve }
 export interface Profile { id: string; name: string; linked: boolean; morning: Curves; evening: Curves }
 export interface Association { profile_id: string; lights: string[]; brightness_offset: number }
+export interface Nightlight { enabled: boolean; lights: Record<string, LampState> }
+export interface LightingFallback {
+  mode: "always" | "time" | "sun";
+  start: string;
+  end: string;
+  linked: boolean;
+  morning_below: number;
+  evening_below: number;
+  turn_off: boolean;
+}
 export interface Room {
   id: string;
   lights: string[];
@@ -43,6 +72,7 @@ export interface Room {
   lux_threshold: number | null;
   lux_hysteresis: number;
   lux_off: boolean;
+  lighting_fallback: LightingFallback;
   absence_delay: number;
   manual_pause: number;
   lux_off_delay: number;
@@ -51,6 +81,7 @@ export interface Room {
   natural_enabled: boolean;
   transitions: Transitions;
   base: Record<string, LampState>;
+  nightlight: Nightlight;
   associations: Association[];
   scenes: Scene[];
 }
@@ -60,6 +91,7 @@ export interface Light {
   name: string;
   is_group?: boolean;
   group_members?: string[];
+  group_members_complete?: boolean;
   member_of?: string[];
   area_id: string | null;
   available: boolean;
@@ -68,7 +100,7 @@ export interface Light {
   max_color_temp_kelvin?: number;
   supported_features: number;
 }
-export interface Entity { entity_id: string; name: string; state: string; attributes: Record<string, unknown> }
+export interface Entity { entity_id: string; name: string; state: string; attributes: Record<string, unknown>; platform?: string }
 export interface RoomStatus {
   [key: string]: unknown;
   reason?: string;
@@ -78,6 +110,10 @@ export interface RoomStatus {
   pause_until?: string | number | null;
   is_on?: boolean;
   available?: boolean;
+  scene_errors?: Record<string, string>;
+  lighting_allowed?: boolean | null;
+  lighting_source?: "lux" | "always" | "time" | "sun";
+  lighting_off_deadline?: string | null;
 }
 export interface Snapshot {
   config: Config;

@@ -731,3 +731,138 @@ async def test_presence_return_setting_rejected_atomically(api):
     current = (await request(api.client, "halo/get"))["result"]
     assert current["revision"] == snapshot["revision"]
     assert current["config"] == snapshot["config"]
+
+
+async def test_native_scene_inspection_is_admin_only_and_read_only(
+    hass, api, hass_ws_client, hass_read_only_access_token
+):
+    saved = await configure(api)
+    hass.states.async_set(
+        "scene.native",
+        "unknown",
+        {"entity_id": [api.lamp, "light.outside", "switch.tv"]},
+    )
+    inspected = await request(
+        api.client, "halo/scene/inspect", room_id=api.room_id, entity_id="scene.native"
+    )
+    assert inspected["success"]
+    assert inspected["result"]["outside_lights"] == ["light.outside"]
+    assert inspected["result"]["other_entities"] == ["switch.tv"]
+    assert inspected["result"]["complete"]
+    assert inspected["result"]["available"]
+    current = (await request(api.client, "halo/get"))["result"]
+    assert current["config"] == saved["config"]
+    assert current["revision"] == saved["revision"]
+    assert not api.calls
+    reader = await hass_ws_client(hass, access_token=hass_read_only_access_token)
+    denied = await request(
+        reader, "halo/scene/inspect", room_id=api.room_id, entity_id="scene.native"
+    )
+    assert not denied["success"] and denied["error"]["code"] == "unauthorized"
+    await reader.close()
+    invalid = await request(
+        api.client, "halo/scene/inspect", room_id=api.room_id, entity_id="light.outside"
+    )
+    assert not invalid["success"]
+
+
+async def test_linked_scene_uses_real_native_reproduction_and_preserves_omitted_lamp(
+    hass, api
+):
+    saved = await configure(api)
+    for entity_id in ("light.omitted", "light.outside"):
+        hass.states.async_set(
+            entity_id,
+            "on",
+            {
+                "brightness": 127,
+                "color_mode": "brightness",
+                "supported_color_modes": ["brightness"],
+            },
+        )
+    await hass.services.async_call(
+        "scene",
+        "create",
+        {
+            "scene_id": "native",
+            "entities": {
+                api.lamp: {"state": "on", "brightness": 200, "effect": "Candle"},
+                "light.outside": {"state": "off"},
+            },
+        },
+        blocking=True,
+    )
+    config = deepcopy(saved["config"])
+    config["rooms"][api.room_id]["lights"].append("light.omitted")
+    config["rooms"][api.room_id]["scenes"] = [
+        {
+            "id": "linked",
+            "name": "Native link",
+            "type": "home_assistant",
+            "scene_entity_id": "scene.native",
+            "conditions": None,
+            "can_turn_on": False,
+        }
+    ]
+    response = await request(
+        api.client, "halo/save", config=config, revision=saved["revision"]
+    )
+    assert response["success"], response
+    assert not api.calls
+    response = await request(
+        api.client,
+        "halo/command",
+        room_id=api.room_id,
+        command="scene",
+        scene_id="linked",
+    )
+    assert response["success"], response
+    await hass.async_block_till_done()
+    assert {call.data["entity_id"] for call in api.calls} == {
+        api.lamp,
+        "light.outside",
+    }
+    assert all(call.context.user_id for call in api.calls)
+    assert hass.states.get(api.lamp).attributes["brightness"] == 200
+    assert hass.states.get(api.lamp).attributes["effect"] == "Candle"
+    assert hass.states.get("light.outside").state == "off"
+    assert hass.states.get("light.omitted").attributes["brightness"] == 127
+    assert (
+        api.entry.runtime_data.engines[api.room_id].lighting_status["scene_id"]
+        == "linked"
+    )
+
+
+async def test_renaming_an_active_link_does_not_recall_it(hass, api):
+    saved = await configure(api)
+    calls = []
+
+    async def recall(call):
+        calls.append(call)
+
+    hass.services.async_register("scene", "turn_on", recall)
+    hass.states.async_set("scene.native", "unknown")
+    config = deepcopy(saved["config"])
+    room = config["rooms"][api.room_id]
+    room["automation_enabled"] = True
+    room["scenes"] = [
+        {
+            "id": "linked",
+            "name": "First",
+            "type": "home_assistant",
+            "scene_entity_id": "scene.native",
+            "can_turn_on": True,
+            "conditions": {"type": "state", "entity_id": api.lamp, "state": "on"},
+        }
+    ]
+    response = await request(
+        api.client, "halo/save", config=config, revision=saved["revision"]
+    )
+    assert response["success"], response
+    assert len(calls) == 1
+    room["scenes"][0]["name"] = "Renamed"
+    response = await request(
+        api.client, "halo/save", config=config, revision=response["result"]["revision"]
+    )
+    assert response["success"], response
+    assert len(calls) == 1

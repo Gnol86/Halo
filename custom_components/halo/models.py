@@ -14,6 +14,15 @@ TRANSITION_DEFAULTS = {
     "scene": 10,
     "turn_off": 2,
 }
+LIGHTING_FALLBACK_DEFAULTS = {
+    "mode": "always",
+    "start": "18:00",
+    "end": "08:00",
+    "linked": True,
+    "morning_below": 0,
+    "evening_below": 0,
+    "turn_off": False,
+}
 ROOM_DEFAULTS = {
     "lights": [],
     "presence_entity_id": None,
@@ -22,6 +31,7 @@ ROOM_DEFAULTS = {
     "lux_threshold": None,
     "lux_hysteresis": 0,
     "lux_off": False,
+    "lighting_fallback": LIGHTING_FALLBACK_DEFAULTS.copy(),
     "absence_delay": 0,
     "manual_pause": 7200,
     "lux_off_delay": 30,
@@ -30,6 +40,7 @@ ROOM_DEFAULTS = {
     "natural_enabled": True,
     "transitions": dict.fromkeys(TRANSITIONS, "inherit"),
     "base": {},
+    "nightlight": {"enabled": False, "lights": {}},
     "associations": [],
     "scenes": [],
 }
@@ -56,8 +67,8 @@ def _number(value: Any, label: str, low: float, high: float) -> float:
     if (
         isinstance(value, bool)
         or not isinstance(value, (int, float))
-        or not math.isfinite(value)
         or not low <= value <= high
+        or not math.isfinite(value)
     ):
         raise ValueError(f"{label}: expected a finite number between {low} and {high}")
     return value
@@ -67,6 +78,28 @@ def _boolean(value: Any, label: str) -> bool:
     if not isinstance(value, bool):
         raise ValueError(f"{label}: expected a boolean")
     return value
+
+
+def validate_lighting_fallback(value: Any) -> dict[str, Any]:
+    """Keep inactive choices while validating a room's no-sensor policy."""
+    supplied = _mapping(value, "lighting_fallback")
+    if supplied.keys() - LIGHTING_FALLBACK_DEFAULTS.keys():
+        raise ValueError("Unknown lighting_fallback setting")
+    fallback = LIGHTING_FALLBACK_DEFAULTS.copy() | deepcopy(supplied)
+    if fallback["mode"] not in ("always", "time", "sun"):
+        raise ValueError("Invalid lighting_fallback mode")
+    for key in ("start", "end"):
+        if not isinstance(fallback[key], str) or not re.fullmatch(
+            r"(?:[01][0-9]|2[0-3]):[0-5][0-9]", fallback[key]
+        ):
+            raise ValueError(f"lighting_fallback {key}: expected HH:MM")
+    if fallback["start"] == fallback["end"]:
+        raise ValueError("lighting_fallback start and end must differ")
+    for key in ("linked", "turn_off"):
+        _boolean(fallback[key], f"lighting_fallback {key}")
+    for key in ("morning_below", "evening_below"):
+        _number(fallback[key], f"lighting_fallback {key}", -90, 90)
+    return fallback
 
 
 def _text(value: Any, label: str) -> str:
@@ -186,6 +219,27 @@ def validate_lamp_states(value: Any, members: list[str]) -> dict:
     return output
 
 
+def validate_nightlight(value: Any, members: list[str]) -> dict:
+    """Normalize an absence ambience without silently selecting room lights."""
+    nightlight = {"enabled": False, "lights": {}} | deepcopy(
+        _mapping(value, "nightlight")
+    )
+    if set(nightlight) - {"enabled", "lights"}:
+        raise ValueError("Unknown nightlight setting")
+    _boolean(nightlight["enabled"], "nightlight.enabled")
+    nightlight["lights"] = validate_lamp_states(nightlight["lights"], members)
+    if nightlight["enabled"] and not any(
+        settings["state"] == "on"
+        and all(
+            settings.get(key, 1) > 0
+            for key in ("brightness", "brightness_pct", "white")
+        )
+        for settings in nightlight["lights"].values()
+    ):
+        raise ValueError("An enabled nightlight requires at least one light on")
+    return nightlight
+
+
 def validate_condition(value: Any, depth: int = 0) -> None:
     """Validate the visual condition tree; no templates or arbitrary code."""
     if value is None:
@@ -242,7 +296,17 @@ def validate_scene(value: Any, members: list[str]) -> dict:
     _boolean(scene["can_turn_on"], "can_turn_on")
     scene.setdefault("conditions", None)
     validate_condition(scene["conditions"])
-    scene["lights"] = validate_lamp_states(scene.get("lights", {}), members)
+    kind = scene.setdefault("type", "halo")
+    if kind == "home_assistant":
+        _entity(scene.get("scene_entity_id"), "scene")
+        if "lights" in scene:
+            raise ValueError("A linked scene cannot contain copied lamp settings")
+    elif kind == "halo":
+        if "scene_entity_id" in scene:
+            raise ValueError("A Halo scene cannot also reference a native scene")
+        scene["lights"] = validate_lamp_states(scene.get("lights", {}), members)
+    else:
+        raise ValueError("Unknown scene type")
     return scene
 
 
@@ -333,6 +397,9 @@ def validate_config(value: Any) -> dict[str, Any]:
         if room["lux_entity_id"] is not None or room["lux_threshold"] is not None:
             _number(room["lux_threshold"], "lux_threshold", 0, 1e9)
         _number(room["lux_hysteresis"], "lux_hysteresis", 0, 1e9)
+        room["lighting_fallback"] = validate_lighting_fallback(
+            room["lighting_fallback"]
+        )
         for key in ("absence_delay", "manual_pause", "lux_off_delay"):
             _number(room[key], key, 0, 604800)
         for key in (
@@ -344,11 +411,15 @@ def validate_config(value: Any) -> dict[str, Any]:
             _boolean(room[key], key)
         room["transitions"] = _transitions(room["transitions"], room=True)
         room["base"] = validate_lamp_states(room["base"], room["lights"])
+        room["nightlight"] = validate_nightlight(room["nightlight"], room["lights"])
+        if room["nightlight"]["enabled"] and not room["presence_entity_id"]:
+            raise ValueError("An enabled nightlight requires a presence entity")
         if not isinstance(room["associations"], list):
             raise ValueError("Associations must be a list")
         natural_members: set[str] = set()
         for association in room["associations"]:
             _mapping(association, "association")
+            _identifier(association.get("profile_id"))
             if association.get("profile_id") not in profiles:
                 raise ValueError("Unknown natural profile")
             association["lights"] = _lights(association.get("lights", []))

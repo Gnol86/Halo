@@ -30,7 +30,7 @@ def number(value: Any) -> float | None:
         return None
     try:
         result = float(value)
-    except TypeError, ValueError:
+    except TypeError, ValueError, OverflowError:
         return None
     return result if isfinite(result) else None
 
@@ -78,6 +78,8 @@ def _evaluate(
         return False
     attribute = "elevation" if kind == "sun" else condition.get("attribute")
     value = number(state.attributes.get(attribute) if attribute else state.state)
+    if kind == "sun" and value is not None and not -90 <= value <= 90:
+        return None
     return None if value is None else _between(value, condition)
 
 

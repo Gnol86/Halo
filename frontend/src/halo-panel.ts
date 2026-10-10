@@ -1,21 +1,24 @@
 import { LitElement, html, nothing, svg, type PropertyValues, type TemplateResult } from "lit";
 import { live } from "lit/directives/live.js";
 import { keyed } from "lit/directives/keyed.js";
-import { categories, createId, colorMode, dimmable, curveInterpolation, interpolate, moveItem, newCondition, newProfile, newRoom, optionalNumber } from "./model";
+import { categories, createId, colorMode, dimmable, curveInterpolation, interpolate, moveItem, newCondition, newLightingFallback, newProfile, newRoom, optionalNumber } from "./model";
 import { en, language, translate, type TranslationKey } from "./translations";
 import { styles } from "./styles";
 import { HaloEntityPicker, matchesEntity } from "./entity-picker";
-import type { Condition, Config, Curve, CurveInterpolation, Hass, LampState, Light, Profile, Room, Scene, Snapshot, Transition, Transitions } from "./types";
+import type { Condition, Config, Curve, CurveInterpolation, Hass, HaloScene, HomeAssistantScene, LampState, Light, LightingFallback, Nightlight, Profile, Room, Scene, SceneInspection, Snapshot, Transition, Transitions } from "./types";
 
-type Editor = { roomId: string; token: string; scene: Scene; included: Set<string>; revision: number; ready: boolean };
-type SceneImport = { roomId: string; revision: number; entityId: string | null; loading: boolean; request: number; error: string; scene?: Scene; ignored?: number };
+type Editor = { roomId: string; token: string; included: Set<string>; revision: number; ready: boolean } & (
+  { target: "scene"; scene: HaloScene } | { target: "nightlight"; nightlight: Nightlight }
+);
+type SceneImport = { roomId: string; revision: number; entityId: string | null; loading: boolean; request: number; error: string; scene?: HaloScene; ignored?: number };
+type SceneLink = { roomId: string; revision: number; scene: HomeAssistantScene; existing: boolean; loading: boolean; request: number; error: string; inspection?: SceneInspection };
 type RoomSection = "control" | "lights" | "automation" | "ambiences" | "settings";
-type FieldOptions = { min?: number; max?: number; step?: number | "any"; required?: boolean; type?: string; unit?: string };
+type FieldOptions = { min?: number; max?: number; step?: number | "any"; required?: boolean; type?: string; unit?: string; ariaLabel?: string };
 
 export class HaloPanel extends LitElement {
   static properties = { hass: { attribute: false }, narrow: { type: Boolean }, snapshot: { state: true },
     draft: { state: true }, page: { state: true }, dirty: { state: true }, busy: { state: true },
-    error: { state: true }, notice: { state: true }, editor: { state: true }, importer: { state: true }, search: { state: true }, showOtherLights: { state: true }, roomSearch: { state: true }, roomSection: { state: true }, selectedProfile: { state: true } };
+    error: { state: true }, notice: { state: true }, editor: { state: true }, importer: { state: true }, linker: { state: true }, search: { state: true }, showOtherLights: { state: true }, roomSearch: { state: true }, roomSection: { state: true }, selectedProfile: { state: true } };
   static styles = styles;
   declare hass: Hass;
   narrow = false;
@@ -25,6 +28,7 @@ export class HaloPanel extends LitElement {
   private viewGeneration = 0;
   private page = "rooms";
   private dirty = false;
+  private draftGeneration = 0;
   private busy = false;
   private error = "";
   private notice = "";
@@ -37,6 +41,7 @@ export class HaloPanel extends LitElement {
   private lightSearches = new Map<string, string>();
   private editor?: Editor;
   private importer?: SceneImport;
+  private linker?: SceneLink;
   private unsubscribe?: () => void;
   private connection?: Hass["connection"];
   private connectionGeneration = 0;
@@ -51,7 +56,7 @@ export class HaloPanel extends LitElement {
   private get admin() { return this.snapshot?.is_admin === true; }
   private get room() { return this.draft?.rooms[this.page]; }
   private get hasConflict() { return this.dirty && this.snapshot?.revision !== this.revision; }
-  private get editing() { return Boolean(this.editor); }
+  private get editing() { return Boolean(this.editor || this.linker); }
 
   protected updated(changed: PropertyValues) {
     if (changed.has("hass")) {
@@ -81,12 +86,17 @@ export class HaloPanel extends LitElement {
     this.clearEditorTimers();
     this.editor = undefined;
     this.importer = undefined;
+    this.linker = undefined;
     this.showOtherLights = false;
   }
 
   private async connect() {
     const generation = ++this.connectionGeneration;
     this.importer = undefined;
+    this.linker = undefined;
+    this.clearEditorTimers();
+    this.editor = undefined;
+    this.busy = false;
     this.unsubscribe?.();
     this.unsubscribe = undefined;
     this.connection = this.hass.connection;
@@ -104,8 +114,24 @@ export class HaloPanel extends LitElement {
 
   private receive(snapshot: Snapshot) {
     this.snapshot = snapshot;
-    if (!this.dirty && !this.editor) {
+    if (!snapshot.is_admin && (this.dirty || this.editor || this.importer || this.linker)) {
+      // Privileged forms and their old session must not survive a role change.
+      this.linker = undefined;
+      this.importer = undefined;
+      this.clearEditorTimers();
+      this.editor = undefined;
+      this.dirty = false;
+      this.draftGeneration++;
+      this.durationModes.clear();
+      this.viewGeneration++;
+      this.roomSection = "control";
+    }
+    if (!this.dirty && !this.editing) {
       this.draft = structuredClone(snapshot.config);
+      for (const room of Object.values(this.draft.rooms)) {
+        room.nightlight ??= { enabled: false, lights: {} };
+        room.lighting_fallback ??= newLightingFallback();
+      }
       this.revision = snapshot.revision;
     }
   }
@@ -136,6 +162,7 @@ export class HaloPanel extends LitElement {
   private modify(callback: (config: Config) => void) {
     if (!this.admin || !this.draft || this.editor) return;
     callback(this.draft);
+    this.draftGeneration++;
     this.dirty = true;
     this.clearNotice();
     this.requestUpdate();
@@ -163,6 +190,13 @@ export class HaloPanel extends LitElement {
       this.error = this.t("badCurve");
       return false;
     }
+    const badSchedule = this.renderRoot.querySelector<HTMLElement>(".fallback-time[data-invalid]");
+    if (badSchedule) {
+      const field = badSchedule.querySelectorAll<HTMLInputElement>('input[type="time"]')[badSchedule.dataset.invalidField === "start" ? 0 : 1];
+      field?.focus();
+      this.error = this.t(badSchedule.dataset.invalidFormat === "true" ? "fallbackInvalidTime" : "fallbackDistinctTimes");
+      return false;
+    }
     for (const picker of this.renderRoot.querySelectorAll<HaloEntityPicker>("halo-entity-picker")) {
       if (picker.required && !picker.value) this.revealField(picker);
       if (!picker.reportValidity()) { this.error = this.t("validation"); return false; }
@@ -178,21 +212,28 @@ export class HaloPanel extends LitElement {
 
   private markFieldDirty() {
     if (!this.admin || this.editor) return;
+    this.draftGeneration++;
     this.dirty = true;
     this.clearNotice();
   }
 
   private async save() {
-    if (!this.draft || !this.validateFields() || this.busy || this.hasConflict) return;
+    if (!this.admin || !this.draft || !this.validateFields() || this.busy || this.hasConflict) return;
+    const generation = this.connectionGeneration;
+    const draftGeneration = this.draftGeneration;
     this.busy = true;
     this.error = "";
     try {
-      const result = await this.hass.callWS<Snapshot>({ type: "halo/save", config: this.draft, revision: this.revision });
-      this.dirty = false;
-      this.receive(result);
-      this.showSavedNotice();
-    } catch (error) { this.showError(error); }
-    finally { this.busy = false; }
+      const result = await this.hass.callWS<Snapshot>({ type: "halo/save", config: structuredClone(this.draft), revision: this.revision });
+      if (!this.isConnected || generation !== this.connectionGeneration || !this.admin) return;
+      // Inputs remain usable during a slow save. Acknowledge only the submitted
+      // draft and keep anything entered since, including invalid field text.
+      this.dirty = this.draftGeneration !== draftGeneration;
+      this.revision = result.revision;
+      this.receive(this.snapshot && this.snapshot.revision > result.revision ? this.snapshot : result);
+      if (!this.dirty) this.showSavedNotice();
+    } catch (error) { if (this.isConnected && generation === this.connectionGeneration) this.showError(error); }
+    finally { if (generation === this.connectionGeneration) this.busy = false; }
   }
 
   private discard() {
@@ -206,13 +247,16 @@ export class HaloPanel extends LitElement {
   }
 
   private async command(roomId: string, command: string, params: Record<string, unknown> = {}) {
+    const generation = this.connectionGeneration;
+    const admin = this.admin;
+    const current = () => this.isConnected && generation === this.connectionGeneration && admin === this.admin;
     this.busy = true;
     this.error = "";
     try {
       const result = await this.hass.callWS<Snapshot | undefined>({ type: "halo/command", room_id: roomId, command, ...params });
-      if (result?.config) this.receive(result);
-    } catch (error) { this.showError(error); }
-    finally { this.busy = false; }
+      if (current() && result?.config && result.revision >= (this.snapshot?.revision ?? 0)) this.receive(result);
+    } catch (error) { if (current()) this.showError(error); }
+    finally { if (generation === this.connectionGeneration) this.busy = false; }
   }
 
   private navigate(page: string) {
@@ -262,7 +306,7 @@ export class HaloPanel extends LitElement {
   }
 
   private numberField(label: TranslationKey, value: number | null | undefined, change: (value: number | null) => void, options: FieldOptions = {}) {
-    return html`<label>${this.t(label)}${options.unit ? ` (${options.unit})` : ""}<input type="number" .value=${value == null ? "" : String(value)}
+    return html`<label>${this.t(label)}${options.unit ? ` (${options.unit})` : ""}<input type="number" .value=${value == null ? "" : String(value)} aria-label=${options.ariaLabel ?? nothing}
       min=${options.min ?? nothing} max=${options.max ?? nothing} step=${options.step ?? "any"} ?required=${options.required ?? false}
       @input=${(event: Event) => {
         const field = event.target as HTMLInputElement;
@@ -280,12 +324,26 @@ export class HaloPanel extends LitElement {
       @change=${(event: Event) => change((event.target as HTMLInputElement).checked)}>${this.t(label)}</label>`;
   }
 
-  private entityField(label: TranslationKey, value: string | null, change: (value: string | null) => void, domain?: string, required = false) {
-    const entities = (this.snapshot?.entities ?? []).filter((entity) => !domain || entity.entity_id.startsWith(`${domain}.`)).map((entity) =>
+  private entityField(label: TranslationKey, value: string | null, change: (value: string | null) => void, domain?: string, options: { required?: boolean; excludeHalo?: boolean; currentValue?: boolean; validateBeforeChange?: boolean } = {}) {
+    const entities = (this.snapshot?.entities ?? []).filter((entity) => (!domain || entity.entity_id.startsWith(`${domain}.`)) && (!options.excludeHalo || entity.platform !== "halo")).map((entity) =>
       // A scene reports "unknown" until its first activation; its configuration can still be read.
       domain === "scene" && entity.state === "unknown" ? { ...entity, state: undefined } : entity);
-    return html`<halo-entity-picker .label=${this.t(label)} .locale=${this.locale} .entities=${entities} .value=${value} .required=${required}
-      @entity-changed=${(event: CustomEvent<{ value: string | null }>) => change(event.detail.value)}></halo-entity-picker>`;
+    return html`<halo-entity-picker .label=${this.t(label)} .locale=${this.locale} .entities=${entities} .value=${value} .required=${options.required ?? false}
+      .currentValue=${options.currentValue ? this.currentEntityValue(value) : undefined}
+      @entity-changed=${(event: CustomEvent<{ value: string | null }>) => {
+        if (options.validateBeforeChange && !this.validateFields()) { (event.target as HaloEntityPicker).value = value; return; }
+        change(event.detail.value);
+      }}></halo-entity-picker>`;
+  }
+
+  private currentEntityValue(entityId: string | null): string | undefined {
+    if (!entityId) return undefined;
+    // Once live states are available, a removed entity must not show a stale snapshot.
+    const entity = this.hass.states ? this.hass.states[entityId] : this.snapshot?.entities.find((item) => item.entity_id === entityId);
+    if (!entity || entity.state === "unavailable") return this.t("unavailable");
+    if (entity.state === "unknown" || !entity.state) return this.t("unknownState");
+    const unit = typeof entity.attributes.unit_of_measurement === "string" ? entity.attributes.unit_of_measurement.trim() : "";
+    return unit ? `${entity.state} ${unit}` : entity.state;
   }
 
   private lightSearch(key: string) {
@@ -331,7 +389,7 @@ export class HaloPanel extends LitElement {
     const selected = this.page !== "rooms" && this.page !== "global" && this.page !== "profiles";
     return html`<div class="workspace ${selected ? "has-room" : ""}">
       ${this.renderRooms()}
-      <div class="room-detail">${this.editor ? this.renderEditor(this.editor) : this.importer && this.admin ? this.renderImport(this.importer)
+      <div class="room-detail">${this.editor ? this.renderEditor(this.editor) : this.linker && this.admin ? this.renderSceneLink(this.linker) : this.importer && this.admin ? this.renderImport(this.importer)
         : selected ? this.renderRoom() : html`<div class="empty-state welcome"><ha-icon icon="mdi:lightbulb-group-outline"></ha-icon><h2 class="view-title" tabindex="-1">${this.t("chooseRoom")}</h2><p>${this.t("chooseRoomHelp")}</p>${!this.admin ? html`<p class="help">${this.t("adminOnly")}</p>` : nothing}</div>`}</div>
     </div>`;
   }
@@ -342,9 +400,13 @@ export class HaloPanel extends LitElement {
     const reason = status.reason ?? "idle";
     const key = reason in en ? reason as TranslationKey : "idle";
     const scene = this.draft?.rooms[roomId]?.scenes.find((item) => item.id === status.scene_id);
+    const sourceLabels = { lux: "luxEntity", always: "fallbackAlways", time: "time", sun: "sun" } as const;
     return html`<div aria-label=${this.t("status")}><span class="badge">${this.t(key)}${scene ? ` · ${scene.name}` : ""}</span>
       <span class="badge">${this.t(status.available === false ? "unavailable" : status.is_on ? "on" : "off")}</span>
-      ${([["pause_until", "pauseUntil"], ["absence_deadline", "absenceDeadline"], ["lux_off_deadline", "luxDeadline"]] as const).map(([field, label]) => {
+      ${status.lighting_allowed !== undefined ? html`<p class="help status-line lighting-authorization">${this.t("lightingAuthorization")}: ${this.t(status.lighting_allowed === null ? "unavailable" : status.lighting_allowed ? "lightingAllowed" : "lightingBlocked")}${status.lighting_source && status.lighting_source in sourceLabels ? ` · ${this.t(sourceLabels[status.lighting_source])}` : ""}</p>` : nothing}
+      ${status.error === "nightlight_group_conflict" ? html`<p class="notice error" role="alert">${this.t("nightlight_group_conflict")}</p>` : nothing}
+      ${([["pause_until", "pauseUntil"], ["absence_deadline", "absenceDeadline"], ["lux_off_deadline", "luxDeadline"], ["lighting_off_deadline", "sunDeadline"]] as const).map(([field, label]) => {
+        if (field === "lighting_off_deadline" && status.lighting_source !== "sun") return nothing;
         const value = status[field];
         if (!value) return nothing;
         const date = new Date(typeof value === "number" ? value * 1000 : String(value));
@@ -380,7 +442,7 @@ export class HaloPanel extends LitElement {
         return html`<div class="room-item" ?data-active=${this.page === area.id} data-state=${state?.available === false ? "unavailable" : on ? "on" : "off"}>
           <button class="room-link" aria-label=${area.name} aria-current=${this.page === area.id ? "page" : nothing} ?disabled=${this.editing || this.busy} @click=${() => this.navigate(area.id)}>
             <ha-icon icon=${room ? on ? "mdi:lightbulb-on-outline" : "mdi:lightbulb-outline" : "mdi:plus-circle-outline"}></ha-icon><span><strong>${area.name}</strong>
-              <small class="room-meta">${room ? `${room.lights.length} ${this.t("lightsCount")} · ${this.t(state?.available === false ? "unavailable" : key)}` : this.t("unconfigured")}</small></span>
+              <small class="room-meta">${room ? `${room.lights.length} ${this.t(room.lights.length === 1 ? "lightCount" : "lightsCount")} · ${this.t(state?.available === false ? "unavailable" : key)}` : this.t("unconfigured")}</small></span>
           </button>
           ${room ? html`<button class="icon-button quick-toggle" aria-pressed=${String(on)} aria-label=${`${this.t(on ? "turnOff" : "turnOn")} · ${area.name}`} title=${this.t(on ? "turnOff" : "turnOn")} ?disabled=${this.busy || this.editing || !this.snapshot?.config.rooms[room.id] || state?.available === false}
             @click=${() => this.command(room.id, on ? "turn_off" : "turn_on")}><ha-icon icon="mdi:power"></ha-icon></button>` : nothing}
@@ -402,7 +464,7 @@ export class HaloPanel extends LitElement {
       <div id="room-panel" class="room-panel" role="tabpanel" aria-labelledby=${`room-tab-${activeSection}`}>
         ${activeSection === "control" ? this.renderScenes(room) : activeSection === "lights" ? this.renderLightSelection(room)
           : activeSection === "automation" ? this.renderAutomation(room) : activeSection === "ambiences" ? html`${this.renderAssociations(room)}<section class="base-section"><div class="section-heading"><h3>${this.t("base")}</h3>${this.help("baseHelp")}</div>
-              ${this.lightSearch("base")}${this.filteredLights(room.lights, "base").map((id) => this.lampEditor(id, room.base[id], (value) => this.modifyRoom((current) => { if (value) current.base[id] = value; else delete current.base[id]; }), true))}</section>`
+              ${this.lightSearch("base")}${this.filteredLights(room.lights, "base").map((id) => this.lampEditor(id, room.base[id], (value) => this.modifyRoom((current) => { if (value) current.base[id] = value; else delete current.base[id]; }), true))}</section>${this.renderNightlight(room)}`
           : html`<section><div class="section-heading"><h3>${this.t("transitions")}</h3></div>${this.renderTransitions(room.transitions, (category, value) => this.modifyRoom((current) => { current.transitions[category] = value; }), room.id)}</section>
             <details class="danger-zone"><summary>${this.t("removeRoom")}</summary><p class="help">${this.t("removeRoomHelp")}</p><button class="danger" @click=${() => {
               if (this.removeConfirmation === room.id) { this.modify((config) => { delete config.rooms[room.id]; }); this.removeConfirmation = undefined; }
@@ -430,9 +492,41 @@ export class HaloPanel extends LitElement {
           <input type="checkbox" .checked=${live(room.lights.includes(light.entity_id))} ?disabled=${assigned.has(light.entity_id)} @change=${(event: Event) => this.modifyRoom((current) => {
             if ((event.target as HTMLInputElement).checked) current.lights.push(light.entity_id);
             else { current.lights = current.lights.filter((id) => id !== light.entity_id); delete current.base[light.entity_id];
-              for (const scene of current.scenes) delete scene.lights[light.entity_id];
+              if (current.nightlight) { delete current.nightlight.lights[light.entity_id];
+                if (!Object.values(current.nightlight.lights).some((state) => this.lampProducesLight(state))) current.nightlight.enabled = false; }
+              for (const scene of current.scenes) if (scene.type !== "home_assistant") delete scene.lights[light.entity_id];
               for (const association of current.associations) association.lights = association.lights.filter((id) => id !== light.entity_id); }
           })}><span>${light.name}<small>${light.entity_id}${assigned.has(light.entity_id) ? ` · ${this.t("assigned")}` : ""}${!light.available ? ` · ${this.t("unavailable")}` : ""}</small>${this.groupDetails(light)}</span></label></div>`)}`)}${filtered.length === 0 ? html`<p role="status">${this.t("noResults")}</p>` : nothing}</div></section>`;
+  }
+
+  private lampProducesLight(state: LampState) {
+    return state.state === "on" && state.brightness !== 0 && state.brightness_pct !== 0 && state.white !== 0;
+  }
+
+  private renderNightlight(room: Room) {
+    const nightlight = room.nightlight ?? { enabled: false, lights: {} };
+    const configured = Object.keys(nightlight.lights);
+    const canEnable = Boolean(room.presence_entity_id) && Object.values(nightlight.lights).some((state) => this.lampProducesLight(state));
+    const lux = room.lux_entity_id ? (this.hass.states?.[room.lux_entity_id] ?? this.snapshot?.entities.find((entity) => entity.entity_id === room.lux_entity_id)) : undefined;
+    const unit = typeof lux?.attributes.unit_of_measurement === "string" ? ` ${lux.attributes.unit_of_measurement.trim()}` : "";
+    const unknownGroups = room.lights.filter((id) => this.light(id).is_group && (this.light(id).group_members_complete === false || !this.light(id).group_members?.length));
+    return html`<section class="nightlight-section"><div class="section-heading"><h3>${this.t("nightlight")}</h3>
+      ${this.check("nightlightEnabled", nightlight.enabled, (enabled) => this.modifyRoom((current) => { current.nightlight = { ...nightlight, enabled }; }), this.busy || !nightlight.enabled && !canEnable)}</div>
+      <div class="row"><div class="grow"><p class="compact-help">${configured.length ? `${configured.length} ${this.t(configured.length === 1 ? "nightlightLamp" : "nightlightLamps")} · ${this.t("nightlightDuringAbsence")}` : this.t("nightlightUnconfigured")}</p>
+        ${configured.length ? html`<p class="help compact-help">${configured.map((id) => this.light(id).name).join(", ")}</p>` : nothing}</div>
+        <button class="configure-nightlight" ?disabled=${this.busy || this.dirty || !this.snapshot?.config.rooms[room.id] || !room.lights.length} @click=${() => this.startEditor(room, undefined, "nightlight")}>${this.t("configureNightlight")}</button></div>
+      ${!room.presence_entity_id ? html`<p class="help">${this.t("nightlightPresenceRequired")}</p>` : !canEnable ? html`<p class="help">${this.t("nightlightLightRequired")}</p>` : nothing}
+      ${this.dirty ? html`<p class="help">${this.t("editFirstSave")}</p>` : nothing}
+      <details class="help-details"><summary><ha-icon icon="mdi:information-outline"></ha-icon>${this.t("howItWorks")}</summary>
+        <p class="help">${this.t(room.lux_entity_id ? "nightlightLuxHelp" : room.lighting_fallback?.mode === "time" ? "nightlightTimeHelp" : room.lighting_fallback?.mode === "sun" ? "nightlightSunHelp" : "nightlightNoLuxHelp")}</p>
+        ${room.lux_entity_id ? html`<p class="help">${this.t("currentValue")}: ${this.currentEntityValue(room.lux_entity_id)}<br>
+          ${this.t("effectiveLow")}: ${room.lux_threshold ?? "—"}${unit} · ${this.t("effectiveHigh")}: ${room.lux_threshold == null ? "—" : room.lux_threshold + room.lux_hysteresis}${unit}<br>
+          ${this.t("luxDelay")}: ${room.lux_off_delay}</p>` : nothing}
+        <p class="help">${this.t("nightlightReturnHelp")}</p><p class="help">${this.t("nightlightPauseHelp")}</p>
+        ${room.lux_entity_id ? html`<p class="help">${this.t("nightlightSensorHelp")}</p>` : nothing}</details>
+      ${unknownGroups.length ? html`<p class="help">${this.t("nightlightUnknownGroups")}: ${unknownGroups.map((id) => this.light(id).name).join(", ")}</p>` : nothing}
+      <button class="nightlight-automation" @click=${() => this.selectRoomSection("automation")}>${this.t("nightlightAutomation")}</button>
+    </section>`;
   }
 
   private renderAutomation(room: Room) {
@@ -440,25 +534,63 @@ export class HaloPanel extends LitElement {
     const unit = typeof attributes?.unit_of_measurement === "string" ? attributes.unit_of_measurement.trim() : "";
     const suffix = unit ? ` ${unit}` : "";
     return html`<section class="automation-section"><div class="settings-group"><h3>${this.t("presence")}</h3><div class="field-grid">
-      ${this.entityField("presenceEntity", room.presence_entity_id, (value) => this.modifyRoom((current) => { current.presence_entity_id = value; }))}
+      ${this.entityField("presenceEntity", room.presence_entity_id, (value) => this.modifyRoom((current) => { current.presence_entity_id = value; }), undefined, { currentValue: true })}
       ${this.textField("presentStates", room.presence_states.join(", "), (value) => this.modifyRoom((current) => { current.presence_states = value.split(",").map((state) => state.trim()).filter(Boolean); }), { required: Boolean(room.presence_entity_id) })}
       ${this.numberField("absenceDelay", room.absence_delay, (value) => this.modifyRoom((current) => { current.absence_delay = value ?? 0; }), { min: 0, required: true })}</div></div>
-      <div class="settings-group"><h3>${this.t("lux")}</h3>${this.entityField("luxEntity", room.lux_entity_id, (value) => this.modifyRoom((current) => { current.lux_entity_id = value; }), "sensor")}
+      <div class="settings-group"><h3>${this.t("lux")}</h3>${this.entityField("luxEntity", room.lux_entity_id, (value) => this.modifyRoom((current) => { current.lux_entity_id = value; }), "sensor", { currentValue: true, validateBeforeChange: !room.lux_entity_id })}
       ${room.lux_entity_id ? html`<div class="field-grid">${this.numberField("luxThreshold", room.lux_threshold, (value) => this.modifyRoom((current) => { current.lux_threshold = value; }), { min: 0, required: true, unit })}
         ${this.numberField("hysteresis", room.lux_hysteresis, (value) => this.modifyRoom((current) => { current.lux_hysteresis = value ?? 0; }), { min: 0, required: true, unit })}</div>
         <p>${this.t("effectiveLow")}: ${room.lux_threshold ?? "—"}${suffix} · ${this.t("effectiveHigh")}: ${room.lux_threshold == null ? "—" : room.lux_threshold + room.lux_hysteresis}${suffix}</p>
         ${!unit ? html`<p class="help">${this.t("unknownUnit")}</p>` : nothing}
         ${this.check("luxOff", room.lux_off, (value) => this.modifyRoom((current) => { current.lux_off = value; }))}
-        ${room.lux_off ? this.numberField("luxDelay", room.lux_off_delay, (value) => this.modifyRoom((current) => { current.lux_off_delay = value ?? 30; }), { min: 0, required: true }) : nothing}
-        ${this.help("luxHelp")}` : nothing}</div>
+        ${room.lux_off || room.nightlight?.enabled || Object.keys(room.nightlight?.lights ?? {}).length ? this.numberField("luxDelay", room.lux_off_delay, (value) => this.modifyRoom((current) => { current.lux_off_delay = value ?? 30; }), { min: 0, required: true }) : nothing}
+        ${this.help("luxHelp")}` : this.renderLightingFallback(room)}</div>
       <div class="settings-group"><div class="section-heading"><h3>${this.t("manual")}</h3>${this.help("pauseHelp")}</div>${this.numberField("pauseDuration", room.manual_pause / 60, (value) => this.modifyRoom((current) => { current.manual_pause = (value ?? 120) * 60; }), { min: 0, required: true })}
       ${this.check("allowOff", room.allow_off_during_pause, (value) => this.modifyRoom((current) => { current.allow_off_during_pause = value; }))}</div></section>`;
+  }
+
+  private renderLightingFallback(room: Room) {
+    const fallback = room.lighting_fallback ?? newLightingFallback();
+    const update = (change: Partial<LightingFallback>) => this.modifyRoom((current) => {
+      current.lighting_fallback = { ...(current.lighting_fallback ?? newLightingFallback()), ...change };
+    });
+    const sunId = this.draft?.sun_entity_id;
+    const sun = sunId ? (this.hass.states ? this.hass.states[sunId] : this.snapshot?.entities.find((entity) => entity.entity_id === sunId)) : undefined;
+    const rawElevation = sun?.attributes.elevation;
+    const elevation = typeof rawElevation === "string" && /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(rawElevation.trim()) ? Number(rawElevation) : rawElevation;
+    const sunAvailable = Boolean(sun && !["unknown", "unavailable"].includes(sun.state) && typeof elevation === "number" && Number.isFinite(elevation) && elevation >= -90 && elevation <= 90);
+    const rising = sun?.attributes.rising;
+    const timePattern = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
+    const invalidTime = !timePattern.test(fallback.start) || !timePattern.test(fallback.end);
+    return html`<div class="lighting-fallback"><label>${this.t("fallbackMode")}<select data-selected=${fallback.mode} .value=${live(fallback.mode)} @change=${(event: Event) => {
+      const select = event.target as HTMLSelectElement;
+      if (!this.validateFields()) { select.value = fallback.mode; return; }
+      update({ mode: select.value as LightingFallback["mode"] });
+    }}><option value="always">${this.t("fallbackAlways")}</option><option value="time">${this.t("time")}</option><option value="sun">${this.t("sun")}</option></select></label>
+      ${fallback.mode === "always" ? html`<p class="help">${this.t("fallbackAlwaysHelp")}</p>` : fallback.mode === "time" ? html`
+        <div class="field-grid fallback-time" ?data-invalid=${fallback.start === fallback.end || invalidTime} data-invalid-format=${String(invalidTime)} data-invalid-field=${!timePattern.test(fallback.start) ? "start" : "end"}>
+          ${this.textField("fallbackStart", fallback.start, (start) => update({ start }), { type: "time", required: true })}
+          ${this.textField("fallbackEnd", fallback.end, (end) => update({ end }), { type: "time", required: true })}</div>
+        ${invalidTime || fallback.start === fallback.end ? html`<p class="danger" role="alert">${this.t(invalidTime ? "fallbackInvalidTime" : "fallbackDistinctTimes")}</p>` : nothing}
+        <p class="help">${this.t("fallbackTimeHelp")}</p>` : html`
+        ${this.check("linked", fallback.linked, (linked) => { if (this.validateFields()) update({ linked }); else this.requestUpdate(); })}
+        <div class="field-grid">${this.numberField(fallback.linked ? "fallbackBelow" : "fallbackMorningBelow", fallback.morning_below, (morning_below) => { if (morning_below !== null) update({ morning_below }); }, { min: -90, max: 90, required: true })}
+          ${!fallback.linked ? this.numberField("fallbackEveningBelow", fallback.evening_below, (evening_below) => { if (evening_below !== null) update({ evening_below }); }, { min: -90, max: 90, required: true }) : nothing}</div>
+        <p class="help current-sun-elevation">${this.t("currentSunElevation")}: ${sunAvailable ? `${(elevation as number).toLocaleString(language(this.locale), { maximumFractionDigits: 6 })}°` : this.t("unavailable")}</p>
+        ${!sunAvailable ? html`<p class="help">${this.t("fallbackSunUnavailable")}</p>` : nothing}
+        ${!fallback.linked ? html`<p class="help current-sun-direction">${this.t("currentSunDirection")}: ${this.t(sunAvailable && typeof rising === "boolean" ? rising ? "morning" : "evening" : "unavailable")}</p>
+          ${sunAvailable && typeof rising !== "boolean" ? html`<p class="help">${this.t("fallbackSunDirectionUnavailable")}</p>` : nothing}` : nothing}
+        <p class="help">${this.t("fallbackSunHelp")}</p>`}
+      ${fallback.mode !== "always" ? html`${this.check("fallbackTurnOff", fallback.turn_off, (turn_off) => update({ turn_off }))}
+        ${fallback.mode === "sun" && (fallback.turn_off || room.nightlight?.enabled || Object.keys(room.nightlight?.lights ?? {}).length) ? this.numberField("fallbackDelay", room.lux_off_delay, (value) => this.modifyRoom((current) => { if (value !== null) current.lux_off_delay = value; }), { min: 0, max: 604800, required: true }) : nothing}` : nothing}
+      ${this.help("fallbackHelp")}
+    </div>`;
   }
 
   private renderAssociations(room: Room) {
     const profiles = Object.values(this.draft!.profiles);
     return html`<section class="associations-section"><div class="section-heading"><h3>${this.t("associations")}</h3>${this.help("associationHelp")}</div>
-      ${room.associations.map((association, index) => html`<details class="association" ?open=${room.associations.length === 1}><summary><span>${profiles.find((profile) => profile.id === association.profile_id)?.name ?? this.t("noProfile")}</span><small>${association.lights.length} ${this.t("lightsCount")} · ${association.brightness_offset > 0 ? "+" : ""}${association.brightness_offset} %</small></summary><div class="row"><label class="grow">${this.t("profile")}<select required data-selected=${association.profile_id} .value=${live(association.profile_id)} @change=${(event: Event) => this.modifyRoom((current) => { current.associations[index].profile_id = (event.target as HTMLSelectElement).value; })}>
+      ${room.associations.map((association, index) => html`<details class="association" ?open=${room.associations.length === 1}><summary><span>${profiles.find((profile) => profile.id === association.profile_id)?.name ?? this.t("noProfile")}</span><small>${association.lights.length} ${this.t(association.lights.length === 1 ? "lightCount" : "lightsCount")} · ${association.brightness_offset > 0 ? "+" : ""}${association.brightness_offset} %</small></summary><div class="row"><label class="grow">${this.t("profile")}<select required data-selected=${association.profile_id} .value=${live(association.profile_id)} @change=${(event: Event) => this.modifyRoom((current) => { current.associations[index].profile_id = (event.target as HTMLSelectElement).value; })}>
         <option value="" ?selected=${!association.profile_id}>${this.t("noProfile")}</option>${profiles.map((profile) => html`<option value=${profile.id} ?selected=${profile.id === association.profile_id}>${profile.name}</option>`)}</select></label>
         <button @click=${() => this.modifyRoom((current) => { current.associations.splice(index, 1); })}>${this.t("remove")}</button></div>
         ${this.numberField("offset", association.brightness_offset, (value) => this.modifyRoom((current) => { current.associations[index].brightness_offset = value ?? 0; }), { min: -100, max: 1000, required: true })}${this.help("offsetHelp")}
@@ -485,7 +617,11 @@ export class HaloPanel extends LitElement {
       ${value ? html`<label>${this.t("state")}<select data-selected=${value.state} .value=${live(value.state)} @change=${(event: Event) => update({ state: (event.target as HTMLSelectElement).value as "on" | "off" })}>
         <option value="on" ?selected=${value.state === "on"}>${this.t("on")}</option><option value="off" ?selected=${value.state === "off"}>${this.t("off")}</option></select></label>
         ${value.state === "on" ? html`<div class="field-grid">
-          ${dimmable(light) ? this.numberField("brightness", value.brightness_pct, (brightness) => { const next = { ...value }; if (brightness == null) delete next.brightness_pct; else next.brightness_pct = brightness; change(next); }, { min: 0, max: 100 }) : nothing}
+          ${dimmable(light) ? this.numberField("brightness", value.brightness_pct ?? (value.brightness == null ? undefined : value.brightness / 255 * 100), (brightness) => {
+            const next = { ...value }; delete next.brightness;
+            if (brightness == null) delete next.brightness_pct; else next.brightness_pct = brightness;
+            change(next);
+          }, { min: 0, max: 100 }) : nothing}
           ${modes.length > 1 ? html`<label>${this.t("colorMode")}<select data-selected=${selectedMode} .value=${live(selectedMode)} @change=${(event: Event) => {
             const selected = (event.target as HTMLSelectElement).value; const next = { ...value }; delete next.color_temp_kelvin; delete next.rgb_color; delete next.hs_color; delete next.xy_color;
             if (selected === "temperature") next.color_temp_kelvin = Math.max(light.min_color_temp_kelvin ?? 2000, Math.min(3000, light.max_color_temp_kelvin ?? 6500));
@@ -502,14 +638,17 @@ export class HaloPanel extends LitElement {
 
   private renderScenes(room: Room) {
     return html`<section class="scenes-section"><div class="section-heading"><div><h3>${this.t("scenes")}</h3><p class="help compact-help">${this.t("scenesBrief")}</p></div>
-      ${this.admin ? html`<div class="section-actions"><button class="primary create-scene" ?disabled=${this.busy || this.dirty || room.lights.length === 0} @click=${() => this.startEditor(room)}><ha-icon icon="mdi:plus"></ha-icon>${this.t("createScene")}</button>
-        <button class="import-scene" ?disabled=${this.busy || this.dirty || room.lights.length === 0 || !this.snapshot?.config.rooms[room.id]} @click=${() => this.startImport(room)}><ha-icon icon="mdi:import"></ha-icon>${this.t("importScene")}</button></div>` : nothing}</div>
+      ${this.admin ? html`<div class="section-actions"><details class="scene-add-menu"><summary class="add-scene"><ha-icon icon="mdi:plus"></ha-icon>${this.t("addScene")}</summary><div class="menu-actions">
+        <button class="create-scene" ?disabled=${this.busy || this.dirty || room.lights.length === 0} @click=${() => this.startEditor(room)}>${this.t("createScene")}</button>
+        <button class="link-scene" ?disabled=${this.busy || this.dirty || room.lights.length === 0 || !this.snapshot?.config.rooms[room.id]} @click=${() => this.startSceneLink(room)}>${this.t("useHomeAssistantScene")}</button>
+        <button class="import-scene" ?disabled=${this.busy || this.dirty || room.lights.length === 0 || !this.snapshot?.config.rooms[room.id]} @click=${() => this.startImport(room)}>${this.t("importScene")}</button>
+      </div></details></div>` : nothing}</div>
       ${room.scenes.length === 0 ? html`<div class="empty-state"><ha-icon icon="mdi:palette-outline"></ha-icon><p>${this.t("noScenes")}</p>${this.admin ? html`<p class="help">${this.t("noScenesHelp")}</p>` : nothing}</div>` : nothing}
       <div class="scenes-list">${room.scenes.map((scene, index) => html`<div class="scene-row" data-scene-id=${scene.id} tabindex="-1" draggable=${this.admin && !this.busy ? "true" : "false"}
         @dragstart=${(event: DragEvent) => { this.dragIndex = index; event.dataTransfer?.setData("text/plain", scene.id); }}
         @dragover=${(event: DragEvent) => { if (this.admin) event.preventDefault(); }}
         @drop=${(event: DragEvent) => { event.preventDefault(); if (this.admin && this.dragIndex != null) this.modifyRoom((current) => { current.scenes = moveItem(current.scenes, this.dragIndex!, index); }); this.dragIndex = undefined; }}>
-        <span class="scene-order" aria-label=${`${this.t("priority")} ${index + 1}`}>${index + 1}</span><div class="grow"><strong>${scene.name}</strong><small class="scene-meta">${Object.keys(scene.lights).length} ${this.t("lightsCount")} · ${this.t(scene.conditions ? "conditionalScene" : "manualScene")}${scene.can_turn_on ? ` · ${this.t("sceneMayTurnOn")}` : ""}</small></div>
+        <span class="scene-order" aria-label=${`${this.t("priority")} ${index + 1}`}>${index + 1}</span><div class="grow"><strong>${scene.name}</strong><small class="scene-meta">${scene.type === "home_assistant" ? html`Home Assistant · ${scene.scene_entity_id}` : `${Object.keys(scene.lights).length} ${this.t(Object.keys(scene.lights).length === 1 ? "lightCount" : "lightsCount")}`} · ${this.t(scene.conditions ? "conditionalScene" : "manualScene")}${scene.can_turn_on ? ` · ${this.t("sceneMayTurnOn")}` : ""}</small></div>
         <div class="actions"><button ?disabled=${this.busy || this.dirty} @click=${() => this.command(room.id, "scene", { scene_id: scene.id })}><ha-icon icon="mdi:play"></ha-icon>${this.t("run")}</button>
           ${this.admin ? html`<button class="edit-scene" data-scene-id=${scene.id} ?disabled=${this.busy || this.dirty} @click=${() => this.startEditor(room, scene)}>${this.t("editSceneShort")}</button>
             <details class="row-menu"><summary class="icon-button" aria-label=${`${this.t("sceneActions")} · ${scene.name}`} title=${this.t("sceneActions")}><ha-icon icon="mdi:dots-vertical"></ha-icon></summary><div class="menu-actions">
@@ -517,8 +656,120 @@ export class HaloPanel extends LitElement {
               <button aria-label=${`${this.t("down")} ${scene.name}`} ?disabled=${index === room.scenes.length - 1 || this.busy} @click=${() => this.modifyRoom((current) => { current.scenes = moveItem(current.scenes, index, index + 1); })}><ha-icon icon="mdi:arrow-down"></ha-icon>${this.t("down")}</button>
               <button class="danger" aria-label=${`${this.t("remove")} ${scene.name}`} ?disabled=${this.busy} @click=${() => this.modifyRoom((current) => { current.scenes.splice(index, 1); })}><ha-icon icon="mdi:delete-outline"></ha-icon>${this.t("remove")}</button>
             </div></details>` : nothing}</div></div>`)}</div>
+      ${Object.entries(this.snapshot?.status[room.id]?.scene_errors ?? {}).map(([id, code]) => html`<p class="notice error" role="alert"><span>${room.scenes.find((scene) => scene.id === id)?.name ?? id}: ${this.t(code in en ? code as TranslationKey : "external_scene_failed")}</span></p>`)}
       ${this.help("scenesHelp", "scenePriorityHelp")}
       ${this.admin && this.dirty ? html`<p class="help">${this.t("editFirstSave")}</p>` : nothing}</section>`;
+  }
+
+  private startSceneLink(room: Room, existing?: HomeAssistantScene) {
+    if (!this.admin || this.busy || this.dirty || this.editing || !this.snapshot?.config.rooms[room.id] || !room.lights.length) return;
+    this.error = "";
+    this.clearNotice();
+    this.linker = { roomId: room.id, revision: this.revision, existing: Boolean(existing), loading: false, request: 0, error: "",
+      scene: existing ? structuredClone(existing) : { type: "home_assistant", id: createId(), name: "", scene_entity_id: "", conditions: null, can_turn_on: false } };
+    if (existing) void this.inspectSceneLink(this.linker, existing.scene_entity_id);
+    void this.updateComplete.then(() => this.renderRoot.querySelector<HTMLElement>("#link-title")?.focus());
+  }
+
+  private linkChanged(linker: SceneLink) {
+    return !this.admin || this.dirty || linker.revision !== this.snapshot?.revision || !this.draft?.rooms[linker.roomId];
+  }
+
+  private updateSceneLink(linker: SceneLink, callback: (scene: HomeAssistantScene) => void) {
+    if (this.linker !== linker || this.linkChanged(linker)) return;
+    callback(linker.scene);
+    this.requestUpdate();
+  }
+
+  private async inspectSceneLink(linker: SceneLink, entityId: string | null) {
+    if (this.linker !== linker || this.linkChanged(linker)) return;
+    const previousName = linker.inspection?.name;
+    const requestedName = linker.scene.name;
+    const replaceName = !requestedName || requestedName === previousName;
+    linker.scene.scene_entity_id = entityId ?? "";
+    linker.inspection = undefined;
+    linker.error = "";
+    linker.loading = false;
+    const request = ++linker.request;
+    const generation = this.connectionGeneration;
+    const current = () => this.linker === linker && linker.request === request && generation === this.connectionGeneration && this.isConnected;
+    if (!entityId) { this.requestUpdate(); return; }
+    linker.loading = true;
+    this.requestUpdate();
+    try {
+      const inspection = await this.hass.callWS<SceneInspection>({ type: "halo/scene/inspect", room_id: linker.roomId, entity_id: entityId });
+      if (!current() || this.linkChanged(linker)) return;
+      linker.inspection = inspection;
+      if (replaceName && linker.scene.name === requestedName) linker.scene.name = inspection.name;
+    } catch (error) {
+      if (current()) {
+        const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
+        linker.error = this.t(code in en ? code as TranslationKey : "sceneInspectionFailed");
+      }
+    } finally {
+      if (current()) { linker.loading = false; this.requestUpdate(); }
+    }
+  }
+
+  private closeSceneLink(focusSceneId?: string) {
+    this.linker = undefined;
+    if (!this.dirty && this.snapshot) this.receive(this.snapshot);
+    this.roomSection = "control";
+    void this.updateComplete.then(() => {
+      const row = focusSceneId ? [...this.renderRoot.querySelectorAll<HTMLElement>(".scene-row")].find((element) => element.dataset.sceneId === focusSceneId) : undefined;
+      (row ?? this.renderRoot.querySelector<HTMLElement>(".add-scene"))?.focus();
+    });
+  }
+
+  private canConfirmSceneLink(linker: SceneLink) {
+    const inspection = linker.inspection;
+    if (this.linkChanged(linker) || linker.loading || !inspection || inspection.blocked || linker.error) return false;
+    const saved = this.snapshot?.config.rooms[linker.roomId]?.scenes.find((scene) => scene.id === linker.scene.id);
+    return inspection.available || saved?.type === "home_assistant" && saved.scene_entity_id === linker.scene.scene_entity_id;
+  }
+
+  private confirmSceneLink(linker: SceneLink) {
+    if (this.linker !== linker || !this.canConfirmSceneLink(linker) || !this.validateFields()) return;
+    const scene = structuredClone(linker.scene);
+    scene.name = scene.name.trim();
+    if (!scene.name) { linker.error = this.t("validation"); this.requestUpdate(); return; }
+    this.modify((config) => {
+      const scenes = config.rooms[linker.roomId].scenes;
+      const index = scenes.findIndex((item) => item.id === scene.id);
+      if (index < 0) scenes.push(scene);
+      else scenes[index] = scene;
+    });
+    this.closeSceneLink(scene.id);
+  }
+
+  private renderSceneLink(linker: SceneLink) {
+    const scene = linker.scene;
+    const inspection = linker.inspection;
+    const conflict = this.linkChanged(linker);
+    const entities = (ids: string[]) => html`<ul>${ids.map((id) => html`<li>${this.snapshot?.entities.find((entity) => entity.entity_id === id)?.name ?? this.light(id).name}<small>${id}</small></li>`)}</ul>`;
+    return html`<section class="scene-link" aria-labelledby="link-title"><div class="section-heading"><h2 id="link-title" class="view-title" tabindex="-1">${this.t("useHomeAssistantScene")} <small>${this.areaName(linker.roomId)}</small></h2></div>
+      <p class="help">${this.t("linkedSceneIntro")}</p>
+      ${this.entityField("sourceScene", scene.scene_entity_id || null, (value) => { void this.inspectSceneLink(linker, value); }, "scene", { required: true, excludeHalo: true })}
+      ${linker.loading ? html`<p role="status">${this.t("sceneInspecting")}</p>` : nothing}
+      ${conflict ? html`<p class="notice error" role="alert">${this.t("linkedSceneConflict")}</p>` : nothing}
+      ${linker.error ? html`<div class="notice error" role="alert"><span>${linker.error}</span><button ?disabled=${conflict || !scene.scene_entity_id} @click=${() => this.inspectSceneLink(linker, scene.scene_entity_id)}>${this.t("retry")}</button></div>` : nothing}
+      ${inspection ? html`<div class="scene-scope" aria-live="polite">
+        ${!inspection.available ? html`<p class="notice error">${this.t("external_scene_unavailable")}</p>` : nothing}
+        ${inspection.blocked ? html`<p class="notice error">${this.t("external_scene_recursive")}</p>` : nothing}
+        <p class="help">${this.t("linkedSceneFullScope")}</p>
+        ${!inspection.complete ? html`<p class="notice">${this.t("linkedSceneIncomplete")}</p>` : nothing}
+        ${inspection.outside_lights.length ? html`<div class="scope-warning"><strong>${this.t("linkedSceneOutside")}</strong>${entities(inspection.outside_lights)}</div>` : nothing}
+        ${inspection.missing_lights.length ? html`<div class="scope-warning"><strong>${this.t("linkedSceneMissing")}</strong>${entities(inspection.missing_lights)}</div>` : nothing}
+        ${inspection.other_entities.length ? html`<details class="help-details"><summary>${this.t("linkedSceneOther")}</summary>${entities(inspection.other_entities)}</details>` : nothing}
+      </div>` : nothing}
+      ${this.textField("sceneName", scene.name, (name) => this.updateSceneLink(linker, (current) => { current.name = name; }), { required: true })}
+      <details class="scene-automation"><summary>${this.t("conditions")}<small>${this.t(scene.conditions ? "conditionalScene" : "manualScene")}</small></summary>
+        ${this.check("canTurnOn", scene.can_turn_on, (value) => this.updateSceneLink(linker, (current) => { current.can_turn_on = value; }))}${this.help("canTurnOnHelp")}
+        ${this.renderCondition(scene.conditions, (condition) => this.updateSceneLink(linker, (current) => { current.conditions = condition; }))}</details>
+      ${this.help("linkedSceneBehaviour", "howItWorks")}
+      <div class="actions editor-actions"><button @click=${() => this.closeSceneLink(linker.existing ? scene.id : undefined)}>${this.t("cancel")}</button>
+        <button class="primary confirm-link" ?disabled=${!this.canConfirmSceneLink(linker)} @click=${() => this.confirmSceneLink(linker)}>${this.t(linker.existing ? "updateSceneDraft" : "confirmImport")}</button></div>
+    </section>`;
   }
 
   private startImport(room: Room) {
@@ -534,7 +785,7 @@ export class HaloPanel extends LitElement {
     this.roomSection = "control";
     void this.updateComplete.then(() => {
       const row = focusSceneId ? [...this.renderRoot.querySelectorAll<HTMLElement>(".scene-row")].find((element) => element.dataset.sceneId === focusSceneId) : undefined;
-      (row ?? this.renderRoot.querySelector<HTMLButtonElement>(".import-scene"))?.focus();
+      (row ?? this.renderRoot.querySelector<HTMLButtonElement>(".add-scene"))?.focus();
     });
   }
 
@@ -564,7 +815,7 @@ export class HaloPanel extends LitElement {
     try {
       const config = await this.hass.callApi<unknown>("GET", `config/scene/config/${encodeURIComponent(id)}`);
       if (!current() || this.importChanged(importer)) return;
-      const result = await this.hass.callWS<{ scene: Scene; ignored_entities: number }>({ type: "halo/scene/import", room_id: importer.roomId, config });
+      const result = await this.hass.callWS<{ scene: HaloScene; ignored_entities: number }>({ type: "halo/scene/import", room_id: importer.roomId, config });
       if (!current() || this.importChanged(importer)) return;
       importer.scene = structuredClone(result.scene);
       importer.ignored = result.ignored_entities;
@@ -594,7 +845,7 @@ export class HaloPanel extends LitElement {
     const conflict = this.importChanged(importer);
     return html`<section class="scene-import" aria-labelledby="import-title"><div class="section-heading"><h2 id="import-title" class="view-title" tabindex="-1">${this.t("importScene")} <small>${this.areaName(importer.roomId)}</small></h2></div>
       <p class="help">${this.t("importIntro")}</p>${this.help("importHelp", "importCompatibility")}
-      ${this.entityField("sourceScene", importer.entityId, (value) => { void this.loadImport(importer, value); }, "scene", true)}
+      ${this.entityField("sourceScene", importer.entityId, (value) => { void this.loadImport(importer, value); }, "scene", { required: true })}
       ${importer.loading ? html`<p role="status">${this.t("importLoading")}</p>` : nothing}
       ${conflict ? html`<p class="notice error" role="alert">${this.t("importConflict")}</p>` : nothing}
       ${importer.error ? html`<p class="notice error" role="alert">${importer.error}</p>` : nothing}
@@ -631,41 +882,54 @@ export class HaloPanel extends LitElement {
     return state;
   }
 
-  private async startEditor(room: Room, existing?: Scene) {
+  private async startEditor(room: Room, existing?: Scene, target: "scene" | "nightlight" = "scene") {
+    if (existing?.type === "home_assistant") { this.startSceneLink(room, existing); return; }
     if (this.dirty || this.busy || !this.admin) return;
     const generation = this.connectionGeneration;
+    const revision = this.revision;
     this.busy = true;
     this.error = "";
     try {
       const { token } = await this.hass.callWS<{ token: string }>({ type: "halo/edit/begin", room_id: room.id });
-      if (!this.isConnected || generation !== this.connectionGeneration) return;
-      const scene = existing ? structuredClone(existing) : { id: createId(), name: "", can_turn_on: false, conditions: null, lights: {} };
+      if (!this.isConnected || generation !== this.connectionGeneration || !this.admin) return;
+      if (revision !== this.snapshot?.revision) {
+        await this.hass.callWS({ type: "halo/edit/end", room_id: room.id, token, save: false });
+        this.error = this.t("conflict");
+        return;
+      }
+      const scene: HaloScene = existing ? structuredClone(existing) : { type: "halo", id: createId(), name: "", can_turn_on: false, conditions: null, lights: {} };
       for (const id of existing ? [] : room.lights) {
         const actual = this.actualLampState(id);
         if (actual) scene.lights[id] ??= actual;
       }
       this.lightSearches.delete("scene");
-      const editor = { token, roomId: room.id, scene, included: new Set(existing ? Object.keys(existing.lights) : room.lights), revision: this.snapshot!.revision, ready: !existing };
+      const nightlight = structuredClone(room.nightlight ?? { enabled: false, lights: {} });
+      const previewLights = target === "nightlight" ? nightlight.lights : existing?.lights;
+      const preview = Boolean(previewLights && Object.keys(previewLights).length);
+      const editor: Editor = { token, roomId: room.id,
+        included: new Set(target === "nightlight" ? Object.keys(nightlight.lights) : existing ? Object.keys(existing.lights) : room.lights),
+        revision, ready: !preview,
+        ...(target === "nightlight" ? { target, nightlight } : { target, scene }) };
       this.editor = editor;
       this.focusView();
       this.heartbeat = setInterval(() => {
         const editor = this.editor;
-        if (editor) void this.hass.callWS({ type: "halo/edit/touch", room_id: editor.roomId, token: editor.token }).catch((error) => this.showError(error));
+        if (editor) void this.hass.callWS({ type: "halo/edit/touch", room_id: editor.roomId, token: editor.token }).catch((error) => { if (this.editor === editor) this.showError(error); });
       }, 20_000);
-      // Apply the stored scene once before handing control to Home Assistant.
+      // Apply stored lamp settings once before handing control to Home Assistant.
       // No later preview may overwrite changes made in the native dialog.
-      this.previewQueue = existing
-        ? this.hass.callWS<void>({ type: "halo/edit/preview", room_id: room.id, token, lights: structuredClone(scene.lights) })
+      this.previewQueue = preview
+        ? this.hass.callWS<void>({ type: "halo/edit/preview", room_id: room.id, token, lights: structuredClone(previewLights) })
         : Promise.resolve();
       await this.previewQueue;
       if (this.editor === editor) editor.ready = true;
-    } catch (error) { this.showError(error); }
-    finally { this.busy = false; }
+    } catch (error) { if (this.isConnected && generation === this.connectionGeneration) this.showError(error); }
+    finally { if (generation === this.connectionGeneration) this.busy = false; }
   }
 
   private clearEditorTimers() { clearInterval(this.heartbeat); this.heartbeat = undefined; }
-  private updateEditor(callback: (scene: Scene) => void) {
-    if (!this.editor) return;
+  private updateEditor(callback: (scene: HaloScene) => void) {
+    if (this.editor?.target !== "scene") return;
     callback(this.editor.scene);
     this.requestUpdate();
   }
@@ -673,60 +937,75 @@ export class HaloPanel extends LitElement {
   private async openNativeLight(id: string) {
     const editor = this.editor;
     if (!editor?.ready || !editor.included.has(id) || this.busy || !this.admin || !this.actualLampState(id)) return;
+    const generation = this.connectionGeneration;
     this.busy = true;
     this.error = "";
     try {
       await this.previewQueue;
       await this.hass.callWS({ type: "halo/edit/touch", room_id: editor.roomId, token: editor.token });
-      if (this.editor !== editor || !this.isConnected || !this.actualLampState(id)) return;
+      if (this.editor !== editor || !this.isConnected || !this.admin || !this.actualLampState(id)) return;
       // Public frontend action API; Home Assistant owns and loads its dialog.
       this.dispatchEvent(new CustomEvent("hass-action", {
         bubbles: true, composed: true,
         detail: { config: { entity: id, tap_action: { action: "more-info" } }, action: "tap" },
       }));
-    } catch (error) { this.showError(error); }
-    finally { this.busy = false; }
+    } catch (error) { if (this.editor === editor) this.showError(error); }
+    finally { if (generation === this.connectionGeneration) this.busy = false; }
   }
 
   private async endEditor(save: boolean) {
     const editor = this.editor;
-    if (!editor || this.busy || (save && (!editor.ready || !this.validateFields()))) return;
+    if (!editor || !this.admin || this.busy || (save && (!editor.ready || !this.validateFields()))) return;
+    const generation = this.connectionGeneration;
+    if (save && editor.target === "nightlight" && editor.nightlight.enabled && ![...editor.included].some((id) => {
+      const state = this.actualLampState(id) ?? editor.nightlight.lights[id];
+      return state && this.lampProducesLight(state);
+    })) { this.error = this.t("nightlightLightRequired"); return; }
     this.busy = true;
     this.error = "";
     try {
       // Cancellation must still release a session whose initial preview failed.
       await this.previewQueue.catch(() => undefined);
+      const source = editor.target === "nightlight" ? editor.nightlight : editor.scene;
+      const settings = { ...source, lights: Object.fromEntries(Object.entries(source.lights).filter(([id]) => editor.included.has(id))) };
       const result = await this.hass.callWS<Snapshot | undefined>({ type: "halo/edit/end", room_id: editor.roomId, token: editor.token, save,
-        ...(save ? { scene: { ...editor.scene, lights: Object.fromEntries(Object.entries(editor.scene.lights).filter(([id]) => editor.included.has(id))) }, revision: editor.revision, capture: true, capture_entities: [...editor.included] } : {}) });
+        ...(save ? { ...(editor.target === "nightlight" ? { target: "nightlight", nightlight: settings } : { scene: settings }), revision: editor.revision, capture: true, capture_entities: [...editor.included] } : {}) });
+      if (this.editor !== editor || !this.isConnected || !this.admin) return;
+      const snapshot = result?.config ? result : await this.hass.callWS<Snapshot>({ type: "halo/get" });
+      if (this.editor !== editor || !this.isConnected || generation !== this.connectionGeneration || !this.admin) return;
       this.clearEditorTimers();
       this.editor = undefined;
-      this.roomSection = "control";
-      this.receive(result?.config ? result : await this.hass.callWS<Snapshot>({ type: "halo/get" }));
+      this.roomSection = editor.target === "nightlight" ? "ambiences" : "control";
+      this.receive(this.snapshot && this.snapshot.revision > snapshot.revision ? this.snapshot : snapshot);
       void this.updateComplete.then(() => {
-        const button = [...this.renderRoot.querySelectorAll<HTMLButtonElement>(".edit-scene")].find((element) => element.dataset.sceneId === editor.scene.id);
-        (button ?? this.renderRoot.querySelector<HTMLButtonElement>(".create-scene"))?.focus();
+        if (editor.target === "nightlight") this.renderRoot.querySelector<HTMLButtonElement>(".configure-nightlight")?.focus();
+        else {
+          const button = [...this.renderRoot.querySelectorAll<HTMLButtonElement>(".edit-scene")].find((element) => element.dataset.sceneId === editor.scene.id);
+          (button ?? this.renderRoot.querySelector<HTMLButtonElement>(".add-scene"))?.focus();
+        }
       });
     } catch (error) {
+      if (this.editor !== editor) return;
       this.showError(error);
       if (typeof error === "object" && error !== null && "code" in error && error.code === "invalid_edit") {
         this.clearEditorTimers(); this.editor = undefined;
         if (this.snapshot) this.receive(this.snapshot);
       }
-    } finally { this.busy = false; }
+    } finally { if (generation === this.connectionGeneration) this.busy = false; }
   }
 
   private renderEditor(editor: Editor) {
-    const scene = editor.scene;
-    const lights = this.draft?.rooms[editor.roomId]?.lights ?? Object.keys(scene.lights);
-    return html`<section class="editor"><div class="editor-toolbar"><h2 class="view-title" tabindex="-1">${this.t("editSceneShort")} <small>${this.areaName(editor.roomId)}</small></h2><span class="badge">${this.t("editing")}</span></div><p class="notice">${this.t("liveBrief")}</p>${this.help("liveHelp", "liveSessionHelp")}
-      ${this.textField("sceneName", scene.name, (value) => this.updateEditor((current) => { current.name = value; }), { required: true })}
+    const scene = editor.target === "scene" ? editor.scene : undefined;
+    const lights = this.draft?.rooms[editor.roomId]?.lights ?? Object.keys(editor.target === "nightlight" ? editor.nightlight.lights : editor.scene.lights);
+    return html`<section class="editor"><div class="editor-toolbar"><h2 class="view-title" tabindex="-1">${this.t(editor.target === "nightlight" ? "configureNightlightTitle" : "editSceneShort")} <small>${this.areaName(editor.roomId)}</small></h2><span class="badge">${this.t("editing")}</span></div><p class="notice">${this.t("liveBrief")}</p>${this.help("liveHelp", "liveSessionHelp")}
+      ${scene ? html`${this.textField("sceneName", scene.name, (value) => this.updateEditor((current) => { current.name = value; }), { required: true })}
       <details class="scene-automation"><summary>${this.t("conditions")}<small>${this.t(scene.conditions ? "conditionalScene" : "manualScene")}</small></summary>
         ${this.check("canTurnOn", scene.can_turn_on, (value) => this.updateEditor((current) => { current.can_turn_on = value; }))}${this.help("canTurnOnHelp")}
-        ${this.renderCondition(scene.conditions, (condition) => this.updateEditor((current) => { current.conditions = condition; }))}</details>
-      <div class="section-heading"><h3>${this.t("lights")}</h3>${this.help("nativeSceneHelp", "nativeControlHelp")}</div><p class="help compact-help">${this.t("sceneIncludedHelp")}</p>
+        ${this.renderCondition(scene.conditions, (condition) => this.updateEditor((current) => { current.conditions = condition; }))}</details>` : nothing}
+      <div class="section-heading"><h3>${this.t("lights")}</h3>${this.help("nativeSceneHelp", "nativeControlHelp")}</div><p class="help compact-help">${this.t(editor.target === "nightlight" ? "nightlightIncludedHelp" : "sceneIncludedHelp")}</p>
       ${!editor.ready && this.busy ? html`<p role="status">${this.t("previewPending")}</p>` : nothing}
       ${this.lightSearch("scene")}<ul class="scene-lights">${this.filteredLights(lights, "scene").map((id) => this.renderNativeLight(id, editor))}</ul>
-      <div class="actions editor-actions"><button ?disabled=${this.busy} @click=${() => this.endEditor(false)}>${this.t("cancel")}</button><button class="primary" ?disabled=${this.busy || !editor.ready} @click=${() => this.endEditor(true)}>${this.t("saveScene")}</button></div>
+      <div class="actions editor-actions"><button ?disabled=${this.busy} @click=${() => this.endEditor(false)}>${this.t("cancel")}</button><button class="primary" ?disabled=${this.busy || !editor.ready} @click=${() => this.endEditor(true)}>${this.t(editor.target === "nightlight" ? "saveNightlight" : "saveScene")}</button></div>
     </section>`;
   }
 
@@ -737,12 +1016,12 @@ export class HaloPanel extends LitElement {
     const brightness = available && entity.state === "on" && typeof attributes.brightness === "number"
       ? `${Math.round(attributes.brightness / 255 * 100)} %` : undefined;
     const effect = available && typeof attributes.effect === "string" ? attributes.effect : undefined;
-    return html`<li><label class="check scene-inclusion"><input type="checkbox" aria-label=${`${this.t("sceneInclude")}: ${this.light(id).name}`} .checked=${live(editor.included.has(id))} ?disabled=${this.busy || !editor.ready}
+    return html`<li><label class="check scene-inclusion"><input type="checkbox" aria-label=${`${this.t(editor.target === "nightlight" ? "nightlightInclude" : "sceneInclude")}: ${this.light(id).name}`} .checked=${live(editor.included.has(id))} ?disabled=${this.busy || !editor.ready}
       @change=${(event: Event) => {
         if ((event.target as HTMLInputElement).checked) editor.included.add(id);
         else editor.included.delete(id);
         this.requestUpdate();
-      }}><span>${this.t("sceneInclude")}: ${this.light(id).name}</span></label><button class="scene-lamp" ?disabled=${this.busy || !editor.ready || !available || !editor.included.has(id)}
+      }}><span>${this.t(editor.target === "nightlight" ? "nightlightInclude" : "sceneInclude")}: ${this.light(id).name}</span></label><button class="scene-lamp" ?disabled=${this.busy || !editor.ready || !available || !editor.included.has(id)}
       @click=${() => this.openNativeLight(id)} aria-label=${`${this.t("nativeLightControl")}: ${this.light(id).name}`}>
       <span class="grow"><strong>${this.light(id).name}</strong><small>${id}</small>
         <span>${available ? this.t(entity.state as "on" | "off") : this.t("unavailable")}${brightness ? ` · ${brightness}` : ""}${effect ? ` · ${this.t("effect")}: ${effect}` : ""}</span>
@@ -760,7 +1039,7 @@ export class HaloPanel extends LitElement {
       }, true)}</div><button aria-label=${this.t("remove")} @click=${() => { const children = [...condition.conditions]; children.splice(index, 1); change({ ...condition, conditions: children }); }}>${this.t("remove")}</button></div>`)}
         <button @click=${() => change({ ...condition, conditions: [...condition.conditions, newCondition("state")] })}>${this.t("addCondition")}</button>` : nothing}
       ${condition.type === "not" ? this.renderCondition(condition.condition, (value) => { if (value) change({ ...condition, condition: value }); }, true) : nothing}
-      ${condition.type === "state" || condition.type === "numeric" ? this.entityField("entity", condition.entity_id, (value) => update({ entity_id: value ?? "" }), undefined, true) : nothing}
+      ${condition.type === "state" || condition.type === "numeric" ? this.entityField("entity", condition.entity_id, (value) => update({ entity_id: value ?? "" }), undefined, { required: true }) : nothing}
       ${condition.type === "state" ? this.textField("expectedState", condition.state, (value) => update({ state: value }), { required: true }) : nothing}
       ${condition.type === "numeric" ? this.textField("attribute", condition.attribute ?? "", (value) => { const next = { ...condition }; if (value) next.attribute = value; else delete next.attribute; change(next); }) : nothing}
       ${condition.type === "numeric" || condition.type === "sun" ? html`<div class="field-grid">${(["above", "below"] as const).map((bound) => this.numberField(bound, condition[bound], (value) => { const next = { ...condition }; if (value == null) delete next[bound]; else next[bound] = value; change(next); }))}</div>` : nothing}
@@ -774,11 +1053,11 @@ export class HaloPanel extends LitElement {
       const value = values[category];
       const key = `${roomId ?? "global"}:${category}`;
       const mode = value === "inherit" ? "inherit" : value !== null || this.durationModes.has(key) ? "duration" : "none";
-      return html`<div class="transition-field"><h4>${this.t(label[category])}</h4>${roomId ? html`<label>${this.t("transitions")}<select data-selected=${mode} .value=${live(mode)} @change=${(event: Event) => {
+      return html`<div class="transition-field"><h4>${this.t(label[category])}</h4>${roomId ? html`<label>${this.t("transitions")}<select aria-label=${`${this.t(label[category])} · ${this.t("transitions")}`} data-selected=${mode} .value=${live(mode)} @change=${(event: Event) => {
         const selected = (event.target as HTMLSelectElement).value; if (selected === "duration") this.durationModes.add(key); else this.durationModes.delete(key);
         change(category, selected === "inherit" ? "inherit" : selected === "duration" ? typeof value === "number" ? value : null : null);
       }}><option value="inherit" ?selected=${mode === "inherit"}>${this.t("inherit")}</option><option value="duration" ?selected=${mode === "duration"}>${this.t("duration")}</option><option value="none" ?selected=${mode === "none"}>${this.t("noTransition")}</option></select></label>` : nothing}
-      ${!roomId || mode === "duration" ? this.numberField("seconds", typeof value === "number" ? value : null, (number) => change(category, number), { min: 0, max: 86400 }) : nothing}
+      ${!roomId || mode === "duration" ? this.numberField("seconds", typeof value === "number" ? value : null, (number) => change(category, number), { min: 0, max: 86400, ariaLabel: `${this.t(label[category])} · ${this.t("seconds")}` }) : nothing}
       ${roomId && mode === "inherit" ? html`<p class="help">${this.t("globalValue")}: ${this.draft!.transitions[category] ?? this.t("noTransition")}</p>` : nothing}</div>`;
     })}</div>`;
   }
@@ -815,7 +1094,7 @@ export class HaloPanel extends LitElement {
       ${this.help("profilesHelp")}
       ${profiles.length ? html`<div class="profiles-workspace"><nav class="profile-list" aria-label=${this.t("profiles")}>${profiles.map((profile) => {
         const count = Object.values(this.draft!.rooms).filter((room) => room.associations.some((association) => association.profile_id === profile.id)).length;
-        return html`<button class="profile-link" aria-current=${profile.id === selected?.id ? "page" : nothing} @click=${() => this.selectProfile(profile.id)}><ha-icon icon="mdi:white-balance-sunny"></ha-icon><span><strong>${profile.name}</strong><small>${count} ${this.t("roomsCount")} · ${this.t(profile.linked ? "linkedBrief" : "separateBrief")}</small></span></button>`;
+        return html`<button class="profile-link" aria-current=${profile.id === selected?.id ? "page" : nothing} @click=${() => this.selectProfile(profile.id)}><ha-icon icon="mdi:white-balance-sunny"></ha-icon><span><strong>${profile.name}</strong><small>${count} ${this.t(count === 1 ? "roomCount" : "roomsCount")} · ${this.t(profile.linked ? "linkedBrief" : "separateBrief")}</small></span></button>`;
       })}</nav><div class="profile-detail">${selected ? this.renderProfile(selected) : nothing}</div></div>`
         : html`<div class="empty-state"><ha-icon icon="mdi:white-balance-sunny"></ha-icon><h3>${this.t("noProfilesTitle")}</h3><p>${this.t("profilesHelp")}</p></div>`}</div>`;
   }

@@ -3,7 +3,7 @@ import { afterEach, test } from "node:test";
 import { Window } from "happy-dom";
 import { newProfile, newRoom } from "../src/model";
 import type { HaloEntityPicker } from "../src/entity-picker";
-import type { Curve, Hass, Scene, Snapshot } from "../src/types";
+import type { Curve, Hass, HaloScene, HomeAssistantScene, SceneInspection, Scene, Snapshot } from "../src/types";
 
 const window = new Window({ url: "http://192.168.1.4:8123" });
 for (const key of ["window", "document", "customElements", "HTMLElement", "Element", "Node", "Document", "ShadowRoot", "CSSStyleSheet", "Event", "CustomEvent", "KeyboardEvent", "FocusEvent"] as const) {
@@ -33,7 +33,7 @@ async function settle(panel: InstanceType<typeof HaloPanel>) {
   await panel.updateComplete;
 }
 
-async function mount(admin = true, initial = fixture(admin), pending: { begin?: () => Promise<void>; preview?: () => Promise<void>; touch?: () => Promise<void>; api?: () => Promise<unknown>; import?: () => Promise<{ scene: Scene; ignored_entities: number }> } = {}) {
+async function mount(admin = true, initial = fixture(admin), pending: { command?: () => Promise<Snapshot>; end?: () => Promise<Snapshot>; save?: (message: Record<string, unknown>) => Promise<Snapshot>; begin?: () => Promise<void>; preview?: () => Promise<void>; touch?: () => Promise<void>; api?: () => Promise<unknown>; import?: () => Promise<{ scene: Scene; ignored_entities: number }>; inspect?: (message: Record<string, unknown>) => Promise<SceneInspection> } = {}) {
   let snapshot = initial;
   const calls: Record<string, unknown>[] = [];
   let callback: ((snapshot: Snapshot) => void) | undefined;
@@ -43,15 +43,18 @@ async function mount(admin = true, initial = fixture(admin), pending: { begin?: 
     async callWS<T>(message: Record<string, unknown>) {
       calls.push(structuredClone(message));
       if (message.type === "halo/get") return structuredClone(snapshot) as T;
+      if (message.type === "halo/command" && pending.command) return await pending.command() as T;
       if (message.type === "halo/save") {
+        if (pending.save) return await pending.save(structuredClone(message)) as T;
         snapshot = { ...snapshot, config: structuredClone(message.config) as Snapshot["config"], revision: snapshot.revision + 1 };
         return structuredClone(snapshot) as T;
       }
       if (message.type === "halo/edit/begin") { await pending.begin?.(); return { token: "editor-token" } as T; }
       if (message.type === "halo/edit/preview") await pending.preview?.();
       if (message.type === "halo/edit/touch") await pending.touch?.();
-      if (message.type === "halo/edit/end") return structuredClone(snapshot) as T;
+      if (message.type === "halo/edit/end") return pending.end ? await pending.end() as T : structuredClone(snapshot) as T;
       if (message.type === "halo/scene/import") return await pending.import?.() as T;
+      if (message.type === "halo/scene/inspect") return await pending.inspect?.(message) as T;
       return undefined as T;
     },
     connection: { async subscribeMessage<T>(handler: (event: T) => void) { callback = handler as (snapshot: Snapshot) => void; return () => { unsubscribed++; }; } } };
@@ -446,7 +449,7 @@ test("scene editing locks workspace navigation and returns focus to the correct 
     assert.equal(panel.shadowRoot!.querySelector('[role="tablist"]'), null);
     button(panel, "Annuler").click(); await settle(panel);
     assert.equal(roomTab(panel, "Pilotage").getAttribute("aria-selected"), "true");
-    assert.equal(panel.shadowRoot!.activeElement, button(panel, action));
+    assert.equal(panel.shadowRoot!.activeElement, action === "Créer une scène" ? panel.shadowRoot!.querySelector(".add-scene") : button(panel, action));
   }
 });
 
@@ -929,7 +932,7 @@ test("cancelling and discarding imported scenes leave the original room intact",
   button(panel, "Annuler").click(); await settle(panel);
   assert.equal(panel.shadowRoot!.querySelector(".savebar"), null);
   assert.equal(panel.shadowRoot!.querySelectorAll(".scene-row").length, 1);
-  assert.equal(panel.shadowRoot!.activeElement?.className, "import-scene");
+  assert.equal(panel.shadowRoot!.activeElement?.className, "add-scene");
   button(panel, "Importer depuis Home Assistant").click(); await settle(panel); await chooseScene(panel);
   button(panel, "Ajouter au brouillon de la pièce").click(); await settle(panel);
   button(panel, "Abandonner les modifications").click(); await settle(panel);
@@ -1038,7 +1041,7 @@ test("existing partial scenes preview and capture only included lamps while addi
   button(panel, "Enregistrer la scène").click(); await settle(panel);
   const end = calls.find((call) => call.type === "halo/edit/end")!;
   assert.deepEqual(end.capture_entities, ["light.simple"]);
-  assert.deepEqual((end.scene as Scene).lights, {});
+  assert.deepEqual((end.scene as HaloScene).lights, {});
   assert.equal(calls.filter((call) => call.type === "halo/edit/preview").length, 1);
 });
 
@@ -1067,5 +1070,828 @@ test("resaving a partial scene retains remembered settings for its unavailable s
   button(panel, "Enregistrer la scène").click(); await settle(panel);
   const end = calls.find((call) => call.type === "halo/edit/end")!;
   assert.deepEqual(end.capture_entities, ["light.colour"]);
-  assert.deepEqual((end.scene as Scene).lights, importedScene.lights);
+  assert.deepEqual((end.scene as HaloScene).lights, importedScene.lights);
+});
+
+const linkedScene: HomeAssistantScene = { type: "home_assistant", id: "native-scene", name: "Ambiance liée", scene_entity_id: "scene.reading", conditions: null, can_turn_on: false };
+const nativeInspection: SceneInspection = { entity_id: "scene.reading", name: "Lecture existante", available: true, complete: true,
+  lights: ["light.colour", "light.extra"], outside_lights: ["light.extra"], missing_lights: ["light.simple"], other_entities: ["media_player.tv"], blocked: false };
+
+async function openLink(panel: InstanceType<typeof HaloPanel>) {
+  await openRoom(panel);
+  const menu = panel.shadowRoot!.querySelector<HTMLDetailsElement>(".scene-add-menu")!;
+  menu.open = true;
+  assert.deepEqual([...menu.querySelectorAll("button")].map((item) => item.textContent?.trim()),
+    ["Créer une scène", "Utiliser une scène Home Assistant", "Importer depuis Home Assistant"]);
+  button(panel, "Utiliser une scène Home Assistant").click();
+  await settle(panel);
+}
+
+function setText(input: HTMLInputElement, value: string) {
+  input.value = value;
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+test("linking an HA scene inspects its complete scope and adds a reference last without controlling lights or copying its settings", async () => {
+  const snapshot = importFixture();
+  snapshot.entities.push({ entity_id: "scene.halo_scene", name: "Scène Halo", state: "unknown", platform: "halo", attributes: {} });
+  const { panel, calls } = await mount(true, snapshot, { inspect: async () => structuredClone(nativeInspection) });
+  await openLink(panel);
+  assert.equal(panel.shadowRoot!.activeElement?.id, "link-title");
+  const selector = picker(panel, "Scène Home Assistant");
+  assert.ok(selector.entities.every((entity) => entity.entity_id.startsWith("scene.") && entity.entity_id !== "scene.halo_scene"));
+  await chooseScene(panel);
+  assert.doesNotMatch(selector.shadowRoot!.textContent!, /Indisponible/);
+  assert.deepEqual(calls.filter((call) => call.type === "halo/scene/inspect"), [{ type: "halo/scene/inspect", room_id: "lounge", entity_id: "scene.reading" }]);
+  const scope = panel.shadowRoot!.querySelector(".scene-scope")!.textContent!;
+  assert.match(scope, /Lampes connues hors de cette pièce.*light.extra/s);
+  assert.match(scope, /Lampes de la pièce absentes.*light.simple/s);
+  assert.match(scope, /Autres équipements connus.*media_player.tv/s);
+  assert.doesNotMatch(scope, /comparaison est incomplète/);
+  assert.equal(inputByLabel(panel, "Nom de la scène").value, "Lecture existante");
+  setText(inputByLabel(panel, "Nom de la scène"), "Ambiance Hue personnalisée");
+  button(panel, "Ajouter au brouillon de la pièce").click(); await settle(panel);
+  assert.equal(panel.shadowRoot!.querySelector(".scene-link"), null);
+  assert.ok(panel.shadowRoot!.querySelector(".savebar"));
+  const row = panel.shadowRoot!.querySelector(".scene-row:last-child")!;
+  assert.match(row.textContent!, /Ambiance Hue personnalisée.*Home Assistant · scene.reading/s);
+  assert.doesNotMatch(row.textContent!, /0 lumières/);
+  assert.equal(calls.some((call) => call.type === "api" || call.type === "halo/save" || String(call.type).startsWith("halo/edit") || call.type === "halo/command"), false);
+  button(panel, "Enregistrer les modifications").click(); await settle(panel);
+  const saved = (calls.find((call) => call.type === "halo/save")!.config as Snapshot["config"]).rooms.lounge.scenes;
+  assert.equal(saved.length, 2);
+  assert.deepEqual(saved[1], { type: "home_assistant", id: saved[1].id, name: "Ambiance Hue personnalisée", scene_entity_id: "scene.reading", conditions: null, can_turn_on: false });
+  assert.equal(calls.some((call) => String(call.type).startsWith("halo/edit") || call.type === "halo/command"), false);
+});
+
+test("opaque provider scenes can be linked without pretending their unknown scope is exhaustive", async () => {
+  const { panel, calls } = await mount(true, importFixture(), { inspect: async () => ({ ...nativeInspection, entity_id: "scene.hue", name: "Ambiance Hue", complete: false, lights: [], outside_lights: [], missing_lights: [], other_entities: [] }) });
+  await openLink(panel); await chooseScene(panel, "Ambiance Hue");
+  assert.match(panel.shadowRoot!.querySelector(".scene-scope")!.textContent!, /comparaison est incomplète/);
+  assert.equal(panel.shadowRoot!.querySelectorAll(".scope-warning").length, 0);
+  assert.equal(button(panel, "Ajouter au brouillon de la pièce").disabled, false);
+  button(panel, "Ajouter au brouillon de la pièce").click(); await settle(panel);
+  button(panel, "Enregistrer les modifications").click(); await settle(panel);
+  assert.equal(((calls.find((call) => call.type === "halo/save")!.config as Snapshot["config"]).rooms.lounge.scenes[1] as HomeAssistantScene).scene_entity_id, "scene.hue");
+});
+
+test("editing a linked scene preserves its ID and priority and changes metadata without a live session", async () => {
+  const snapshot = importFixture();
+  snapshot.config.rooms.lounge.scenes.unshift(structuredClone(linkedScene));
+  const { panel, calls } = await mount(true, snapshot, { inspect: async () => structuredClone(nativeInspection) });
+  await openRoom(panel);
+  panel.shadowRoot!.querySelector<HTMLButtonElement>('.edit-scene[data-scene-id="native-scene"]')!.click(); await settle(panel);
+  assert.equal(inputByLabel(panel, "Nom de la scène").value, "Ambiance liée");
+  assert.equal(panel.shadowRoot!.querySelector(".editor"), null);
+  setText(inputByLabel(panel, "Nom de la scène"), "Cinéma natif");
+  const mayTurnOn = inputByLabel(panel, "Cette scène peut allumer");
+  mayTurnOn.checked = true; mayTurnOn.dispatchEvent(new Event("change", { bubbles: true }));
+  button(panel, "Ajouter une condition").click(); await settle(panel);
+  const condition = picker(panel, "Entité");
+  await searchEntity(condition, "media_player.tv");
+  condition.shadowRoot!.querySelector<HTMLElement>('[role="option"]')!.click(); await settle(panel);
+  button(panel, "Modifier dans le brouillon de la pièce").click(); await settle(panel);
+  assert.equal((panel.shadowRoot!.activeElement as HTMLElement).dataset.sceneId, "native-scene");
+  button(panel, "Enregistrer les modifications").click(); await settle(panel);
+  const scenes = (calls.find((call) => call.type === "halo/save")!.config as Snapshot["config"]).rooms.lounge.scenes;
+  assert.deepEqual(scenes[0], { ...linkedScene, name: "Cinéma natif", can_turn_on: true, conditions: { type: "state", entity_id: "media_player.tv", state: "on" } });
+  assert.equal(scenes[1].id, "cinema");
+  assert.equal(calls.some((call) => String(call.type).startsWith("halo/edit") || call.type === "halo/command"), false);
+});
+
+test("linked scene drafts are cancelled or discarded without changing saved configuration", async () => {
+  const { panel, calls } = await mount(true, importFixture(), { inspect: async () => structuredClone(nativeInspection) });
+  await openLink(panel); await chooseScene(panel);
+  setText(inputByLabel(panel, "Nom de la scène"), "Brouillon temporaire");
+  assert.ok(button(panel, "Réglages globaux").disabled, "Close or confirm the metadata form before leaving it");
+  button(panel, "Annuler").click(); await settle(panel);
+  assert.equal(panel.shadowRoot!.activeElement?.className, "add-scene");
+  assert.equal(panel.shadowRoot!.querySelector(".savebar"), null);
+  await openLink(panel); await chooseScene(panel);
+  button(panel, "Ajouter au brouillon de la pièce").click(); await settle(panel);
+  button(panel, "Abandonner les modifications").click(); await settle(panel);
+  assert.equal(panel.shadowRoot!.querySelectorAll(".scene-row").length, 1);
+  assert.equal(calls.some((call) => call.type === "halo/save" || call.type === "halo/command"), false);
+});
+
+test("linked scene form rejects stale configuration and can reload after cancellation", async () => {
+  const snapshot = importFixture();
+  const { panel, calls, emit } = await mount(true, snapshot, { inspect: async () => structuredClone(nativeInspection) });
+  await openLink(panel); await chooseScene(panel);
+  const next = structuredClone(snapshot); next.revision++;
+  next.config.rooms.lounge.scenes[0].name = "Modifié ailleurs";
+  emit(next); await settle(panel);
+  assert.match(panel.shadowRoot!.textContent!, /configuration de la pièce a changé pendant l’édition du lien/);
+  assert.ok(button(panel, "Ajouter au brouillon de la pièce").disabled);
+  button(panel, "Annuler").click(); await settle(panel);
+  assert.match(panel.shadowRoot!.textContent!, /Modifié ailleurs/);
+  assert.equal(calls.some((call) => call.type === "halo/save"), false);
+  await openLink(panel); await chooseScene(panel);
+  assert.equal(button(panel, "Ajouter au brouillon de la pièce").disabled, false);
+});
+
+test("known recursive and newly unavailable native sources cannot be linked, but an existing missing reference remains editable", async () => {
+  for (const blocked of [true, false]) {
+    const { panel } = await mount(true, importFixture(), { inspect: async () => ({ ...nativeInspection, blocked, available: blocked }) });
+    await openLink(panel); await chooseScene(panel);
+    assert.ok(button(panel, "Ajouter au brouillon de la pièce").disabled);
+    assert.match(panel.shadowRoot!.textContent!, blocked ? /commandes récursives/ : /absente ou indisponible/);
+    panel.remove();
+  }
+  const snapshot = fixture();
+  snapshot.config.rooms.lounge.scenes = [structuredClone(linkedScene)];
+  const { panel, calls } = await mount(true, snapshot, { inspect: async () => ({ ...nativeInspection, available: false, name: "scene.reading" }) });
+  await openRoom(panel); button(panel, "Régler").click(); await settle(panel);
+  assert.equal(picker(panel, "Scène Home Assistant").value, "scene.reading");
+  assert.equal(inputByLabel(panel, "Nom de la scène").value, "Ambiance liée");
+  setText(inputByLabel(panel, "Nom de la scène"), "Référence conservée");
+  assert.equal(button(panel, "Modifier dans le brouillon de la pièce").disabled, false);
+  button(panel, "Modifier dans le brouillon de la pièce").click(); await settle(panel);
+  button(panel, "Enregistrer les modifications").click(); await settle(panel);
+  assert.deepEqual((calls.find((call) => call.type === "halo/save")!.config as Snapshot["config"]).rooms.lounge.scenes[0], { ...linkedScene, name: "Référence conservée" });
+});
+
+test("late inspections do not overwrite a new source, a typed alias, cancellation, disconnection or lost administrator rights", async () => {
+  for (const action of ["source", "alias", "cancel", "disconnect", "rights"] as const) {
+    let release!: (value: SceneInspection) => void;
+    const response = new Promise<SceneInspection>((resolve) => { release = resolve; });
+    const snapshot = importFixture();
+    const { panel, emit, calls } = await mount(true, snapshot, { inspect: (message) => message.entity_id === "scene.reading" ? response : Promise.resolve({ ...nativeInspection, entity_id: "scene.hue", name: "Ambiance Hue", complete: false }) });
+    await openLink(panel); await chooseScene(panel);
+    assert.ok(button(panel, "Ajouter au brouillon de la pièce").disabled);
+    if (action === "source") await chooseScene(panel, "Ambiance Hue");
+    if (action === "alias") setText(inputByLabel(panel, "Nom de la scène"), "Mon nom saisi");
+    if (action === "cancel") button(panel, "Annuler").click();
+    if (action === "disconnect") panel.remove();
+    if (action === "rights") emit({ ...snapshot, is_admin: false });
+    await settle(panel);
+    release(structuredClone(nativeInspection)); await settle(panel);
+    if (action === "source") assert.equal(inputByLabel(panel, "Nom de la scène").value, "Ambiance Hue");
+    if (action === "alias") assert.equal(inputByLabel(panel, "Nom de la scène").value, "Mon nom saisi");
+    if (action === "cancel" || action === "rights") assert.equal(panel.shadowRoot!.querySelector(".scene-link"), null);
+    if (action === "rights") assert.equal(button(panel, "Pièces").disabled, false);
+    assert.equal(calls.some((call) => call.type === "halo/save" || String(call.type).startsWith("halo/edit") || call.type === "halo/command"), false);
+    panel.remove();
+  }
+});
+
+test("inspection failures can be retried and changing sources preserves an explicit alias", async () => {
+  let fail = true;
+  const { panel, calls } = await mount(true, importFixture(), { inspect: async (message) => {
+    if (fail) { fail = false; throw new Error("Offline"); }
+    return { ...nativeInspection, entity_id: String(message.entity_id), name: message.entity_id === "scene.hue" ? "Ambiance Hue" : nativeInspection.name };
+  } });
+  await openLink(panel); await chooseScene(panel);
+  assert.match(panel.shadowRoot!.textContent!, /périmètre de la scène n’a pas pu être vérifié/);
+  assert.ok(button(panel, "Ajouter au brouillon de la pièce").disabled);
+  button(panel, "Réessayer").click(); await settle(panel);
+  assert.equal(button(panel, "Ajouter au brouillon de la pièce").disabled, false);
+  setText(inputByLabel(panel, "Nom de la scène"), "Mon nom");
+  await chooseScene(panel, "Ambiance Hue");
+  assert.equal(inputByLabel(panel, "Nom de la scène").value, "Mon nom");
+  assert.equal(calls.filter((call) => call.type === "halo/scene/inspect").length, 3);
+  setText(inputByLabel(panel, "Nom de la scène"), "");
+  button(panel, "Ajouter au brouillon de la pièce").click(); await settle(panel);
+  assert.ok(panel.shadowRoot!.querySelector(".scene-link"));
+  assert.equal(panel.shadowRoot!.querySelector(".savebar"), null);
+});
+
+test("linked scenes stay runnable for users through the existing room command and show localized automatic failures", async () => {
+  const snapshot = importFixture(); snapshot.is_admin = false;
+  snapshot.config.rooms.lounge.scenes = [structuredClone(linkedScene)];
+  snapshot.status.lounge.scene_errors = { "native-scene": "external_scene_unavailable" };
+  const { panel, hass, calls } = await mount(false, snapshot);
+  await openRoom(panel);
+  assert.equal(panel.shadowRoot!.querySelector(".scene-add-menu"), null);
+  assert.equal(panel.shadowRoot!.querySelector(".edit-scene"), null);
+  assert.match(panel.shadowRoot!.querySelector('.scenes-section [role="alert"]')!.textContent!, /Ambiance liée.*absente ou indisponible/s);
+  button(panel, "Lancer").click(); await settle(panel);
+  assert.deepEqual(calls.find((call) => call.type === "halo/command"), { type: "halo/command", room_id: "lounge", command: "scene", scene_id: "native-scene" });
+  panel.hass = { ...hass, locale: { language: "de" } }; await settle(panel);
+  assert.match(panel.shadowRoot!.querySelector('.scenes-section [role="alert"]')!.textContent!, /Ambiance liée.*missing or unavailable/s);
+  assert.match(panel.shadowRoot!.querySelector(".scene-meta")!.textContent!, /Home Assistant · scene.reading/);
+});
+
+test("room membership changes prune Halo scene targets but preserve linked scenes and their priority controls", async () => {
+  const snapshot = importFixture(); snapshot.config.rooms.lounge.scenes.push(structuredClone(linkedScene));
+  const { panel, calls } = await mount(true, snapshot);
+  await openRoom(panel, "Lumières");
+  const lamp = [...panel.shadowRoot!.querySelectorAll<HTMLLabelElement>(".light-option label")].find((item) => item.textContent?.includes("light.colour"))!.querySelector<HTMLInputElement>("input")!;
+  lamp.checked = false; lamp.dispatchEvent(new Event("change", { bubbles: true })); await settle(panel);
+  await selectRoomTab(panel, "Pilotage");
+  panel.shadowRoot!.querySelector<HTMLButtonElement>('[aria-label="Monter Ambiance liée"]')!.click(); await settle(panel);
+  assert.equal(panel.shadowRoot!.querySelector(".scene-row strong")!.textContent, "Ambiance liée");
+  button(panel, "Enregistrer les modifications").click(); await settle(panel);
+  const room = (calls.find((call) => call.type === "halo/save")!.config as Snapshot["config"]).rooms.lounge;
+  assert.deepEqual(room.lights, ["light.simple"]);
+  assert.deepEqual(room.scenes[0], linkedScene);
+  assert.deepEqual((room.scenes[1] as HaloScene).lights, { "light.simple": { state: "off" } });
+  panel.shadowRoot!.querySelector<HTMLButtonElement>('[aria-label="Supprimer Ambiance liée"]')!.click(); await settle(panel);
+  button(panel, "Enregistrer les modifications").click(); await settle(panel);
+  assert.equal((calls.filter((call) => call.type === "halo/save").at(-1)!.config as Snapshot["config"]).rooms.lounge.scenes.length, 1);
+  assert.equal(calls.some((call) => call.type === "halo/command" || String(call.type).startsWith("halo/edit")), false);
+});
+
+test("automation selectors show live raw values and units without changing the draft or commanding entities", async () => {
+  const snapshot = fixture();
+  Object.assign(snapshot.config.rooms.lounge, { presence_entity_id: "input_select.presence", presence_states: ["occupied_custom"], lux_entity_id: "sensor.daylight", lux_threshold: 30 });
+  snapshot.entities.push(
+    { entity_id: "input_select.presence", name: "Presence", state: "stale", attributes: {} },
+    { entity_id: "sensor.daylight", name: "Daylight", state: "99", attributes: { unit_of_measurement: "lx" } },
+  );
+  const { panel, hass, calls } = await mount(true, snapshot);
+  panel.hass = { ...hass, states: {
+    "input_select.presence": { state: "occupied_custom", attributes: {} },
+    "sensor.daylight": { state: "0", attributes: { unit_of_measurement: "lx" } },
+  } };
+  await openRoom(panel, "Automatisation");
+  const presence = picker(panel, "Entité de présence");
+  const lux = picker(panel, "Capteur de luminosité");
+  const value = (control: HaloEntityPicker) => control.shadowRoot!.querySelector("#entity-current-value")?.textContent;
+  assert.equal(value(presence), "Valeur actuelle: occupied_custom");
+  assert.equal(value(lux), "Valeur actuelle: 0 lx");
+  assert.equal(lux.shadowRoot!.querySelector("input")!.getAttribute("aria-describedby"), "entity-current-value");
+  const threshold = inputByLabel(panel, "Seuil d’allumage");
+  threshold.value = "42"; threshold.dispatchEvent(new Event("input", { bubbles: true })); await settle(panel);
+  panel.hass = { ...hass, states: {
+    "input_select.presence": { state: "absent_custom", attributes: {} },
+    "sensor.daylight": { state: "12.5", attributes: { unit_of_measurement: "%" } },
+  } }; await settle(panel);
+  assert.equal(value(presence), "Valeur actuelle: absent_custom");
+  assert.equal(value(lux), "Valeur actuelle: 12.5 %");
+  assert.equal(threshold.value, "42", "Live readings leave the edited threshold intact");
+  lux.shadowRoot!.querySelector<HTMLButtonElement>("button")!.click(); await settle(panel);
+  assert.equal(value(lux), undefined);
+  assert.equal(lux.shadowRoot!.querySelector("input")!.hasAttribute("aria-describedby"), false);
+  assert.ok(calls.every((call) => call.type === "halo/get"), "Displaying values never saves or commands entities");
+});
+
+test("current sensor values distinguish unknown, unavailable and missing data and follow the panel language", async () => {
+  const snapshot = fixture();
+  Object.assign(snapshot.config.rooms.lounge, { presence_entity_id: "binary_sensor.presence", lux_entity_id: "sensor.daylight", lux_threshold: 30 });
+  snapshot.entities.push(
+    { entity_id: "binary_sensor.presence", name: "Presence", state: "on", attributes: {} },
+    { entity_id: "sensor.daylight", name: "Daylight", state: "15", attributes: { unit_of_measurement: "lx" } },
+  );
+  const { panel, hass } = await mount(true, snapshot);
+  panel.hass = { ...hass, states: undefined };
+  await openRoom(panel, "Automatisation");
+  const current = (label: string) => picker(panel, label).shadowRoot!.querySelector("#entity-current-value")?.textContent;
+  assert.equal(current("Entité de présence"), "Valeur actuelle: on");
+  assert.equal(current("Capteur de luminosité"), "Valeur actuelle: 15 lx");
+  panel.hass = { ...hass, states: { "binary_sensor.presence": { state: "unknown", attributes: {} }, "sensor.daylight": { state: "unavailable", attributes: { unit_of_measurement: "lx" } } } }; await settle(panel);
+  assert.equal(current("Entité de présence"), "Valeur actuelle: Inconnue");
+  assert.equal(current("Capteur de luminosité"), "Valeur actuelle: Indisponible");
+  panel.hass = { ...hass, locale: { language: "de" }, states: {} }; await settle(panel);
+  assert.equal(current("Presence entity"), "Current value: Unavailable");
+  assert.equal(current("Illuminance sensor"), "Current value: Unavailable", "Removed live entities never reuse stale snapshot values");
+  panel.hass = { ...hass, states: { "sensor.daylight": { state: "0", attributes: {} } } }; await settle(panel);
+  assert.equal(current("Capteur de luminosité"), "Valeur actuelle: 0");
+});
+
+function nightlightFixture() {
+  const snapshot = fixture();
+  snapshot.config.rooms.lounge.presence_entity_id = "binary_sensor.presence";
+  snapshot.config.rooms.lounge.nightlight = { enabled: true, lights: { "light.colour": { state: "on", brightness: 30, color_mode: "rgbww", rgbww_color: [1, 2, 3, 4, 5], effect: "Candle" } } };
+  return snapshot;
+}
+
+test("nightlight stays in Ambiences with five tabs, safe defaults and no live edits when toggling the draft", async () => {
+  const snapshot = nightlightFixture();
+  snapshot.config.rooms.lounge.nightlight.enabled = false;
+  const { panel, calls } = await mount(true, snapshot);
+  await openRoom(panel, "Ambiances");
+  assert.equal(panel.shadowRoot!.querySelectorAll('[role="tab"]').length, 5);
+  const section = panel.shadowRoot!.querySelector(".nightlight-section")!;
+  assert.match(section.textContent!, /1 lampe · pendant l’absence/);
+  assert.match(section.textContent!, /Sans capteur lumineux/);
+  assert.equal(section.querySelector<HTMLDetailsElement>("details")!.open, false);
+  const enabled = inputByLabel(panel, "Activer la veilleuse");
+  assert.equal(enabled.disabled, false);
+  enabled.checked = true; enabled.dispatchEvent(new Event("change", { bubbles: true })); await settle(panel);
+  assert.equal(button(panel, "Configurer").disabled, true);
+  button(panel, "Enregistrer les modifications").click(); await settle(panel);
+  assert.equal((calls.find((call) => call.type === "halo/save")!.config as Snapshot["config"]).rooms.lounge.nightlight.enabled, true);
+  assert.equal(calls.some((call) => String(call.type).startsWith("halo/edit") || call.type === "halo/command"), false);
+  button(panel, "Réglages de présence et de luminosité").click(); await settle(panel);
+  assert.equal(roomTab(panel, "Automatisation").getAttribute("aria-selected"), "true");
+});
+
+test("nightlight editing previews only stored lamps, preserves native capture and returns focus to Ambiences", async () => {
+  const snapshot = nightlightFixture();
+  const { panel, calls, hass } = await mount(true, snapshot);
+  const actions: CustomEvent[] = [];
+  panel.addEventListener("hass-action", (event) => actions.push(event as CustomEvent));
+  await openRoom(panel, "Ambiances");
+  button(panel, "Configurer").click(); await settle(panel);
+  assert.equal(panel.shadowRoot!.querySelector(".scene-automation"), null);
+  assert.equal(panel.shadowRoot!.querySelector('.editor input[type="text"]'), null);
+  assert.deepEqual(calls.find((call) => call.type === "halo/edit/preview")!.lights, snapshot.config.rooms.lounge.nightlight.lights);
+  assert.deepEqual([...panel.shadowRoot!.querySelectorAll<HTMLInputElement>(".scene-inclusion input")].map((input) => input.checked), [true, false]);
+  panel.shadowRoot!.querySelector<HTMLButtonElement>(".scene-lamp")!.click(); await settle(panel);
+  assert.deepEqual(actions[0].detail, { config: { entity: "light.colour", tap_action: { action: "more-info" } }, action: "tap" });
+  panel.hass = { ...hass, states: { "light.colour": { state: "on", attributes: { brightness: 11, color_mode: "rgbww", rgbww_color: [5, 4, 3, 2, 1], effect: "Rainbow" } } } };
+  await settle(panel);
+  button(panel, "Enregistrer la veilleuse").click(); await settle(panel);
+  const end = calls.find((call) => call.type === "halo/edit/end")!;
+  assert.equal(end.target, "nightlight");
+  assert.equal(end.scene, undefined);
+  assert.equal(end.capture, true);
+  assert.equal(end.revision, 7);
+  assert.deepEqual(end.capture_entities, ["light.colour"]);
+  assert.deepEqual(end.nightlight, snapshot.config.rooms.lounge.nightlight, "Stored settings remain the fallback; real native changes are captured by the server");
+  assert.equal(calls.filter((call) => call.type === "halo/edit/preview").length, 1);
+  assert.equal(roomTab(panel, "Ambiances").getAttribute("aria-selected"), "true");
+  assert.equal(panel.shadowRoot!.activeElement, button(panel, "Configurer"));
+});
+
+test("new nightlight has explicit empty inclusion and cancellation closes the shared edit session", async () => {
+  const { panel, calls } = await mount();
+  await openRoom(panel, "Ambiances");
+  assert.equal(inputByLabel(panel, "Activer la veilleuse").disabled, true);
+  assert.match(panel.shadowRoot!.querySelector(".nightlight-section")!.textContent!, /Choisis une entité de présence/);
+  button(panel, "Configurer").click(); await settle(panel);
+  assert.deepEqual([...panel.shadowRoot!.querySelectorAll<HTMLInputElement>(".scene-inclusion input")].map((input) => input.checked), [false, false]);
+  assert.equal(calls.some((call) => call.type === "halo/edit/preview"), false);
+  button(panel, "Annuler").click(); await settle(panel);
+  assert.deepEqual(calls.find((call) => call.type === "halo/edit/end"), { type: "halo/edit/end", room_id: "lounge", token: "editor-token", save: false });
+  assert.equal(panel.shadowRoot!.querySelector(".editor"), null);
+  assert.equal(roomTab(panel, "Ambiances").getAttribute("aria-selected"), "true");
+  assert.equal(calls.some((call) => call.type === "halo/save"), false);
+});
+
+test("enabled nightlight cannot capture no included light or zero brightness, but keeps unavailable stored settings", async () => {
+  const snapshot = nightlightFixture();
+  const { panel, calls, hass } = await mount(true, snapshot);
+  await openRoom(panel, "Ambiances"); button(panel, "Configurer").click(); await settle(panel);
+  const included = panel.shadowRoot!.querySelector<HTMLInputElement>(".scene-inclusion input")!;
+  included.checked = false; included.dispatchEvent(new Event("change", { bubbles: true })); await settle(panel);
+  button(panel, "Enregistrer la veilleuse").click(); await settle(panel);
+  assert.equal(calls.some((call) => call.type === "halo/edit/end"), false);
+  assert.match(panel.shadowRoot!.querySelector('[role="alert"]')!.textContent!, /luminosité non nulle/);
+  included.checked = true; included.dispatchEvent(new Event("change", { bubbles: true }));
+  panel.hass = { ...hass, states: { "light.colour": { state: "on", attributes: { brightness: 0 } } } }; await settle(panel);
+  button(panel, "Enregistrer la veilleuse").click(); await settle(panel);
+  assert.equal(calls.some((call) => call.type === "halo/edit/end"), false);
+  panel.hass = { ...hass, states: { "light.colour": { state: "unavailable", attributes: {} } } }; await settle(panel);
+  assert.equal(panel.shadowRoot!.querySelector<HTMLButtonElement>(".scene-lamp")!.disabled, true);
+  button(panel, "Enregistrer la veilleuse").click(); await settle(panel);
+  assert.deepEqual(calls.find((call) => call.type === "halo/edit/end")!.nightlight, snapshot.config.rooms.lounge.nightlight);
+});
+
+test("removing the last usable nightlight prunes settings and disables it without changing scenes", async () => {
+  const snapshot = nightlightFixture();
+  const { panel, calls } = await mount(true, snapshot);
+  await openRoom(panel, "Lumières");
+  const selected = [...panel.shadowRoot!.querySelectorAll<HTMLInputElement>('.light-option input')].find((input) => input.parentElement!.textContent!.includes("light.colour"))!;
+  selected.checked = false; selected.dispatchEvent(new Event("change", { bubbles: true })); await settle(panel);
+  button(panel, "Enregistrer les modifications").click(); await settle(panel);
+  const room = (calls.find((call) => call.type === "halo/save")!.config as Snapshot["config"]).rooms.lounge;
+  assert.deepEqual(room.nightlight, { enabled: false, lights: {} });
+  assert.deepEqual(room.lights, ["light.simple"]);
+  assert.equal(room.scenes.length, 1);
+});
+
+test("nightlight shows shared sensor settings and incomplete groups, with localized status and admin-only controls", async () => {
+  const snapshot = nightlightFixture();
+  const room = snapshot.config.rooms.lounge;
+  room.lux_entity_id = "sensor.illuminance"; room.lux_threshold = 20; room.lux_hysteresis = 5; room.lux_off = false;
+  snapshot.entities.push({ entity_id: "sensor.illuminance", name: "Luminosité", state: "15", attributes: { unit_of_measurement: "%" } });
+  snapshot.lights[0].is_group = true; snapshot.lights[0].group_members = ["light.child"]; snapshot.lights[0].group_members_complete = false;
+  snapshot.status.lounge.reason = "nightlight";
+  const { panel, hass } = await mount(true, snapshot);
+  panel.hass = { ...hass, states: { "sensor.illuminance": { state: "15", attributes: { unit_of_measurement: "%" } } } };
+  await openRoom(panel, "Ambiances");
+  const section = panel.shadowRoot!.querySelector(".nightlight-section")!;
+  assert.match(section.textContent!, /Seuil bas: 20 % · Seuil haut: 25 %/);
+  assert.match(section.textContent!, /Valeur actuelle: 15 %/);
+  assert.match(section.textContent!, /Certains membres de groupes sont inconnus/);
+  assert.match(panel.shadowRoot!.querySelector('[aria-label="État de la pièce"]')!.textContent!, /Veilleuse/);
+  button(panel, "Réglages de présence et de luminosité").click(); await settle(panel);
+  assert.equal(inputByLabel(panel, "Délai de confirmation de luminosité").value, "30");
+  await selectRoomTab(panel, "Ambiances");
+  panel.hass = { ...hass, locale: { language: "de" } }; await settle(panel);
+  assert.match(panel.shadowRoot!.querySelector(".nightlight-section")!.textContent!, /Nightlight/);
+  panel.remove();
+  const viewer = await mount(false, { ...snapshot, is_admin: false }); await openRoom(viewer.panel);
+  assert.equal(viewer.panel.shadowRoot!.querySelectorAll('[role="tab"]').length, 1);
+  assert.equal(viewer.panel.shadowRoot!.querySelector(".nightlight-section"), null);
+  assert.equal(viewer.calls.some((call) => call.type === "halo/edit/begin"), false);
+});
+
+
+test("a slow save never discards newer valid edits and the next save uses its acknowledged revision", async () => {
+  let release!: (snapshot: Snapshot) => void;
+  const saving = new Promise<Snapshot>((resolve) => { release = resolve; });
+  const { panel, calls } = await mount(true, fixture(), { save: () => saving });
+  await openRoom(panel, "Automatisation");
+  const changeDelay = async (value: string) => {
+    const input = inputByLabel(panel, "Délai d’absence");
+    input.value = value; input.dispatchEvent(new Event("input", { bubbles: true })); await settle(panel);
+  };
+  await changeDelay("15");
+  button(panel, "Enregistrer les modifications").click(); await settle(panel);
+  await changeDelay("25");
+  const saved = fixture(); saved.revision = 8; saved.config.rooms.lounge.absence_delay = 15;
+  release(saved); await settle(panel);
+  assert.equal(inputByLabel(panel, "Délai d’absence").value, "25", "Typing during save must not be replaced by the older server response");
+  assert.ok(panel.shadowRoot!.querySelector(".savebar"));
+  assert.equal(button(panel, "Enregistrer les modifications").disabled, false);
+  assert.equal(calls.filter((call) => call.type === "halo/save").length, 1);
+  button(panel, "Enregistrer les modifications").click(); await settle(panel);
+  const second = calls.filter((call) => call.type === "halo/save")[1];
+  assert.equal(second.revision, 8);
+  assert.equal((second.config as Snapshot["config"]).rooms.lounge.absence_delay, 25);
+});
+
+test("losing administrator rights abandons configuration and native editing without issuing more privileged actions", async () => {
+  for (const editing of [false, true]) {
+    const { panel, calls, emit } = await mount();
+    if (editing) { await openRoom(panel); button(panel, "Régler").click(); await settle(panel); }
+    else {
+      await openRoom(panel, "Automatisation");
+      const field = inputByLabel(panel, "Délai d’absence"); field.value = "17";
+      field.dispatchEvent(new Event("input", { bubbles: true })); await settle(panel);
+    }
+    const before = calls.length;
+    emit(fixture(false)); await settle(panel);
+    assert.ok(!panel.shadowRoot!.querySelector(".editor"), "The privileged editor must close");
+    assert.ok(!panel.shadowRoot!.querySelector(".savebar"), "The privileged draft bar must disappear");
+    assert.ok(!panel.shadowRoot!.querySelector(".automation-section"));
+    assert.equal(button(panel, "Allumer").disabled, false);
+    assert.equal(calls.slice(before).some((call) => ["halo/save", "halo/edit/end", "halo/edit/touch", "halo/edit/preview"].includes(String(call.type))), false);
+    panel.remove();
+  }
+});
+
+test("a new Home Assistant connection drops the old native editor and its lock", async () => {
+  const { panel, hass, calls } = await mount();
+  await openRoom(panel); button(panel, "Régler").click(); await settle(panel);
+  panel.hass = { ...hass, connection: { async subscribeMessage() { return () => undefined; } } };
+  await settle(panel);
+  assert.ok(!panel.shadowRoot!.querySelector(".editor"), "The privileged editor must close");
+  assert.equal(button(panel, "Pièces").disabled, false);
+  assert.equal(calls.filter((call) => call.type === "halo/get").length, 2);
+});
+
+
+test("invalid text entered during a slow save remains visible, dirty and unsaved after acknowledgement", async () => {
+  let release!: (snapshot: Snapshot) => void;
+  const saving = new Promise<Snapshot>((resolve) => { release = resolve; });
+  const { panel, calls } = await mount(true, fixture(), { save: () => saving });
+  await openRoom(panel, "Automatisation");
+  const field = inputByLabel(panel, "Délai d’absence");
+  field.value = "15"; field.dispatchEvent(new Event("input", { bubbles: true })); await settle(panel);
+  button(panel, "Enregistrer les modifications").click(); await settle(panel);
+  field.value = "-1"; field.dispatchEvent(new Event("input", { bubbles: true })); await settle(panel);
+  const saved = fixture(); saved.revision = 8; saved.config.rooms.lounge.absence_delay = 15;
+  release(saved); await settle(panel);
+  assert.equal(field.value, "-1");
+  assert.ok(panel.shadowRoot!.querySelector(".savebar"));
+  button(panel, "Enregistrer les modifications").click(); await settle(panel);
+  assert.equal(calls.filter((call) => call.type === "halo/save").length, 1);
+  assert.equal(panel.shadowRoot!.activeElement, field);
+  button(panel, "Abandonner les modifications").click(); await settle(panel);
+  assert.equal(inputByLabel(panel, "Délai d’absence").value, "15");
+});
+
+test("a newer remote revision arriving before save acknowledgement stays authoritative", async () => {
+  for (const editAgain of [false, true]) {
+    let release!: (snapshot: Snapshot) => void;
+    const saving = new Promise<Snapshot>((resolve) => { release = resolve; });
+    const { panel, emit } = await mount(true, fixture(), { save: () => saving });
+    await openRoom(panel, "Automatisation");
+    const field = inputByLabel(panel, "Délai d’absence");
+    field.value = "15"; field.dispatchEvent(new Event("input", { bubbles: true })); await settle(panel);
+    button(panel, "Enregistrer les modifications").click(); await settle(panel);
+    if (editAgain) { field.value = "25"; field.dispatchEvent(new Event("input", { bubbles: true })); await settle(panel); }
+    const remote = fixture(); remote.revision = 9; remote.config.rooms.lounge.absence_delay = 35;
+    emit(remote); await settle(panel);
+    const saved = fixture(); saved.revision = 8; saved.config.rooms.lounge.absence_delay = 15;
+    release(saved); await settle(panel);
+    assert.equal(field.value, editAgain ? "25" : "35");
+    if (editAgain) {
+      assert.equal(button(panel, "Enregistrer les modifications").disabled, true);
+      button(panel, "Abandonner les modifications").click(); await settle(panel);
+      assert.equal(inputByLabel(panel, "Délai d’absence").value, "35");
+    } else assert.ok(!panel.shadowRoot!.querySelector(".savebar"));
+    panel.remove();
+  }
+});
+
+test("a save failure preserves the draft and exposes its error", async () => {
+  let reject!: (reason: unknown) => void;
+  const saving = new Promise<Snapshot>((_, fail) => { reject = fail; });
+  const { panel, calls } = await mount(true, fixture(), { save: () => saving });
+  await openRoom(panel, "Automatisation");
+  const field = inputByLabel(panel, "Délai d’absence");
+  field.value = "15"; field.dispatchEvent(new Event("input", { bubbles: true })); await settle(panel);
+  button(panel, "Enregistrer les modifications").click(); await settle(panel);
+  reject({ code: "invalid_config" }); await settle(panel);
+  assert.equal(field.value, "15");
+  assert.ok(panel.shadowRoot!.querySelector(".savebar"));
+  assert.ok(panel.shadowRoot!.querySelector('[role="alert"]'));
+  assert.equal(calls.filter((call) => call.type === "halo/save").length, 1);
+  panel.remove();
+});
+
+test("a changed revision while starting an editor cancels its lock before any stale preview", async () => {
+  let release!: () => void;
+  const begin = new Promise<void>((resolve) => { release = resolve; });
+  const { panel, calls, emit } = await mount(true, fixture(), { begin: () => begin });
+  await openRoom(panel); button(panel, "Régler").click(); await settle(panel);
+  const remote = fixture(); remote.revision = 8; remote.config.rooms.lounge.scenes[0].name = "Updated elsewhere";
+  emit(remote); await settle(panel);
+  release(); await settle(panel);
+  assert.ok(!panel.shadowRoot!.querySelector(".editor"));
+  assert.equal(calls.some((call) => call.type === "halo/edit/preview"), false);
+  assert.ok(calls.some((call) => call.type === "halo/edit/end" && call.save === false));
+  assert.match(panel.shadowRoot!.textContent!, /configuration a changé ailleurs/);
+  assert.match(panel.shadowRoot!.textContent!, /Updated elsewhere/);
+});
+
+test("role loss during native lock renewal prevents a late Home Assistant dialog", async () => {
+  let release!: () => void;
+  const touch = new Promise<void>((resolve) => { release = resolve; });
+  const { panel, emit } = await mount(true, fixture(), { touch: () => touch });
+  await openRoom(panel); button(panel, "Régler").click(); await settle(panel);
+  const actions: Event[] = []; panel.addEventListener("hass-action", (event) => actions.push(event));
+  panel.shadowRoot!.querySelector<HTMLButtonElement>(".scene-lamp")!.click(); await settle(panel);
+  emit(fixture(false)); await settle(panel);
+  release(); await settle(panel);
+  assert.equal(actions.length, 0);
+  assert.ok(!panel.shadowRoot!.querySelector(".editor"));
+});
+
+test("ordinary-user status updates retain keyboard focus instead of remounting the controls", async () => {
+  const { panel, emit } = await mount(false);
+  await openRoom(panel);
+  const control = button(panel, "Allumer"); control.focus();
+  emit({ ...fixture(false), status: { lounge: { reason: "base", is_on: true, available: true } } }); await settle(panel);
+  assert.equal(panel.shadowRoot!.activeElement, control);
+});
+
+
+test("late save and edit-end responses from a previous connection cannot replace newer configuration", async () => {
+  for (const editing of [false, true]) {
+    let release!: (snapshot: Snapshot) => void;
+    const pending = new Promise<Snapshot>((resolve) => { release = resolve; });
+    const { panel, hass, emit } = await mount(true, fixture(), editing ? { end: () => pending } : { save: () => pending });
+    await openRoom(panel, editing ? "Pilotage" : "Automatisation");
+    if (editing) {
+      button(panel, "Régler").click(); await settle(panel);
+      button(panel, "Enregistrer la scène").click(); await settle(panel);
+    } else {
+      const field = inputByLabel(panel, "Délai d’absence");
+      field.value = "15"; field.dispatchEvent(new Event("input", { bubbles: true })); await settle(panel);
+      button(panel, "Enregistrer les modifications").click(); await settle(panel);
+    }
+    const remote = fixture(); remote.revision = 9; remote.config.rooms.lounge.absence_delay = 35;
+    emit(remote); await settle(panel);
+    panel.hass = { ...hass, connection: { async subscribeMessage() { return () => undefined; } } }; await settle(panel);
+    if (!editing) { button(panel, "Abandonner les modifications").click(); await settle(panel); }
+    const old = fixture(); old.revision = 8; old.config.rooms.lounge.absence_delay = 15;
+    release(old); await settle(panel);
+    await selectRoomTab(panel, "Automatisation");
+    assert.equal(inputByLabel(panel, "Délai d’absence").value, "35");
+    assert.ok(!panel.shadowRoot!.querySelector(".editor"));
+    panel.remove();
+  }
+});
+
+
+test("single-light and single-room counts use singular labels in French and English", async () => {
+  const snapshot = fixture(); const room = snapshot.config.rooms.lounge;
+  room.lights = ["light.colour"];
+  (room.scenes[0] as HaloScene).lights = { "light.colour": { state: "on" } };
+  snapshot.config.profiles.solar = newProfile("solar", "Solaire");
+  room.associations = [{ profile_id: "solar", lights: ["light.colour"], brightness_offset: 0 }];
+  const { panel, hass } = await mount(true, snapshot);
+  for (const [locale, oneLight, oneRoom, tabs] of [
+    ["fr-BE", "1 lumière", "1 pièce", ["Ambiances", "Profils de lumière naturelle", "Pièces"]],
+    ["en", "1 light", "1 room", ["Ambiences", "Natural light profiles", "Rooms"]],
+  ] as const) {
+    panel.hass = { ...hass, locale: { language: locale } }; await settle(panel);
+    const link = panel.shadowRoot!.querySelector<HTMLButtonElement>('.room-link[aria-label="Salon personnalisé"]')!;
+    link.click(); await settle(panel);
+    assert.match(panel.shadowRoot!.querySelector(".room-meta")!.textContent!, new RegExp(`${oneLight} ·`));
+    assert.match(panel.shadowRoot!.querySelector(".scene-meta")!.textContent!, new RegExp(`${oneLight} ·`));
+    await selectRoomTab(panel, tabs[0]);
+    assert.match(panel.shadowRoot!.querySelector(".association summary")!.textContent!, new RegExp(`${oneLight} ·`));
+    button(panel, tabs[1]).click(); await settle(panel);
+    assert.match(panel.shadowRoot!.querySelector(".profile-link small")!.textContent!, new RegExp(`${oneRoom} ·`));
+    button(panel, tabs[2]).click(); await settle(panel);
+  }
+});
+
+
+test("transition modes and duration fields identify their category to assistive technology", async () => {
+  const { panel } = await mount();
+  button(panel, "Réglages globaux").click(); await settle(panel);
+  const globalNames = [...panel.shadowRoot!.querySelectorAll<HTMLInputElement>('.transition-grid input[type="number"]')].map((field) => field.getAttribute("aria-label"));
+  assert.equal(globalNames.length, 5);
+  assert.equal(new Set(globalNames).size, 5);
+  for (const name of globalNames) assert.match(name!, / · Secondes$/);
+  button(panel, "Pièces").click(); await settle(panel);
+  await openRoom(panel, "Réglages");
+  const modes = [...panel.shadowRoot!.querySelectorAll<HTMLSelectElement>(".transition-grid select")];
+  assert.equal(new Set(modes.map((field) => field.getAttribute("aria-label"))).size, 5);
+  for (const [index, mode] of modes.entries()) {
+    assert.equal(mode.getAttribute("aria-label"), globalNames[index]!.replace("Secondes", "Transitions des lumières"));
+    mode.value = "duration"; mode.dispatchEvent(new Event("change", { bubbles: true })); await settle(panel);
+  }
+  assert.deepEqual([...panel.shadowRoot!.querySelectorAll<HTMLInputElement>('.transition-grid input[type="number"]')].map((field) => field.getAttribute("aria-label")), globalNames);
+});
+
+
+test("late room command replies cannot restore old revisions, privileged views or previous connections", async () => {
+  for (const change of ["revision", "rights", "connection"]) {
+    let release!: (snapshot: Snapshot) => void;
+    const command = new Promise<Snapshot>((resolve) => { release = resolve; });
+    const { panel, hass, emit } = await mount(true, fixture(), { command: () => command });
+    await openRoom(panel);
+    button(panel, "Reprendre").click(); await settle(panel);
+    const latest = fixture(change !== "rights"); latest.revision = 9;
+    latest.config.rooms.lounge.absence_delay = 35;
+    emit(latest); await settle(panel);
+    if (change === "connection") {
+      panel.hass = { ...hass, connection: { async subscribeMessage() { return () => undefined; } } }; await settle(panel);
+    }
+    const old = fixture(); old.revision = 8; old.config.rooms.lounge.absence_delay = 15;
+    release(old); await settle(panel);
+    if (change === "rights") {
+      assert.equal(panel.shadowRoot!.querySelectorAll('[role="tab"]').length, 1, "A late privileged reply must not restore configuration actions");
+      assert.equal(button(panel, "Allumer").disabled, false);
+    } else {
+      await selectRoomTab(panel, "Automatisation");
+      assert.equal(inputByLabel(panel, "Délai d’absence").value, "35");
+    }
+    panel.remove();
+  }
+});
+
+
+test("base ambience displays native brightness without rewriting it and edits keep a single representation", async () => {
+  for (const native of [0, 127, 204]) {
+    const snapshot = fixture();
+    snapshot.config.rooms.lounge.base["light.colour"] = { state: "on", brightness: native, color_mode: "rgb", rgb_color: [10, 20, 30], effect: "Candle" };
+    const { panel, calls } = await mount(true, snapshot);
+    await openRoom(panel, "Ambiances");
+    const brightness = inputByLabel(panel, "Luminosité (%)");
+    assert.equal(Number(brightness.value), native / 255 * 100);
+    assert.notEqual(brightness.value, "");
+    assert.ok(!panel.shadowRoot!.querySelector(".savebar"), "Displaying native precision must not rewrite the saved configuration");
+    brightness.value = "30"; brightness.dispatchEvent(new Event("input", { bubbles: true })); await settle(panel);
+    button(panel, "Enregistrer les modifications").click(); await settle(panel);
+    const changed = (calls.filter((call) => call.type === "halo/save").at(-1)!.config as Snapshot["config"]).rooms.lounge.base["light.colour"];
+    assert.deepEqual(changed, { state: "on", brightness_pct: 30, color_mode: "rgb", rgb_color: [10, 20, 30], effect: "Candle" });
+    const cleared = inputByLabel(panel, "Luminosité (%)");
+    cleared.value = ""; cleared.dispatchEvent(new Event("input", { bubbles: true })); await settle(panel);
+    button(panel, "Enregistrer les modifications").click(); await settle(panel);
+    const noBrightness = (calls.filter((call) => call.type === "halo/save").at(-1)!.config as Snapshot["config"]).rooms.lounge.base["light.colour"];
+    assert.equal(noBrightness.brightness, undefined);
+    assert.equal(noBrightness.brightness_pct, undefined);
+    assert.equal(noBrightness.effect, "Candle");
+    panel.remove();
+  }
+});
+
+function fallbackMode(panel: InstanceType<typeof HaloPanel>): HTMLSelectElement {
+  const select = panel.shadowRoot!.querySelector<HTMLSelectElement>(".lighting-fallback select");
+  assert.ok(select, "The fallback mode selector should exist without a lux sensor");
+  return select;
+}
+async function chooseFallback(panel: InstanceType<typeof HaloPanel>, mode: string) {
+  const select = fallbackMode(panel); select.value = mode; select.dispatchEvent(new Event("change", { bubbles: true })); await settle(panel);
+}
+async function fill(panel: InstanceType<typeof HaloPanel>, label: string, value: string) {
+  const field = inputByLabel(panel, label); field.value = value; field.dispatchEvent(new Event("input", { bubbles: true })); await settle(panel); return field;
+}
+
+test("lighting fallback defaults are detached, legacy-safe and hidden whenever a lux sensor is configured", async () => {
+  const first = newRoom("one"), second = newRoom("two"); first.lighting_fallback.start = "22:00";
+  assert.equal(second.lighting_fallback.start, "18:00");
+  const snapshot = fixture(); delete (snapshot.config.rooms.lounge as Partial<typeof first>).lighting_fallback;
+  const { panel, calls, emit } = await mount(true, snapshot); await openRoom(panel, "Automatisation");
+  assert.equal(fallbackMode(panel).value, "always");
+  assert.equal(panel.shadowRoot!.querySelectorAll('[role="tab"]').length, 5);
+  assert.ok(!panel.shadowRoot!.querySelector(".savebar"), "Reading an old configuration must not create a draft");
+  assert.ok(!("lighting_fallback" in snapshot.config.rooms.lounge), "The source snapshot remains unchanged");
+  const withLux = fixture(); withLux.config.rooms.lounge.lux_entity_id = "sensor.missing"; withLux.config.rooms.lounge.lux_threshold = 20;
+  withLux.config.rooms.lounge.lighting_fallback.mode = "time";
+  emit(withLux); await settle(panel);
+  assert.ok(!panel.shadowRoot!.querySelector(".lighting-fallback"), "Unavailable configured lux is not absence of configuration");
+  assert.equal(calls.filter((call) => call.type !== "halo/get").length, 0);
+});
+
+test("lighting fallback mode changes preserve inactive hours, solar thresholds and normal shutoff in the saved draft", async () => {
+  const { panel, calls } = await mount(); await openRoom(panel, "Automatisation");
+  await chooseFallback(panel, "time"); await fill(panel, "Heure de début", "23:15"); await fill(panel, "Heure de fin", "00:00");
+  const turnOff = inputByLabel(panel, "Éteindre aussi l’éclairage normal"); turnOff.checked = true; turnOff.dispatchEvent(new Event("change", { bubbles: true })); await settle(panel);
+  await chooseFallback(panel, "sun");
+  await fill(panel, "Autoriser sous cette hauteur", "-6.25");
+  const linked = inputByLabel(panel, "Lier le matin et le soir"); linked.checked = false; linked.dispatchEvent(new Event("change", { bubbles: true })); await settle(panel);
+  await fill(panel, "Soleil descendant : autoriser sous", "4.5");
+  linked.checked = true; linked.dispatchEvent(new Event("change", { bubbles: true })); await settle(panel);
+  await chooseFallback(panel, "always"); await selectRoomTab(panel, "Ambiances"); await selectRoomTab(panel, "Automatisation");
+  await chooseFallback(panel, "time");
+  assert.equal(inputByLabel(panel, "Heure de début").value, "23:15"); assert.equal(inputByLabel(panel, "Heure de fin").value, "00:00");
+  assert.equal(inputByLabel(panel, "Éteindre aussi l’éclairage normal").checked, true);
+  await chooseFallback(panel, "sun");
+  assert.equal(inputByLabel(panel, "Autoriser sous cette hauteur").value, "-6.25");
+  const unlink = inputByLabel(panel, "Lier le matin et le soir"); unlink.checked = false; unlink.dispatchEvent(new Event("change", { bubbles: true })); await settle(panel);
+  assert.equal(inputByLabel(panel, "Soleil descendant : autoriser sous").value, "4.5");
+  button(panel, "Enregistrer les modifications").click(); await settle(panel);
+  const saved = calls.find((call) => call.type === "halo/save")!.config as Snapshot["config"];
+  assert.deepEqual(saved.rooms.lounge.lighting_fallback, { mode: "sun", start: "23:15", end: "00:00", linked: false, morning_below: -6.25, evening_below: 4.5, turn_off: true });
+  assert.equal(calls.some((call) => call.type === "halo/command" || String(call.type).startsWith("halo/edit")), false);
+});
+
+test("fallback time range rejects equal or empty times before save, navigation or hiding the fields", async () => {
+  const { panel, calls } = await mount(); await openRoom(panel, "Automatisation"); await chooseFallback(panel, "time");
+  await fill(panel, "Heure de début", "00:00"); const end = await fill(panel, "Heure de fin", "00:00");
+  button(panel, "Enregistrer les modifications").click(); await settle(panel);
+  assert.equal(calls.some((call) => call.type === "halo/save"), false); assert.equal(panel.shadowRoot!.activeElement, end);
+  await selectRoomTab(panel, "Ambiances"); assert.equal(roomTab(panel, "Automatisation").getAttribute("aria-selected"), "true");
+  await chooseFallback(panel, "always"); assert.equal(fallbackMode(panel).value, "time");
+  const lux = picker(panel, "Capteur de luminosité"); lux.value = "sensor.any"; lux.dispatchEvent(new CustomEvent("entity-changed", { detail: { value: "sensor.any" } })); await settle(panel);
+  assert.equal(lux.value, null); assert.ok(panel.shadowRoot!.querySelector(".fallback-time"));
+  await fill(panel, "Heure de fin", "08:00"); await fill(panel, "Heure de début", "18:00:30");
+  button(panel, "Enregistrer les modifications").click(); await settle(panel); assert.equal(calls.some((call) => call.type === "halo/save"), false);
+  await fill(panel, "Heure de début", "");
+  button(panel, "Enregistrer les modifications").click(); await settle(panel); assert.equal(calls.some((call) => call.type === "halo/save"), false);
+  button(panel, "Abandonner les modifications").click(); await settle(panel); assert.equal(fallbackMode(panel).value, "always");
+});
+
+test("fallback solar fields validate bounds, preserve invalid input and expose confirmation for nightlights independently of normal shutoff", async () => {
+  const snapshot = nightlightFixture(); snapshot.config.rooms.lounge.lighting_fallback.mode = "sun";
+  const { panel, calls } = await mount(true, snapshot); await openRoom(panel, "Automatisation");
+  assert.equal(inputByLabel(panel, "Éteindre aussi l’éclairage normal").checked, false);
+  assert.equal(inputByLabel(panel, "Délai de confirmation solaire").value, "30");
+  for (const value of ["-91", "91", ""]) {
+    const input = await fill(panel, "Autoriser sous cette hauteur", value);
+    button(panel, "Enregistrer les modifications").click(); await settle(panel);
+    assert.equal(calls.some((call) => call.type === "halo/save"), false); assert.equal(panel.shadowRoot!.activeElement, input);
+    await chooseFallback(panel, "always"); assert.equal(fallbackMode(panel).value, "sun"); assert.equal(input.value, value);
+  }
+  await fill(panel, "Autoriser sous cette hauteur", "-90"); await fill(panel, "Délai de confirmation solaire", "0");
+  button(panel, "Enregistrer les modifications").click(); await settle(panel);
+  const saved = calls.find((call) => call.type === "halo/save")!.config as Snapshot["config"];
+  assert.equal(saved.rooms.lounge.lighting_fallback.morning_below, -90); assert.equal(saved.rooms.lounge.lux_off_delay, 0);
+  await chooseFallback(panel, "time"); assert.ok(!panel.shadowRoot!.querySelector('.lighting-fallback input[type="number"]'));
+});
+
+test("fallback sun elevation follows the global live entity without invented zero or stale readings and keeps drafts untouched", async () => {
+  const snapshot = fixture(); snapshot.config.rooms.lounge.lighting_fallback.mode = "sun";
+  const { panel, calls, hass } = await mount(true, snapshot); panel.hass = { ...hass, states: undefined }; await openRoom(panel, "Automatisation");
+  const current = () => panel.shadowRoot!.querySelector(".current-sun-elevation")!.textContent;
+  assert.equal(current(), "Hauteur solaire actuelle: 15°");
+  await fill(panel, "Autoriser sous cette hauteur", "-7.5");
+  for (const [state, elevation, expected] of [["above_horizon", 0, "0°"], ["below_horizon", "-6.25", "-6,25°"], ["above_horizon", "", "Indisponible"], ["above_horizon", true, "Indisponible"], ["above_horizon", 91, "Indisponible"], ["unavailable", 12, "Indisponible"], ["unknown", 0, "Indisponible"], ["above_horizon", Infinity, "Indisponible"], ["above_horizon", null, "Indisponible"]] as const) {
+    panel.hass = { ...hass, states: { "sun.sun": { state, attributes: { elevation } } } }; await settle(panel);
+    assert.equal(current(), `Hauteur solaire actuelle: ${expected}`); assert.equal(inputByLabel(panel, "Autoriser sous cette hauteur").value, "-7.5");
+  }
+  panel.hass = { ...hass, states: {} }; await settle(panel); assert.equal(current(), "Hauteur solaire actuelle: Indisponible");
+  assert.equal(calls.some((call) => call.type === "halo/save" || call.type === "halo/command"), false);
+});
+
+test("lighting authorization and solar deadline are localized from engine status without implying a lux reading", async () => {
+  const snapshot = fixture(false); snapshot.status.lounge = { reason: "outside_schedule", is_on: false, available: true, lighting_source: "time", lighting_allowed: false, lighting_off_deadline: "2026-10-10T12:00:00Z" };
+  const { panel, hass, emit } = await mount(false, snapshot); await openRoom(panel);
+  assert.match(panel.shadowRoot!.textContent!, /Hors plage horaire/);
+  assert.equal(panel.shadowRoot!.querySelector(".lighting-authorization")!.textContent, "Autorisation d’éclairage: Non autorisé · Plage horaire");
+  assert.doesNotMatch(panel.shadowRoot!.textContent!, /Extinction après confirmation solaire/, "A time range closes immediately without a solar confirmation countdown");
+  assert.equal(panel.shadowRoot!.querySelectorAll('[role="tab"]').length, 1); assert.ok(!panel.shadowRoot!.querySelector(".lighting-fallback"));
+  emit({ ...snapshot, status: { lounge: { reason: "sun_above_threshold", lighting_source: "sun", lighting_allowed: null, lighting_off_deadline: "2026-10-10T12:00:00Z", is_on: true, available: true } } }); await settle(panel);
+  assert.match(panel.shadowRoot!.textContent!, /Soleil au-dessus du seuil/); assert.match(panel.shadowRoot!.textContent!, /Extinction après confirmation solaire/);
+  assert.match(panel.shadowRoot!.querySelector(".lighting-authorization")!.textContent!, /Indisponible · Hauteur du soleil/);
+  panel.hass = { ...hass, locale: { language: "en" } }; await settle(panel);
+  assert.match(panel.shadowRoot!.textContent!, /Sun above the threshold/); assert.match(panel.shadowRoot!.textContent!, /Lighting authorization: Unavailable · Sun elevation/);
+  assert.doesNotMatch(panel.shadowRoot!.querySelector(".lighting-authorization")!.textContent!, /\blx\b|lux/);
+});
+
+test("fallback configuration and nightlight guidance follow locale while retaining private drafts and shared settings", async () => {
+  const snapshot = nightlightFixture(); snapshot.config.rooms.lounge.lighting_fallback.mode = "time";
+  const { panel, hass, calls } = await mount(true, snapshot); await openRoom(panel, "Ambiances");
+  assert.match(panel.shadowRoot!.querySelector(".nightlight-section")!.textContent!, /plage autorisée/);
+  button(panel, "Réglages de présence et de luminosité").click(); await settle(panel);
+  await fill(panel, "Heure de début", "20:45"); panel.hass = { ...hass, locale: { language: "en-US" } }; await settle(panel);
+  assert.equal(inputByLabel(panel, "Start time").value, "20:45"); assert.equal(fallbackMode(panel).value, "time");
+  await chooseFallback(panel, "sun"); assert.equal(inputByLabel(panel, "Allow below this sun elevation").value, "0");
+  await selectRoomTab(panel, "Ambiences"); assert.match(panel.shadowRoot!.querySelector(".nightlight-section")!.textContent!, /selected solar thresholds/);
+  assert.equal(calls.some((call) => call.type === "halo/save"), false);
+});
+
+test("separate fallback solar thresholds report a missing direction without hiding a valid elevation", async () => {
+  const snapshot = fixture(); Object.assign(snapshot.config.rooms.lounge.lighting_fallback, { mode: "sun", linked: false });
+  const { panel, hass, calls } = await mount(true, snapshot);
+  panel.hass = { ...hass, states: { "sun.sun": { state: "below_horizon", attributes: { elevation: "-2.5" } } } }; await openRoom(panel, "Automatisation");
+  assert.match(panel.shadowRoot!.querySelector(".current-sun-elevation")!.textContent!, /-2,5°/);
+  assert.equal(panel.shadowRoot!.querySelector(".current-sun-direction")!.textContent, "Sens actuel du soleil: Indisponible");
+  assert.match(panel.shadowRoot!.querySelector(".lighting-fallback")!.textContent!, /suspendue quand ce sens est indisponible/);
+  for (const [rising, label] of [["false", "Indisponible"], [false, "Soleil descendant"], [true, "Soleil montant"]] as const) {
+    panel.hass = { ...hass, states: { "sun.sun": { state: "below_horizon", attributes: { elevation: -2.5, rising } } } }; await settle(panel);
+    assert.equal(panel.shadowRoot!.querySelector(".current-sun-direction")!.textContent, `Sens actuel du soleil: ${label}`);
+  }
+  assert.ok(!panel.shadowRoot!.querySelector(".savebar")); assert.equal(calls.some((call) => call.type !== "halo/get"), false);
 });

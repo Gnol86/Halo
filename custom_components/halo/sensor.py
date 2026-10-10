@@ -9,7 +9,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .entity import HaloRoomEntity, async_setup_room_entities
 
-_RESERVED_STATES = {"off", "manual", "natural", "unknown", "unavailable"}
+_RESERVED_STATES = {"off", "manual", "natural", "nightlight", "unknown", "unavailable"}
 
 
 async def async_setup_entry(

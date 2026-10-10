@@ -107,7 +107,7 @@ components:
 
 # Design System: Halo
 
-Dernière mise à jour : **9 octobre 2026**.
+Dernière mise à jour : **10 octobre 2026**.
 
 ## Overview
 
@@ -127,6 +127,8 @@ La refonte du 9 octobre 2026 est **actée et implémentée** : pilotage priorita
 Ce document est la référence des règles visuelles, d’organisation et d’interaction du dashboard, maintenue en temps réel selon [AGENTS.md](AGENTS.md). Les fonctionnalités métier restent définies dans [PROJET.md](PROJET.md), l’état disponible dans [README.md](README.md), le contexte produit dans [PRODUCT.md](PRODUCT.md) et la direction de cette surface dans [le contrat du panneau](.impeccable/surfaces/frontend-src-halo-panel-ts.md). Le frontmatter contient les tokens normatifs extraits de [styles.ts](frontend/src/styles.ts) et [entity-picker.ts](frontend/src/entity-picker.ts) ; les propriétés hors de son schéma et les composants autonomes figurent dans [.impeccable/design.json](.impeccable/design.json).
 
 ### Statut et vérifications
+
+La recette transversale du **10 octobre 2026** recense les 68 critères produit, leurs tests et les limites de chaque preuve dans [docs/QA-2026-10-10.md](docs/QA-2026-10-10.md). La suite courante passe **464 tests Python et 87 tests frontend**, avec TypeScript conforme et bundle reconstruit à l’identique deux fois. Les compteurs ci-dessous décrivent les lots historiques ; le recensement des 68 critères ne signifie pas 68 parcours graphiques complets ni une validation des lampes du logement.
 
 La refonte est implémentée dans le panneau fonctionnel, avec son bundle reconstruit. Les vérifications de cette tâche comprennent **219 tests Python**, **52 tests frontend** (43 du panneau et 9 du modèle), les contrôles TypeScript et Ruff et la construction du bundle. Les aperçus ont été examinés à **390 et 1 436 pixels** de large, en clair, sombre et avec un thème personnalisé et une police à **125 %**. Ces aperçus utilisent des données simulées.
 
@@ -226,7 +228,7 @@ L’état réel, les commandes et les modes précèdent les onglets. Les adminis
 | Pilotage | Scènes, lancement, import et édition. |
 | Lumières | Affectation explicite et informations de groupes. |
 | Automatisation | Présence, luminosité et pause manuelle. |
-| Ambiances | Associations naturelles et ambiance de base. |
+| Ambiances | Associations naturelles, ambiance de base et veilleuse. |
 | Réglages | Transitions locales et suppression de la pièce. |
 
 Les utilisateurs ordinaires conservent le pilotage. La vue d’accueil invite à choisir une pièce ; les pièces non configurées restent visibles et expliquent l’action disponible selon les droits. Aucune option métier n’est supprimée par ce découpage.
@@ -263,11 +265,15 @@ L’ajout de l’unique instance Halo crée automatiquement le panneau, sans car
 
 Les changements de pièce, d’onglet ou de profil conservent le brouillon transversal. Une saisie invalide bloque la navigation, ouvre le détail qui la contient si nécessaire et reçoit le focus. La validation serveur reste la garantie finale. Abandonner restaure aussi les champs contenant une saisie invalide ; un conflit de révision garde le brouillon visible et interdit une sauvegarde aveugle.
 
+Pendant une sauvegarde lente, une nouvelle saisie reste visible et non enregistrée, y compris lorsqu’elle est invalide. La confirmation porte uniquement sur la version envoyée. Si une révision distante plus récente arrive entre-temps, le brouillon est conservé avec son conflit ; une ancienne réponse de commande ou de sauvegarde ne remplace pas cette configuration récente.
+
+La perte des droits administrateur ferme les formulaires privilégiés et retire leur brouillon. Un changement de connexion invalide les réponses et sessions d’édition de l’ancienne connexion. Si la révision change pendant l’acquisition du verrou d’édition, le panneau annule cette ouverture avant tout aperçu de lampe et invite à repartir de la configuration courante. Les vérifications côté serveur restent nécessaires dans tous ces cas.
+
 La barre persistante signale les modifications non enregistrées et propose l’enregistrement ou l’abandon. Avec un brouillon sur une pièce déjà enregistrée, l’allumage et l’extinction restent accessibles ; les modes et la reprise demandent d’enregistrer ou d’abandonner. Pour une nouvelle pièce, les commandes attendent sa première sauvegarde. Le texte d’aide distingue ces deux situations.
 
 La notification de succès **« Modifications enregistrées. »** (`Changes saved.`) reste visible **4 secondes**, puis disparaît sans action. Chaque sauvegarde réussie relance ce délai ; la fermeture du panneau libère la temporisation. Ce comportement concerne seulement la confirmation de sauvegarde, pas les erreurs ni les alertes.
 
-L’édition réelle bloque la navigation jusqu’à sa fin. Après import ou édition, le panneau revient au pilotage avec un focus cohérent : nouvelle scène importée, action d’origine après annulation, ou scène réglée après édition.
+L’édition réelle bloque la navigation jusqu’à sa fin. Après import ou édition de scène, le panneau revient au pilotage avec un focus cohérent : nouvelle scène importée, action d’origine après annulation, ou scène réglée après édition. L’édition de la veilleuse revient à sa section dans Ambiances, avec le focus sur son bouton Configurer.
 
 ### Configuration et pilotage d’une pièce
 
@@ -284,6 +290,8 @@ Les groupes fournis par Philips Hue sont également reconnus. Un groupe reste in
 Chaque sélection d’entité propose une recherche immédiate par nom et identifiant, insensible à la casse et aux accents, avec navigation au clavier et choix à la souris ou au toucher. La sélection courante reste lisible ; quitter une recherche sans choisir conserve cette sélection. Les cas sans résultat et les entités sélectionnées devenues indisponibles sont explicites. Les listes de lampes de la pièce, des associations naturelles, de l’ambiance de base et des scènes proposent aussi un filtre.
 
 La sélection est affichée dans le champ lui-même. Les lignes répétitives « Sélectionnée : nom · identifiant » et « Aucune entité » ne sont plus affichées sous les sélecteurs. Cette simplification conserve les indications utiles d’indisponibilité, les retours de recherche et de validation ainsi que les libellés accessibles.
+
+**Ajout implémenté le 10 octobre 2026 :** les sélecteurs de présence et de luminosité dans **Automatisation** disposent d’une indication compacte **« Valeur actuelle »** (`Current value`) sous le champ, dans la typographie et la couleur secondaires du thème, avec une marge supérieure de (4px). Elle affiche l’état brut de présence (`on`, `off` ou état personnalisé) et la mesure de luminosité avec son unité native lorsqu’elle existe. Elle suit les mises à jour Home Assistant sans rechargement, sans modifier la sélection ni le brouillon. `unknown` est traduit par **« Inconnue »** (`Unknown`) ; `unavailable`, une entité absente ou inaccessible affichent **« Indisponible »** (`Unavailable`), jamais zéro. Cette ligne disparaît lorsqu’aucune entité n’est sélectionnée, ne répète ni nom ni identifiant et n’est pas ajoutée aux autres sélecteurs. Le champ référence son indication par `aria-describedby` uniquement lorsqu’elle est présente. Les champs voisins restent alignés malgré cette indication supplémentaire. Les vérifications sont consignées séparément dans le guide de développement.
 
 L’utilisation du sélecteur natif Home Assistant partout est demandée, mais reste **non implémentée** : le panneau ne dispose pas d’un mécanisme public de chargement identifié pour ce composant. Les sélecteurs Halo restent en place ; ils ne sont pas présentés comme natifs. La fenêtre native des lampes dans l’éditeur de scènes utilise, elle, une action publique documentée.
 
@@ -308,7 +316,7 @@ La page de pièce expose les commandes correspondant à l’appareil Home Assist
 - L’état allumé/éteint de la pièce reflète les lampes réelles : allumé dès qu’une lampe est allumée, indisponible lorsqu’aucune lampe n’est disponible.
 - L’ambiance de base permet d’enregistrer les réglages de référence par lampe. Pour une lampe sans réglage enregistré, l’interface explique que l’allumage conserve les réglages propres à la lampe.
 
-L’appareil Home Assistant de chaque pièce expose également un capteur **État** (`Status`). Cet affichage synthétique distingue **Éteint**, **Manuel**, **Lumière naturelle** et le nom de la scène active, sans traduire les noms personnalisés. L’indisponibilité de toutes les lampes reste un état indisponible, jamais une extinction supposée. L’extinction réelle prime sur le mode ; l’édition en direct apparaît comme manuelle. Une scène explicitement lancée reste identifiable pendant sa pause, y compris lorsque les automatismes sont désactivés. Les états fixes suivent les traductions natives anglaises/françaises de Home Assistant. Le capteur ne remplace pas les retours détaillés du panneau sur les pauses, l’absence, la luminosité et les données indisponibles. Il est implémenté, avec des tests locaux du moteur et des plateformes Home Assistant utilisant des lampes simulées ; aucun essai navigateur ou matériel n’est revendiqué pour cet ajout.
+L’appareil Home Assistant de chaque pièce expose également un capteur **État** (`Status`). Cet affichage synthétique distingue **Éteint**, **Manuel**, **Lumière naturelle**, **Veilleuse** et le nom de la scène active, sans traduire les noms personnalisés. L’indisponibilité de toutes les lampes reste un état indisponible, jamais une extinction supposée. L’extinction réelle prime sur le mode ; l’édition en direct apparaît comme manuelle. Une scène explicitement lancée reste identifiable pendant sa pause, y compris lorsque les automatismes sont désactivés. Les états fixes suivent les traductions natives anglaises/françaises de Home Assistant. Le capteur ne remplace pas les retours détaillés du panneau sur les pauses, l’absence, la luminosité et les données indisponibles. Il est implémenté, avec des tests locaux du moteur et des plateformes Home Assistant utilisant des lampes simulées. L’ajout du mode veilleuse a également été observé dans Home Assistant 2026.10.0 isolé ; aucun essai matériel du logement n’est revendiqué.
 
 #### Présence, luminosité et pause manuelle
 
@@ -318,6 +326,16 @@ Le capteur de luminosité est facultatif. Lorsqu’il est configuré, l’utilis
 
 Les libellés du seuil, de l’hystérésis et des seuils effectifs affichent l’unité `unit_of_measurement` du capteur sélectionné (`lx`, `%` ou autre unité déclarée). Sans unité déclarée, aucun suffixe n’est supposé. Changer de capteur conserve les valeurs numériques ; aucune conversion entre lux et pourcentage n’est appliquée.
 
+**Autorisation sans capteur lumineux — implémentée et vérifiée localement le 10 octobre 2026.** Dans **Automatisation**, l’absence de capteur configuré donne accès au choix **Toujours**, **Plage horaire** ou **Hauteur du soleil**. Toujours est sélectionné par défaut et conserve le fonctionnement antérieur. Un capteur configuré garde la priorité même lorsqu’il est indisponible : l’interface l’indique sans proposer un basculement implicite. Changer de mode ou ajouter un capteur conserve les autres valeurs dans le brouillon et dans la configuration.
+
+Seuls les champs utiles au mode choisi sont présentés : deux heures locales Home Assistant pour la plage, initialement **18:00–08:00**, ou les seuils solaires en degrés avec **Lier le matin et le soir** coché et **0°** initialement. La plage inclut son début et exclut sa fin ; deux heures identiques sont refusées et l’aide renvoie vers Toujours. Les seuils signés et décimaux vont de −90° à 90° ; l’aide explique la comparaison strictement sous le seuil et la branche montante ou descendante du soleil. La source solaire reste celle des réglages globaux, sans sélecteur dupliqué dans la pièce.
+
+Pour l’horaire ou le soleil, une option désactivée par défaut permet aussi d’éteindre l’éclairage normal à la fermeture de l’autorisation. L’aide distingue la fermeture horaire sans délai supplémentaire de la confirmation solaire utilisant le délai lumineux existant. Ce délai reste accessible lorsqu’une veilleuse en a besoin, même si l’extinction normale n’est pas activée. La veilleuse s’éteint toujours à la fermeture ; la section Ambiances renvoie vers ces réglages communs sans les recopier.
+
+Le résumé courant distingue la **source d’autorisation**, son état **autorisée / non autorisée / indisponible** et l’échéance de confirmation solaire lorsqu’elle s’applique. Le mode horaire n’annonce pas de confirmation solaire fictive. L’autorisation apparaît sur une ligne distincte de l’état allumé ou éteint de la pièce. Aucune valeur horaire ou solaire n’est affichée comme une mesure en lux. Les données solaires manquantes restent explicites. Les contrôles suivent le thème Home Assistant, les droits administrateur, les traductions anglaises/françaises, la validation avant navigation et la sauvegarde du brouillon existants. Les cinq onglets sont conservés ; champs et aides se réorganisent sur mobile sans débordement. Les preuves de réalisation sont suivies dans le [rapport dédié](docs/QA-LIGHTING-FALLBACK-2026-10-10.md).
+
+Le parcours réel dans Home Assistant isolé est vérifié en français, avec son thème sombre, à **1 440 × 1 000**, **375 × 812** et **768 × 1 024** : changement de mode, conservation des seuils, heures identiques refusées avec focus, correction/sauvegarde et abandon d’un brouillon mobile. Les champs solaires passent sur une colonne mobile ; les largeurs mesurées ne débordent pas. La barre fixe conserve deux actions lisibles et le passage par Tab du choix de mode à la liaison matin/soir garde un focus visible. L’anglais est couvert par les tests automatisés, sans inspection visuelle anglaise dans ce lot ; ce parcours ciblé ne constitue pas un audit d’accessibilité exhaustif.
+
 La pause manuelle couvre toute la pièce. Elle concerne les modifications de couleur ou de luminosité, les allumages, les extinctions et les lancements explicites de scènes. Ses réglages comprennent :
 
 - Une durée modifiable, initialement **120 minutes**.
@@ -326,13 +344,27 @@ La pause manuelle couvre toute la pièce. Elle concerne les modifications de cou
 
 L’affichage distingue cette pause de la désactivation générale de l’automatisation et de la suspension temporaire liée à l’édition d’une scène. Une extinction manuelle ne doit pas faire disparaître immédiatement l’indication de pause.
 
+### Veilleuse dans Ambiances
+
+**Implémentée le 10 octobre 2026 ; vérifiée par tests frontend et dans Home Assistant 2026.10.0 isolé avec des lampes simulées.** La veilleuse occupe une section compacte dans l’onglet **Ambiances**, après les réglages d’ambiance existants. Les cinq onglets sont conservés : aucun onglet Veilleuse supplémentaire. La configuration est réservée aux administrateurs.
+
+La section présente un interrupteur d’activation initialement désactivé, un résumé du nombre de lampes et du fonctionnement pendant l’absence, puis le bouton **Configurer**. L’aide reste repliable. Un lien **Automatisation** ouvre les réglages de présence et de luminosité existants, en conservant le brouillon et la validation avant navigation ; aucun seuil ni délai n’est dupliqué dans la veilleuse. Dans Automatisation, le délai de confirmation lumineuse reste accessible dès que la veilleuse est configurée, même si l’extinction lumineuse normale est désactivée.
+
+Le résumé et l’aide précisent la source de présence requise, les seuils réutilisés et la mesure lumineuse actuelle avec son unité. Sans capteur lumineux configuré, le mode **Toujours** permet la veilleuse à chaque absence confirmée ; l’extension horaire ou solaire décrite ci-dessus remplace cette autorisation permanente par celle du mode choisi. Une donnée indisponible est explicite et ne devient ni zéro ni une absence. L’aide explique l’extinction systématique de la veilleuse à la fermeture de l’autorisation même lorsque celle de l’éclairage normal est désactivée, ainsi que le risque de cycles si le capteur mesure la lumière de la veilleuse.
+
+**Configurer** ouvre une édition réelle avec sélection explicite des lampes de la pièce et accès aux fenêtres natives Home Assistant, comme pour les scènes. Les réglages existants sont préservés à la réouverture. Aucune scène ni condition n’est créée par ce parcours. Il exige d’enregistrer ou d’abandonner le brouillon courant avant de suspendre les automatismes. L’enregistrement capture les seuls réglages inclus ; l’annulation restaure les états initiaux ; droits, verrouillage, renouvellement et expiration de session restent ceux de l’édition réelle. Configurer conserve l’état d’activation précédent : une première configuration reste désactivée jusqu’à l’activation explicite dans le brouillon et sa sauvegarde. L’interrupteur d’activation reste indisponible tant que la présence ou une lampe allumée avec luminosité non nulle manque.
+
+Le panneau indique les conflits connus entre veilleuses et groupes destinés à l’extinction ; ceux-ci empêchent une configuration incohérente. Une composition de groupe inconnue est signalée sans prétendre à une validation exhaustive. Les effets et couleurs reproductibles remontés par Home Assistant sont conservés. Au moins une veilleuse doit être configurée allumée pour permettre l’activation.
+
+Le statut **Veilleuse** (`Nightlight`) apparaît lorsqu’elle est effectivement appliquée, sans masquer l’état matériel éteint ou indisponible. Il reste distinct de la pause manuelle, de l’édition et de l’automatisation désactivée. Les contrôles, aides et états utilisent les variables du thème, leurs libellés accessibles et les traductions anglaises/françaises. La section se réorganise sur mobile sans créer de navigation supplémentaire. Les parcours vérifiés dans Home Assistant isolé sur ordinateur (1 280 × 720) et mobile (390 × 844) couvrent configuration native avec effet, capture d’une seule lampe, réouverture sans extension de sélection, restauration à l’annulation et activation par la barre d’enregistrement. Sur mobile, la fenêtre native reste accessible, le lien vers Automatisation fonctionne et le panneau d’onglet ne déborde pas horizontalement. Le périmètre exact et les preuves des vérifications sont consignés dans [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+
 ### Protection globale contre les pertes de présence
 
 **Rallumage rapide et protection de la pause manuelle implémentés et testés localement, sans validation matérielle ni déploiement domestique pour cet ajout.** Les **Réglages globaux** présentent la section **« Protection contre les pertes de présence »** (`Protection against presence dropouts`) et son champ numérique **« Délai de protection de présence (secondes) »** (`Presence protection delay (seconds)`), initialement à **30**. Le champ est obligatoire, accepte les valeurs finies de **0 à 604 800** et utilise les contrôles, couleurs, focus et erreurs du thème Home Assistant.
 
 Une aide dépliable **« Fonctionnement »** conserve la compacité et distingue trois points :
 
-- Après une extinction automatique pour absence, un retour avant l’expiration de cette durée ignore ponctuellement le capteur lumineux et utilise la transition d’allumage habituel. Ce rallumage concerne uniquement les pièces sans extinction sur forte luminosité et respecte une pause encore active.
+- Après une extinction automatique pour absence, un retour avant l’expiration de cette durée utilise la transition d’allumage habituel. Avec un capteur configuré, il ignore ponctuellement sa mesure uniquement si l’extinction sur forte luminosité est désactivée. Sans capteur, il exige une autorisation alternative ouverte, indépendamment des anciens réglages lumineux inactifs. Une pause encore active reste prioritaire.
 - Dans toutes les pièces, le retour ne termine une pause manuelle qu’après une absence continue atteignant à la fois ce délai global et le délai d’absence local. L’indisponibilité du détecteur interrompt cette continuité ; l’expiration propre de pause et la commande de reprise restent distinctes.
 - **0** désactive le rallumage rapide et le minimum supplémentaire de protection de la pause, sans supprimer le délai d’absence local ni modifier celui de l’extinction automatique.
 
@@ -369,9 +401,13 @@ L’indisponibilité du soleil doit apparaître comme une suspension des ajustem
 
 **Statut : implémenté dans la première version de développement ; validation matérielle à réaliser.**
 
+**Extension du 10 octobre 2026 : scènes Home Assistant liées implémentées et vérifiées localement.** Le parcours natif a été vérifié dans Home Assistant isolé avec des lampes simulées ; les preuves et limites figurent dans le guide de développement.
+
 #### Liste et conditions
 
-Les scènes appartiennent à une pièce et utilisent ses lumières sélectionnées. Leur ordre dans la liste définit leur priorité : la première scène dont les conditions sont remplies est sélectionnée, une seule à la fois. La liste permet de déplacer les scènes et propose également des boutons **monter/descendre**. Les actions de lancement et de réglage restent visibles ; déplacement et suppression sont regroupés dans un menu par ligne. Les conditions et l’option d’allumage se déplient dans l’éditeur.
+Les scènes appartiennent à une pièce. Les scènes Halo utilisent ses lumières sélectionnées ; les références Home Assistant lancent leur source complète, avec un avertissement de périmètre au choix de la source. Leur ordre dans la liste définit leur priorité : la première scène admissible dont les conditions sont remplies est sélectionnée, une seule à la fois. La liste permet de déplacer les scènes et propose également des boutons **monter/descendre**. Les actions de lancement et de réglage restent visibles ; déplacement et suppression sont regroupés dans un menu par ligne. Les conditions et l’option d’allumage se déplient dans l’éditeur.
+
+Un seul menu administrateur **« Ajouter une scène »** regroupe **créer dans Halo**, **utiliser une scène Home Assistant** et **importer une copie**. Leurs explications distinguent le réglage réel de lampes, le lancement d’une source existante complète et sa copie indépendante limitée à la pièce. La liste indique l’origine Home Assistant des scènes liées, sans confondre cette origine avec une copie importée.
 
 L’éditeur de conditions propose les états d’entités, les seuils numériques, les horaires et les conditions solaires. Il permet de les combiner avec **ET**, **OU** et **NON**, sans imposer de YAML.
 
@@ -390,9 +426,23 @@ Le lancement explicite d’une scène applique son ambiance et déclenche la pau
 
 Confirmer ajoute une nouvelle scène au brouillon, en dernière position ; la barre d’enregistrement reste le point de sauvegarde ou d’abandon. Annuler le formulaire conserve le brouillon précédent. Les changements non enregistrés doivent être résolus avant de commencer l’import. Le lancement des scènes est désactivé tant qu’il reste des modifications non enregistrées. L’import ne lance pas l’éditeur en direct ni la scène source ; l’utilisateur peut ensuite modifier la copie avec le parcours habituel.
 
+#### Lien vers une scène Home Assistant
+
+**Implémenté ; parcours vérifié dans Home Assistant isolé avec des lampes simulées.** Le formulaire utilise le sélecteur Halo avec recherche par nom ou identifiant, un nom modifiable et les mêmes contrôles de conditions et d’autorisation d’allumage. Les scènes Halo sont exclues du choix. La recherche et les avertissements suivent la langue de l’interface ; le nom de la source et les noms personnalisés ne sont pas traduits.
+
+Après sélection, le panneau affiche les lampes extérieures à la pièce et celles de la pièce que la scène ne commande pas. Les groupes sont développés pour la comparaison lorsque leurs membres sont connus. Une composition inconnue ou partielle, notamment pour Hue, affiche une information explicite sans prétendre vérifier toutes les lampes. Une aide indique que la scène peut agir sur d’autres équipements et qu’elle est toujours lancée intégralement.
+
+Les avertissements de portée utilisent des titres explicites et des listes, séparés par un trait horizontal fin du thème Home Assistant, sans bande colorée latérale.
+
+Confirmer ajoute la référence au brouillon en dernière position, sans condition et sans autorisation d’allumage automatique ; annuler conserve le brouillon précédent. L’enregistrement passe par la barre habituelle et les révisions existantes. Rééditer ouvre ce même formulaire, sans suspendre les automatismes, appliquer d’aperçu ou proposer les contrôles d’édition réelle. Un simple renommage ou l’ajout d’un lien manuel sans condition ne rappelle pas la source. Une modification de source ou de règles enregistrée déclenche la réévaluation normale et peut changer l’ambiance appliquée. Les réglages de la source restent à modifier dans Home Assistant ou chez son fournisseur.
+
+L’aide précise trois limites : la durée transmise à la scène native est plafonnée à **6 553 secondes** ; une scène peut affecter d’autres pièces sans que Halo restaure leurs équipements à sa sortie ; les retours sans origine identifiable sont tolérés dans la pièce pendant **la transition transmise + 5 secondes**, ou 5 secondes sans transition. Une intervention physique sans contexte peut passer inaperçue pendant ce délai ; les commandes manuelles identifiées gardent la priorité.
+
+Une source absente, indisponible ou en erreur est signalée. L’arbitrage automatique passe à la suivante ou à l’ambiance normale ; le lancement manuel échoué affiche une erreur. Ne pas présenter l’état `unknown` d’une scène jamais lancée comme une indisponibilité. Les erreurs et les avertissements ne sont pas masqués par la temporisation de confirmation d’enregistrement.
+
 #### Réglage des lampes réelles
 
-L’éditeur présente une liste Halo recherchable des lampes avec leur état réel et leur effet actif, lorsque disponible. Un clic ouvre la fenêtre native Home Assistant, qui fournit les contrôles adaptés à la lampe. Ce parcours est implémenté et vérifié dans le frontend officiel Home Assistant 20260930.2, avec des lampes simulées dans une instance locale. L’ouverture utilise l’action documentée `more-info` ; aucun composant interne Home Assistant n’est copié ou détourné.
+Ce parcours concerne les scènes créées ou importées dans Halo. L’éditeur présente une liste Halo recherchable des lampes avec leur état réel et leur effet actif, lorsque disponible. Un clic ouvre la fenêtre native Home Assistant, qui fournit les contrôles adaptés à la lampe. Ce parcours est implémenté et vérifié dans le frontend officiel Home Assistant 20260930.2, avec des lampes simulées dans une instance locale. L’ouverture utilise l’action documentée `more-info` ; aucun composant interne Home Assistant n’est copié ou détourné.
 
 Chaque lampe dispose d’une case d’inclusion dans la scène. La réouverture conserve exactement les inclusions enregistrées ; les autres lampes restent proposées mais exclues, sans contrôle matériel tant qu’elles ne sont pas incluses. Une scène manuelle nouvelle inclut toutes les lampes de la pièce. L’aide précise que les lampes exclues restent inchangées au lancement.
 
@@ -416,10 +466,10 @@ Les réglages présentent cinq catégories avec leurs valeurs en **secondes** :
 | Catégorie | Déclenchement |
 | --- | --- |
 | Allumage habituel | Notamment l’arrivée d’une présence, même lorsqu’une scène est sélectionnée. |
-| Allumage sur baisse de luminosité | La pièce est occupée et la luminosité devient insuffisante. |
+| Allumage sur baisse de luminosité | La luminosité devient insuffisante pour l’éclairage normal d’une pièce occupée ou pour sa veilleuse pendant l’absence. |
 | Ajustement naturel | Modification de l’éclairage d’après un profil naturel. |
 | Scène | Activation, changement ou sortie de scène ; comprend une scène provoquant elle-même l’allumage. |
-| Extinction | Extinction de la pièce. |
+| Extinction | Extinction de la pièce ou passage de l’ambiance normale à la veilleuse. |
 
 Les valeurs globales initiales sont respectivement **0, 10, 60, 10 et 2 secondes**, dans l’ordre du tableau. Ces nouveaux défauts ne remplacent pas les réglages déjà enregistrés, y compris les champs vides. Pour chaque catégorie, chaque pièce propose trois choix explicites :
 
@@ -428,6 +478,8 @@ Les valeurs globales initiales sont respectivement **0, 10, 60, 10 et 2 secondes
 3. **Ne demander aucune transition**, sans reprendre la valeur globale.
 
 Sur chaque rangée de catégories, les sélecteurs et les champs de durée sont alignés verticalement, même lorsque les titres occupent des nombres de lignes différents. L’alignement s’adapte au nombre de colonnes disponible, dans les réglages globaux comme dans ceux d’une pièce.
+
+Le nom accessible de chaque sélecteur et champ de durée inclut sa catégorie de transition, pour les distinguer hors du contexte visuel de la grille. Les compteurs de pièces et de lumières emploient le singulier pour une seule entité, en français comme en anglais.
 
 Un champ vide en configuration explicite omet le paramètre de transition. Il se distingue de `0`, qui demande une transition immédiate lorsque la lampe le permet. Une lampe sans prise en charge ne reçoit pas ce paramètre. L’interface doit présenter cette distinction sans faire croire qu’une transition est garantie sur tous les équipements.
 
@@ -474,10 +526,13 @@ La table historique « Règles à définir » est remplacée par les décisions 
 
 - Accès au panneau après l’installation unique, navigation des pièces et droits utilisateur/administrateur.
 - Sélection des lumières, contraintes d’affectation et contrôles adaptés aux quatre familles de lampes.
+- Valeurs sous les sélecteurs de présence et de luminosité : actualisation en direct, état brut comparé aux états personnalisés, unité native ou absente, états inconnus/indisponibles traduits, ligne absente sans sélection et alignement des champs conservé.
 - Lecture des modes, de la pause manuelle et de sa politique d’extinction propre à la pièce, des temporisations et de l’indisponibilité.
 - Courbes naturelles, matin/soir liés ou séparés, associations multiples et correction de luminosité visible sans modification du profil partagé.
 - Ordre des scènes, conditions combinées, option d’allumage et indication de la scène effectivement sélectionnée.
 - Import depuis Home Assistant : recherche, aperçu des lampes retenues et entités ignorées, nom modifiable, annulation, erreurs et sauvegarde avec la barre habituelle, sans commande matérielle.
+- Menu d’ajout et scènes liées : recherche de la source, avertissements de lampes extérieures ou omises, groupes et composition inconnue, nom et règles modifiables, ajout/édition dans le brouillon sans session réelle, annulation et conflit de révision.
+- Sources liées indisponibles ou en échec : problème explicite, scène de repli identifiable, état `unknown` valide et absence de relance périodique ; aides sur la portée complète et la tolérance des retours sans contexte.
 - Scène partielle : inclusions conservées à la réouverture, cases explicites et lampes exclues inchangées au lancement.
 - Clic sur une lampe ouvrant la vraie fenêtre Home Assistant ; effet actif visible au retour, capture des états lors de l’enregistrement et restauration après annulation.
 - Édition réelle, enregistrement, annulation, déconnexion et accès concurrent.
@@ -492,3 +547,7 @@ Pour chaque règle, consigner son statut (**proposée**, **actée**, **implémen
 Documenter les vérifications visuelles avec l’écran, le thème et les états effectivement examinés. Une maquette ou un composant implémenté ne prouve pas que le dashboard complet a été vérifié dans Home Assistant.
 
 Lorsqu’une règle évolue, actualiser la règle et ses exemples dans la même tâche, puis signaler les parties de l’interface qui restent à adapter.
+
+## Lot d’interface préparé pour 0.2.0 — 10 octobre 2026
+
+La publication demandée regroupe les interfaces de scènes Home Assistant liées, la veilleuse dans Ambiances, les valeurs courantes des capteurs et l’autorisation sans capteur dans Automatisation. Elle conserve les cinq onglets, les noms personnalisés et le thème Home Assistant. Les vérifications ordinateur/mobile et leurs limites restent celles du [rapport local](docs/QA-LIGHTING-FALLBACK-2026-10-10.md) ; la préparation d’une release ne prouve pas son installation.

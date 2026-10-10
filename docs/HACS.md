@@ -1,6 +1,6 @@
 # Releases GitHub et distribution HACS
 
-Documentation officielle consultée le **9 octobre 2026**. À la demande d’Arnaud, les **releases GitHub sont mises en place maintenant** pour les installations comme dépôt personnalisé HACS. Le **référencement au catalogue par défaut reste un jalon final**. Cette précision remplace le report initial de toute publication ; elle n’autorise aucune soumission automatique à `hacs/default`.
+Documentation officielle reconsultée le **10 octobre 2026**. À la demande d’Arnaud, les **releases GitHub sont mises en place maintenant** pour les installations comme dépôt personnalisé HACS. Le **référencement au catalogue par défaut reste un jalon final**. Cette précision remplace le report initial de toute publication ; elle n’autorise aucune soumission automatique à `hacs/default`.
 
 ## Structure distribuée
 
@@ -19,6 +19,8 @@ Halo conserve le format standard : HACS lit `custom_components/halo/` au tag cho
 La première **[release `v0.1.0`](https://github.com/Gnol86/Halo/releases/tag/v0.1.0)** est publiée le **9 octobre 2026**, sans statut de brouillon ni de préversion. Le [workflow Release](https://github.com/Gnol86/Halo/actions/runs/37958464981) a réussi ses six jobs, dont HACS et Hassfest. L’archive GitHub du tag a été contrôlée : manifeste `0.1.0`, panneau compilé, images, traductions et licence concordent avec les fichiers locaux de cette version. Les preuves détaillées figurent dans [DEVELOPMENT.md](DEVELOPMENT.md). Le minimum Home Assistant reste `2026.10.0` ; l’installation réelle via HACS et la validation matérielle ne sont pas attestées par cette publication.
 
 La **[release `v0.1.1`](https://github.com/Gnol86/Halo/releases/tag/v0.1.1)** est publiée le même jour et confirmée comme dernière release normale par GitHub. Elle regroupe les corrections de sélecteurs, d’alignement et de notification du panneau. Ses [six jobs de publication](https://github.com/Gnol86/Halo/actions/runs/37961233161) ont réussi, y compris HACS et Hassfest ; les 25 fichiers distribuables de l’archive ont été comparés au dépôt. Cette publication n’installe pas la mise à jour dans le logement.
+
+La version **0.2.0** est préparée le **10 octobre 2026** avec les scènes liées, les veilleuses et les autorisations sans capteur. Versions et notes sont synchronisées ; la publication reste conditionnée à la réussite du workflow. [Notes de version](../releases/0.2.0.md).
 
 ### Contrat du workflow
 

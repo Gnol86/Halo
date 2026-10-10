@@ -141,6 +141,7 @@ def test_filter_before_validation_without_implicit_group_expansion():
     result = normalize_scene_import(source, ["light.group", "light.unlisted"])
     assert result["ignored_entities"] == 3
     assert result["scene"] == {
+        "type": "halo",
         "id": result["scene"]["id"],
         "name": "Cinema",
         "conditions": None,

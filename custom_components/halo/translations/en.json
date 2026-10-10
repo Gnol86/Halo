@@ -35,7 +35,8 @@
         "state": {
           "off": "Off",
           "manual": "Manual",
-          "natural": "Natural lighting"
+          "natural": "Natural lighting",
+          "nightlight": "Nightlight"
         }
       }
     }

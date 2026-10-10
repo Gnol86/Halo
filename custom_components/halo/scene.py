@@ -1,4 +1,4 @@
-"""Expose scenes authored in Halo as native Home Assistant scenes."""
+"""Expose both Halo ambiences and linked scenes as Home Assistant scene entities."""
 
 from typing import Any
 
@@ -48,7 +48,12 @@ class HaloScene(HaloRoomEntity, Scene):
     @property
     def available(self) -> bool:
         return super().available and any(
-            scene["id"] == self.scene_id for scene in self.room.get("scenes", [])
+            scene["id"] == self.scene_id
+            and (
+                scene.get("type") != "home_assistant"
+                or not self.manager.scene_problem(scene)
+            )
+            for scene in self.room.get("scenes", [])
         )
 
     async def async_activate(self, **kwargs: Any) -> None:

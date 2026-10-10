@@ -129,6 +129,7 @@ export const styles = css`
   .badge { display: inline-flex; align-items: center; gap: 5px; font-size: var(--ha-font-size-s,12px); color: var(--halo-secondary); padding: 2px 0; font-variant-numeric: tabular-nums; }
   .badge + .badge::before { content: "·"; margin-inline: 8px; }
   [aria-label] > .status-line { display: inline-block; margin: 2px 12px 2px 0; font-size: var(--ha-font-size-s,12px); }
+  [aria-label] > .lighting-authorization { display: block; margin: 4px 0; }
   .notice { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; margin: 12px 20px; background: var(--halo-selected); border: 1px solid var(--halo-line); border-radius: var(--halo-control-radius); line-height: 1.5; }
   .notice.error { color: var(--error-color,var(--halo-text)); background: var(--halo-surface); }
   .room-detail .notice,.profile-detail .notice { margin: 12px 0; }
@@ -190,7 +191,16 @@ export const styles = css`
   .global-settings { padding: 24px; overflow: auto; flex: 1; min-height: 0; }
   .global-settings > section { max-width: 980px; margin: 0 auto 28px; }
   .global-settings > h2 { max-width: 980px; margin: 0 auto 24px; }
-  .editor,.scene-import { max-width: 980px; margin: 0 auto; width: 100%; }
+  .editor,.scene-import,.scene-link { max-width: 980px; margin: 0 auto; width: 100%; }
+  .scene-add-menu > summary { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: var(--halo-control-radius); background: var(--halo-accent); color: var(--halo-on-accent); list-style: none; }
+  .scene-add-menu > summary::-webkit-details-marker { display: none; }
+  .scene-add-menu .menu-actions { flex-direction: column; align-items: stretch; }
+  .scene-scope { margin: 12px 0; }
+  .scene-scope .notice { margin: 12px 0; }
+  .scope-warning { border-block-start: 1px solid var(--halo-line); padding-block-start: 12px; margin-block: 12px; }
+  .scene-scope ul { padding-inline-start: 20px; }
+  .scene-scope li { margin-bottom: 6px; overflow-wrap: anywhere; }
+  .scene-scope li small { display: block; }
   .editor-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
   .editor-actions { position: sticky; bottom: -32px; z-index: 3; display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; padding: 12px 0 calc(12px + env(safe-area-inset-bottom,0px)); background: var(--halo-bg); border-top: 1px solid var(--halo-line); }
   .scene-lights { list-style: none; padding: 0; margin: 12px 0 20px; }

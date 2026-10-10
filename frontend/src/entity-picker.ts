@@ -12,7 +12,7 @@ export function matchesEntity(entity: EntityOption, query: string): boolean {
 /** Search is transient; only choosing a result changes the configured entity. */
 export class HaloEntityPicker extends LitElement {
   static properties = {
-    entities: { attribute: false }, value: { attribute: false }, label: {}, locale: {}, required: { type: Boolean },
+    entities: { attribute: false }, value: { attribute: false }, currentValue: { attribute: false }, label: {}, locale: {}, required: { type: Boolean },
     open: { state: true }, query: { state: true }, active: { state: true },
   };
   static styles = css`
@@ -60,12 +60,14 @@ export class HaloEntityPicker extends LitElement {
     }
     [aria-selected="true"] { font-weight: var(--ha-font-weight-medium,500); }
     small { display: block; font-size: var(--ha-font-size-s,12px); color: var(--picker-secondary); line-height: 1.5; overflow-wrap: anywhere; }
+    .current-value { margin-top: 4px; }
     .help { color: var(--picker-secondary); margin: 4px 0 8px; line-height: 1.5; }
     .clear-icon { width: 18px; height: 18px; fill: currentColor; }
     @media (pointer:coarse) { input,button,[role="option"] { min-height: 44px; } button { min-width: 44px; } }
   `;
   entities: EntityOption[] = [];
   value: string | null = null;
+  currentValue?: string;
   label = "";
   locale?: string;
   required = false;
@@ -132,11 +134,13 @@ export class HaloEntityPicker extends LitElement {
     return html`<label for="entity-input">${this.label}${unavailable ? html`<span class="unavailable"> · ${this.t("unavailable")}</span>` : nothing}</label>
       <div class="control" part="control"><div class="field"><input id="entity-input" role="combobox" aria-autocomplete="list" aria-expanded=${String(this.open)}
         aria-controls="entity-results" aria-required=${String(this.required)}
+        aria-describedby=${this.currentValue !== undefined ? "entity-current-value" : nothing}
         aria-activedescendant=${this.open && this.active >= 0 && results[this.active] ? `entity-option-${this.active}` : nothing}
         autocomplete="off" spellcheck="false" placeholder=${this.t("searchEntities")} title=${this.selectionText || nothing} .value=${this.open ? this.query : this.selectionText}
         @focus=${this.startSearch} @click=${this.startSearch} @keydown=${this.onKey}
         @input=${(event: Event) => { this.query = (event.target as HTMLInputElement).value; this.open = true; this.active = -1; }}>
         ${this.value ? html`<button type="button" aria-label=${`${this.t("clearEntity")}: ${this.label}`} @click=${() => this.choose(null)}><svg class="clear-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"></path></svg></button>` : nothing}</div>
+      ${this.currentValue !== undefined ? html`<small id="entity-current-value" class="current-value">${this.t("currentValue")}: ${this.currentValue}</small>` : nothing}
       ${this.open ? html`<div class="results" id="entity-results" role="listbox" aria-label=${this.label}>
         ${results.map((entity, index) => html`<div role="option" tabindex="-1" id=${`entity-option-${index}`} aria-selected=${String(entity.entity_id === this.value)}
           ?data-active=${index === this.active} @mousedown=${(event: MouseEvent) => event.preventDefault()} @click=${() => this.choose(entity.entity_id)}>
