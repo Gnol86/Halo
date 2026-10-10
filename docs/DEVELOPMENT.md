@@ -1,8 +1,15 @@
 # Développer Halo
 
-## Préparation de la release 0.2.0 — 10 octobre 2026
+## Release 0.2.0 publiée et vérifiée — 10 octobre 2026
 
-Le manifeste, `pyproject.toml` et `uv.lock` passent de 0.1.1 à 0.2.0, sans changement de dépendances. Les notes rassemblent scènes Home Assistant liées, veilleuses, autorisations horaires/solaires et corrections de la recette. Le code du lot a réussi 545 tests Python et 95 frontend avant cette préparation ; les contrôles du tag, HACS et Hassfest restent bloquants dans le workflow de publication. Le résultat GitHub et l’archive seront vérifiés séparément.
+La [release normale v0.2.0](https://github.com/Gnol86/Halo/releases/tag/v0.2.0) est publiée à **00:57:45 UTC**, sur le commit `fbed7fc88685fc7baf0ad812c4be41bbdbe2a65d`. GitHub la confirme comme dernière release, ni brouillon ni préversion. Le manifeste, `pyproject.toml` et `uv.lock` portent 0.2.0 sans changement de dépendances.
+
+- Les [six jobs Release](https://github.com/Gnol86/Halo/actions/runs/38011179346) réussissent : cohérence du tag et des notes, Python, frontend/reproductibilité, Hassfest, HACS sans contrôle ignoré, publication. La [validation sur main](https://github.com/Gnol86/Halo/actions/runs/38011165734) réussit aussi ses trois jobs.
+- Les 545 tests Python et 95 tests frontend du lot ont été suivis localement de 15 tests de métadonnées de release réussis, de Ruff et du contrôle de format. Les lots de tests se recouvrent et ne s’additionnent pas.
+- L’archive source GitHub du tag est téléchargée et ses **28 fichiers distribuables** sont comparés octet pour octet aux fichiers du tag. Le manifeste est 0.2.0 et le panneau conserve le SHA-256 `2ed6d4f7d593efcebfa12dc66a484ec76312e39b24f72b762258c03e7794640c`.
+- Les traces locales ignorées sont `tmp/release-0.2.0-workflow.log`, `tmp/release-0.2.0-published.json` et `tmp/release-0.2.0-archive-verification.json`.
+
+Cette publication rassemble les scènes Home Assistant liées, les veilleuses, les règles sans capteur et les corrections de la recette. Les limites de simulation, de couverture visuelle et d’arrêt du banc macOS restent documentées dans les rapports QA et les notes. Aucun déploiement domestique, référencement au catalogue HACS par défaut ou essai matériel n’est effectué.
 
 ## Autorisation d’éclairage sans capteur — 10 octobre 2026
 

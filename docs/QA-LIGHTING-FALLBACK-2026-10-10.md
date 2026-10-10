@@ -2,6 +2,8 @@
 
 Dernière mise à jour : **10 octobre 2026**.
 
+**Publication ultérieure :** ce lot est inclus dans [v0.2.0](https://github.com/Gnol86/Halo/releases/tag/v0.2.0), publiée le 10 octobre 2026 après les validations ci-dessous. Le [compte rendu de publication](DEVELOPMENT.md#release-020-publiée-et-vérifiée--10-octobre-2026) distingue cette étape des essais locaux historiques et de toute installation domestique.
+
 ## Périmètre et état
 
 Ce rapport concerne uniquement l’ajout de `room.lighting_fallback` dans le checkout local de Halo. **Verdict : lot implémenté et vérifié localement**, avec **545 tests Python**, **95 tests frontend**, un bundle reproductible, des scénarios de services et un parcours graphique dans Home Assistant isolé avec des lampes simulées. Les décisions fonctionnelles figurent dans [PROJET.md](../PROJET.md#autorisation-déclairage-sans-capteur-lumineux), les interactions dans [DESIGN.md](../DESIGN.md) et le contrat de données dans [ARCHITECTURE.md](ARCHITECTURE.md#autorisation-déclairage-sans-capteur). La [recette transversale précédente](QA-2026-10-10.md) reste historique : ses anciens résultats ne sont pas réutilisés comme preuve automatique de cet ajout. Les scénarios effectivement réexécutés sur les nouvelles sources sont identifiés ci-dessous.

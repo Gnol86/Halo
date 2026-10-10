@@ -8,7 +8,7 @@ Ce document, [DESIGN.md](DESIGN.md) et [README.md](README.md) doivent rester à 
 
 ## 1. Vision et état du projet
 
-**Publication demandée le 10 octobre 2026 :** la version **0.2.0** est préparée avec les scènes Home Assistant liées, les veilleuses, les règles sans capteur et les corrections validées localement. Les [notes de version](releases/0.2.0.md) accompagnent le tag ; la réussite de la publication GitHub sera consignée après exécution du workflow. Cette demande ne comprend pas de déploiement domestique.
+**Publication vérifiée le 10 octobre 2026 :** la [version **0.2.0**](https://github.com/Gnol86/Halo/releases/tag/v0.2.0) regroupe les scènes Home Assistant liées, les veilleuses, les règles sans capteur et les corrections validées localement. Les six jobs du [workflow Release](https://github.com/Gnol86/Halo/actions/runs/38011179346) réussissent, dont HACS et Hassfest ; les 28 fichiers distribuables de l’archive GitHub correspondent au tag. Les [notes de version](releases/0.2.0.md) précisent les changements et limites. Aucun déploiement domestique n’a été réalisé.
 
 Halo est une intégration personnalisée Home Assistant destinée à gérer toutes les lumières du logement, avec une configuration simple et centralisée. Son domaine est `halo`, son identité est une fleur de lotus et une seule installation couvre l’ensemble du logement.
 
@@ -26,17 +26,17 @@ La **recette transversale du 10 octobre 2026** inventorie les 68 critères A01�
 | Panneau, configuration des pièces et appareils | Refonte compacte implémentée ; tests de navigation et de brouillons, essais ciblés dans Home Assistant isolé et aperçus adaptatifs. |
 | Capteur d’état de chaque pièce | Implémenté ; tests locaux du moteur et des plateformes Home Assistant avec lampes simulées ; validation sur les équipements du logement à réaliser. |
 | Présence, luminosité, pause manuelle et reprise | Implémenté ; tests avec capteurs et lampes simulés. |
-| Autorisation d’éclairage sans capteur lumineux | Implémentée et vérifiée localement le 10 octobre 2026 : modes Toujours, Plage horaire et Hauteur du soleil, tests automatisés et parcours dans Home Assistant isolé avec lampes simulées. Aucun déploiement domestique ni publication de cet ajout. |
+| Autorisation d’éclairage sans capteur lumineux | Implémentée et vérifiée localement le 10 octobre 2026 : modes Toujours, Plage horaire et Hauteur du soleil, tests automatisés et parcours dans Home Assistant isolé avec lampes simulées. Incluse dans v0.2.0 ; aucun déploiement domestique. |
 | Rallumage rapide après absence | Implémenté et testé localement ; validation matérielle et déploiement domestique non réalisés pour cet ajout. |
 | Protection de la pause contre les pertes brèves de présence | Implémenté et testé localement ; validation matérielle et déploiement domestique non réalisés pour cet ajout. |
 | Ambiance de base et profils naturels | Implémenté ; calculs et adaptation aux capacités testés localement. |
-| Veilleuse par pièce | Implémentée et vérifiée localement, dont un parcours dans Home Assistant 2026.10.0 isolé avec des lampes simulées. Aucun déploiement domestique ni publication de cet ajout. |
+| Veilleuse par pièce | Implémentée et vérifiée localement, dont un parcours dans Home Assistant 2026.10.0 isolé avec des lampes simulées. Incluse dans v0.2.0 ; aucun déploiement domestique. |
 | Scènes, conditions, priorités et édition en direct | Implémenté ; tests locaux des priorités, sessions et restaurations. |
-| Références vers des scènes Home Assistant | Implémenté et vérifié localement, dont un parcours dans Home Assistant isolé avec des lampes simulées. Essais matériels et publication restent distincts. |
+| Références vers des scènes Home Assistant | Implémenté et vérifié localement, dont un parcours dans Home Assistant isolé avec des lampes simulées. Inclus dans v0.2.0 ; essais matériels distincts. |
 | Transitions globales et par pièce | Implémenté ; paramètres et concurrence testés, comportement matériel à vérifier. |
 | Localisation complète et sélection de langue du panneau | Catalogues anglais/français et sélection de langue implémentés ; tests locaux. |
 | Direction du dashboard | Actée et implémentée : pilotage prioritaire, liste de pièces et détail, sous-vues compactes et thème Home Assistant sans palette propre. |
-| Releases GitHub | [Première release `v0.1.0`](https://github.com/Gnol86/Halo/releases/tag/v0.1.0), puis [v0.1.1](https://github.com/Gnol86/Halo/releases/tag/v0.1.1) publiées le 9 octobre 2026 ; workflows réussis avec Hassfest et HACS, archives contrôlées. `v0.1.1` est la dernière release normale vérifiée à cette date et contient les corrections d’interface décrites ci-dessous. Installation dans HACS et validation matérielle distinctes, preuves dans la documentation de développement. |
+| Releases GitHub | [v0.2.0](https://github.com/Gnol86/Halo/releases/tag/v0.2.0) publiée le 10 octobre 2026, après v0.1.0 et v0.1.1. Six jobs réussis avec HACS et Hassfest, 28 fichiers distribuables de l’archive contrôlés. Installation dans HACS et validation matérielle distinctes ; preuves dans la documentation de développement. |
 | Référencement au catalogue HACS par défaut | Jalon final, après développement et validation. Les installations comme dépôt personnalisé sont distinctes. |
 
 ## 2. Installation et panneau Halo

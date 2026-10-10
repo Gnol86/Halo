@@ -548,6 +548,6 @@ Documenter les vérifications visuelles avec l’écran, le thème et les états
 
 Lorsqu’une règle évolue, actualiser la règle et ses exemples dans la même tâche, puis signaler les parties de l’interface qui restent à adapter.
 
-## Lot d’interface préparé pour 0.2.0 — 10 octobre 2026
+## Lot d’interface publié dans 0.2.0 — 10 octobre 2026
 
-La publication demandée regroupe les interfaces de scènes Home Assistant liées, la veilleuse dans Ambiances, les valeurs courantes des capteurs et l’autorisation sans capteur dans Automatisation. Elle conserve les cinq onglets, les noms personnalisés et le thème Home Assistant. Les vérifications ordinateur/mobile et leurs limites restent celles du [rapport local](docs/QA-LIGHTING-FALLBACK-2026-10-10.md) ; la préparation d’une release ne prouve pas son installation.
+La [release 0.2.0](https://github.com/Gnol86/Halo/releases/tag/v0.2.0), publiée et vérifiée, regroupe les interfaces de scènes Home Assistant liées, la veilleuse dans Ambiances, les valeurs courantes des capteurs et l’autorisation sans capteur dans Automatisation. Elle conserve les cinq onglets, les noms personnalisés et le thème Home Assistant. Les vérifications ordinateur/mobile et leurs limites restent celles du [rapport local](docs/QA-LIGHTING-FALLBACK-2026-10-10.md) ; la publication de cette release ne prouve pas son installation.

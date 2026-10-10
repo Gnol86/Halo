@@ -20,7 +20,7 @@ La première **[release `v0.1.0`](https://github.com/Gnol86/Halo/releases/tag/v0
 
 La **[release `v0.1.1`](https://github.com/Gnol86/Halo/releases/tag/v0.1.1)** est publiée le même jour et confirmée comme dernière release normale par GitHub. Elle regroupe les corrections de sélecteurs, d’alignement et de notification du panneau. Ses [six jobs de publication](https://github.com/Gnol86/Halo/actions/runs/37961233161) ont réussi, y compris HACS et Hassfest ; les 25 fichiers distribuables de l’archive ont été comparés au dépôt. Cette publication n’installe pas la mise à jour dans le logement.
 
-La version **0.2.0** est préparée le **10 octobre 2026** avec les scènes liées, les veilleuses et les autorisations sans capteur. Versions et notes sont synchronisées ; la publication reste conditionnée à la réussite du workflow. [Notes de version](../releases/0.2.0.md).
+La **[release v0.2.0](https://github.com/Gnol86/Halo/releases/tag/v0.2.0)** est publiée le **10 octobre 2026** et confirmée comme dernière release normale. Elle ajoute les scènes liées, les veilleuses et les autorisations sans capteur. Les [six jobs du workflow](https://github.com/Gnol86/Halo/actions/runs/38011179346) réussissent, y compris HACS sans contrôle ignoré et Hassfest. Les 28 fichiers de `custom_components/halo/` de l’archive GitHub sont identiques au tag `v0.2.0`, sur le commit `fbed7fc88685fc7baf0ad812c4be41bbdbe2a65d`. [Notes de version](../releases/0.2.0.md). Aucune installation domestique ne découle de cette publication.
 
 ### Contrat du workflow
 
