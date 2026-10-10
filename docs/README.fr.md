@@ -12,7 +12,7 @@ Halo est une intégration personnalisée Home Assistant qui réunit présence, l
 
 Une seule intégration couvre ton logement. Le panneau est inclus, suit le thème Home Assistant et s'adapte aux ordinateurs comme aux mobiles. La configuration de Halo ne nécessite ni YAML ni carte de dashboard séparée. Son moteur d'éclairage fonctionne dans Home Assistant et reste actif lorsque le panneau est fermé.
 
-> **État du projet :** Halo est en début de développement, avec des releases GitHub publiées pour une installation comme dépôt personnalisé HACS. Les tests automatisés et les essais ciblés dans une instance Home Assistant isolée utilisent des lampes simulées ; la validation sur les équipements réels du logement reste à compléter. Halo n'est pas encore référencé dans le catalogue HACS par défaut.
+> **État du projet :** Halo est en début de développement, avec des releases GitHub publiées pour une installation comme dépôt personnalisé HACS. Les tests automatisés et les essais ciblés dans une instance Home Assistant isolée utilisent des lampes simulées ; la validation sur les équipements réels du logement reste à compléter. La [demande d'inclusion au catalogue HACS par défaut](https://github.com/hacs/default/pull/11771) est ouverte et attend son examen ; Halo n'est pas encore référencé.
 
 ## Ce que Halo peut faire
 

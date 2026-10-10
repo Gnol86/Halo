@@ -37,7 +37,7 @@ La **recette transversale du 10 octobre 2026** inventorie les 68 critères A01�
 | Localisation complète et sélection de langue du panneau | Catalogues anglais/français et sélection de langue implémentés ; tests locaux. |
 | Direction du dashboard | Actée et implémentée : pilotage prioritaire, liste de pièces et détail, sous-vues compactes et thème Home Assistant sans palette propre. |
 | Releases GitHub | [v0.2.0](https://github.com/Gnol86/Halo/releases/tag/v0.2.0) publiée le 10 octobre 2026, après v0.1.0 et v0.1.1. Six jobs réussis avec HACS et Hassfest, 28 fichiers distribuables de l’archive contrôlés. Installation dans HACS et validation matérielle distinctes ; preuves dans la documentation de développement. |
-| Référencement au catalogue HACS par défaut | Soumission demandée le 10 octobre 2026 ; exigences et preuves examinées dans [docs/HACS.md](docs/HACS.md#référencement-au-catalogue). Acceptation et disponibilité effective non acquises. Les essais matériels restent distincts. |
+| Référencement au catalogue HACS par défaut | [PR #11771](https://github.com/hacs/default/pull/11771) ouverte le 10 octobre 2026 depuis le compte propriétaire ; ses 12 contrôles réussissent. Exigences et preuves dans [docs/HACS.md](docs/HACS.md#référencement-au-catalogue). Approbation des mainteneurs et disponibilité effective en attente. Les essais matériels restent distincts. |
 
 ## 2. Installation et panneau Halo
 

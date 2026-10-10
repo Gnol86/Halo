@@ -1,5 +1,15 @@
 # Développer Halo
 
+## Soumission au catalogue HACS — 10 octobre 2026
+
+À la demande explicite d’Arnaud, le report du référencement à la fin du projet est remplacé par une soumission immédiate après audit. La [matrice des exigences](HACS.md#référencement-au-catalogue) relie les exigences actuelles à l’état GitHub, aux métadonnées et aux preuves. La présentation anglaise et sa traduction française sont publiées sur `main` dans le commit `631add2`, avec une [validation GitHub réussie](https://github.com/Gnol86/Halo/actions/runs/38048597507) : Python, panneau et Hassfest.
+
+Le [contrôle officiel HACS relancé](https://github.com/Gnol86/Halo/actions/runs/38048474644) réussit ses neuf vérifications sans exclusion et détecte v0.2.0. Les fichiers de `custom_components/halo/` et `hacs.json` sont inchangés depuis cette release. Les PNG RGBA 256/512 pixels, les manifestes et les liens locaux des documents sont vérifiés ; aucune modification applicative ni nouvelle release n’est introduite.
+
+La [PR hacs/default #11771](https://github.com/hacs/default/pull/11771) ajoute uniquement `Gnol86/Halo` à `integration`, depuis `Gnol86/default:codex/add-halo` vers `master`. Elle est modifiable par les mainteneurs, non brouillon, étiquetée **New default repository**, avec le modèle officiel rempli et les preuves des validations antérieures à v0.2.0. Le script de tri du catalogue et la validité JSON passent localement. Les **12 contrôles distants** passent : [Check](https://github.com/hacs/default/actions/runs/38048667096) et [Lint](https://github.com/hacs/default/actions/runs/38048664631).
+
+État observé : **OPEN**, **REVIEW_REQUIRED**, fusion bloquée dans l’attente d’une approbation. Cette soumission ne vaut ni inclusion effective, ni installation domestique, ni validation matérielle. Le contrôle officiel d’absence de doublon réussit ; l’accès direct au catalogue depuis le poste retourne HTTP 403 et ne constitue aucune preuve supplémentaire.
+
 ## Release 0.2.0 publiée et vérifiée — 10 octobre 2026
 
 La [release normale v0.2.0](https://github.com/Gnol86/Halo/releases/tag/v0.2.0) est publiée à **00:57:45 UTC**, sur le commit `fbed7fc88685fc7baf0ad812c4be41bbdbe2a65d`. GitHub la confirme comme dernière release, ni brouillon ni préversion. Le manifeste, `pyproject.toml` et `uv.lock` portent 0.2.0 sans changement de dépendances.

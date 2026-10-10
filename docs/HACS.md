@@ -70,7 +70,7 @@ Les exigences viennent des [règles générales](https://www.hacs.xyz/docs/publi
 | Condition | Preuve ou état Halo |
 | --- | --- |
 | Dépôt GitHub public, actif | API GitHub : `Gnol86/Halo`, public et non archivé. |
-| Description, sujets, tickets ouverts | Description `Whole-home lighting management for Home Assistant.`, cinq sujets dont `hacs` et `home-assistant`, issues activées. |
+| Description, sujets, suivi des tickets activé | Description `Whole-home lighting management for Home Assistant.`, cinq sujets dont `hacs` et `home-assistant`, issues activées. |
 | Licence reconnue par la validation HACS | Licence MIT présente à la racine et identifiée par l’API GitHub. |
 | README expliquant l’utilisation | Présentation anglaise à la racine et traduction `docs/README.fr.md` : installation, premiers réglages et limites. |
 | Manifeste HACS à la racine | `hacs.json` : nom `Halo`, minimum Home Assistant `2026.10.0`. Aucune restriction géographique. |
@@ -83,8 +83,8 @@ Les exigences viennent des [règles générales](https://www.hacs.xyz/docs/publi
 | Release complète après les validations | [v0.2.0](https://github.com/Gnol86/Halo/releases/tag/v0.2.0), publiée le 10 octobre à 00:57:45 UTC après la fin des deux contrôles ; ni brouillon ni préversion. |
 | Soumission par le propriétaire ou un contributeur majeur | Compte GitHub authentifié `Gnol86`, propriétaire du dépôt avec droits administrateur. |
 | Absence de doublon ou retrait antérieur | `Gnol86/Halo` absent de `integration`, `blacklist` et `removed` ; aucune PR correspondante trouvée lors de la préparation. |
-| PR modifiable, depuis une branche personnelle | À vérifier après création ; ajout unique dans `integration`, tri alphabétique insensible à la casse et JSON valide. |
-| Modèle et preuves complets | Toutes les cases doivent être justifiées ; liens vers release, action HACS et Hassfest obligatoires. Ne pas demander explicitement de revue aux mainteneurs. |
+| PR modifiable, depuis une branche personnelle | [PR #11771](https://github.com/hacs/default/pull/11771) : `Gnol86/default:codex/add-halo` vers `hacs/default:master`, `maintainerCanModify=true`. Une seule ligne ajoutée dans `integration` ; JSON et tri officiel vérifiés localement. |
+| Modèle et preuves complets | Modèle rempli dans la PR, avec les liens vers la release et les validations HACS/Hassfest antérieures à sa publication ; aucune demande explicite de revue. |
 
 Les captures d’écran sont exigées pour les thèmes et plugins, pas pour une intégration. Une version minimale de Home Assistant et une restriction de pays doivent refléter la compatibilité réelle ; Halo n’impose aucun pays. La documentation ne fixe pas de seuil de popularité pour soumettre une intégration.
 
@@ -92,14 +92,19 @@ Le [nouveau contrôle officiel HACS](https://github.com/Gnol86/Halo/actions/runs
 
 ### État de la démarche
 
+La [PR #11771 — Add Gnol86/Halo](https://github.com/hacs/default/pull/11771) est ouverte le **10 octobre 2026**, sans statut de brouillon, par `Gnol86`. Le label **New default repository** est présent. Elle reprend le modèle officiel et les preuves des contrôles réussis avant la publication de v0.2.0. Aucun relecteur n’a été sollicité explicitement.
+
 - [x] Vérifier les exigences officielles, les métadonnées GitHub et les preuves de la release 0.2.0.
 - [x] Préparer les README anglais/français et actualiser la décision de soumission dans la documentation.
-- [ ] Publier la documentation et vérifier les nouveaux contrôles GitHub.
-- [ ] Ouvrir la PR d’ajout dans `hacs/default` avec le modèle rempli et les preuves.
+- [x] Publier la documentation : commit `631add2` sur `main` ; [validation GitHub](https://github.com/Gnol86/Halo/actions/runs/38048597507) réussie, avec tests Python, panneau et Hassfest.
+- [x] Ouvrir la PR d’ajout dans `hacs/default` avec le modèle rempli et les preuves.
+- [x] Vérifier tous les contrôles de la PR du catalogue : **12 sur 12 réussis**, workflows [Check](https://github.com/hacs/default/actions/runs/38048667096) et [Lint](https://github.com/hacs/default/actions/runs/38048664631).
 - [ ] Obtenir la fusion par les mainteneurs.
 - [ ] Confirmer la présence dans le catalogue distribué après le scan HACS.
 
 HACS annonce que l’examen des nouvelles demandes peut prendre plusieurs mois. Une PR ouverte ou des contrôles réussis ne constituent donc pas une inclusion. Les validations matérielles de la [feuille de route](ROADMAP.md) restent à réaliser ; la demande de référencement ne les transforme pas en essais effectués.
+
+À l’issue des contrôles, GitHub indique **OPEN**, **REVIEW_REQUIRED** et **BLOCKED** : l’approbation des mainteneurs manque encore. Le contrôle officiel **Existing repository** confirme l’absence de doublon dans les catalogues distribués au moment de la soumission. La vérification directe du catalogue depuis ce poste a reçu HTTP 403 ; elle n’est pas utilisée comme preuve de présence ou d’absence.
 
 ## Validation et limites
 

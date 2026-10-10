@@ -75,6 +75,7 @@ La demande explicite du 10 octobre 2026 remplace le report à la fin du projet. 
 
 - [x] Examiner les exigences actuelles et consigner les preuves dans la [liste d’inclusion au catalogue](HACS.md#référencement-au-catalogue).
 - [x] Préparer la présentation et les instructions d’installation dans les README anglais et français.
-- [ ] Soumettre l’ajout de `Gnol86/Halo` à `hacs/default` depuis une branche du fork personnel, avec les preuves de validation.
+- [x] Soumettre l’ajout de `Gnol86/Halo` à `hacs/default` depuis une branche du fork personnel, avec les preuves de validation : [PR #11771](https://github.com/hacs/default/pull/11771), ouverte le 10 octobre 2026 et modifiable par les mainteneurs.
+- [x] Vérifier les 12 contrôles de la PR du catalogue : tous réussis, dont HACS, Hassfest, propriétaire, release, doublons, JSON et tri.
 - [ ] Obtenir la fusion par les mainteneurs HACS.
 - [ ] Vérifier l’apparition effective dans le catalogue après le scan HACS.
