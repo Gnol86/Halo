@@ -1,6 +1,6 @@
 # Releases GitHub et distribution HACS
 
-Documentation officielle reconsultée le **10 octobre 2026**. À la demande d’Arnaud, les **releases GitHub sont mises en place maintenant** pour les installations comme dépôt personnalisé HACS. Le **référencement au catalogue par défaut reste un jalon final**. Cette précision remplace le report initial de toute publication ; elle n’autorise aucune soumission automatique à `hacs/default`.
+Documentation officielle reconsultée le **10 octobre 2026**. Les releases GitHub sont mises en place depuis le 9 octobre pour les installations comme dépôt personnalisé HACS. Le **10 octobre, Arnaud demande explicitement la soumission au catalogue HACS par défaut**, en remplacement du report à la fin du projet. L’examen et la fusion dépendent des mainteneurs HACS ; la disponibilité effective doit ensuite être vérifiée dans leur catalogue.
 
 ## Structure distribuée
 
@@ -61,21 +61,45 @@ La correction proposée dans [hacs/integration #5388](https://github.com/hacs/in
 
 Le dépôt `home-assistant/brands` n’accepte plus les images des nouvelles intégrations personnalisées : les images doivent rester embarquées dans Halo. Aucune soumission à ce dépôt ni au catalogue HACS n’est effectuée pour ce correctif. [Annonce officielle du changement](https://developers.home-assistant.io/blog/2026/02/24/brands-proxy-api/).
 
-## Référencement au catalogue, en dernier
+## Référencement au catalogue
 
-- [ ] Terminer et vérifier les fonctions d’éclairage sur une instance de test.
-- [ ] Actualiser le README avec les fonctions, limites et instructions réellement disponibles.
-- [ ] Confirmer la compatibilité et ajuster le minimum Home Assistant si nécessaire.
-- [ ] Recontrôler les exigences officielles HACS au moment de publier.
-- [x] Compléter la description GitHub : `Whole-home lighting management for Home Assistant.`
-- [x] Ajouter les sujets GitHub : `home-assistant`, `hacs`, `custom-integration`, `lighting`, `halo` ; conserver les issues activées.
-- [ ] Vérifier l’installation et la mise à jour comme dépôt personnalisé HACS.
-- [x] Obtenir des résultats verts pour Hassfest et l’action HACS, **sans contrôle ignoré** : workflow Release de `v0.1.0` réussi le 9 octobre 2026.
-- [x] Confirmer qu’une release GitHub est publiée, avec une version cohérente dans le manifeste : `v0.1.0`, archive vérifiée ; l’installation et la mise à jour HACS restent à valider séparément.
-- [ ] Depuis une branche d’un fork personnel de `hacs/default`, proposer `Gnol86/Halo` dans la liste `integration`, à sa place alphabétique, en remplissant le modèle de PR.
-- [ ] Attendre l’examen et la fusion par les mainteneurs, puis vérifier l’apparition effective dans le catalogue.
+### Audit du 10 octobre 2026
 
-Le propriétaire ou un contributeur majeur doit soumettre la demande. L’inclusion dépend des mainteneurs HACS et n’est jamais automatique. [Procédure officielle d’inclusion](https://www.hacs.xyz/docs/publish/include/).
+Les exigences viennent des [règles générales](https://www.hacs.xyz/docs/publish/start/), des [règles des intégrations](https://www.hacs.xyz/docs/publish/integration/) et de la [procédure d’inclusion](https://www.hacs.xyz/docs/publish/include/). Le [modèle de PR](https://github.com/hacs/default/blob/master/.github/PULL_REQUEST_TEMPLATE.md) et les [contrôles du catalogue](https://github.com/hacs/default/tree/master/.github/workflows) ont aussi été relus.
+
+| Condition | Preuve ou état Halo |
+| --- | --- |
+| Dépôt GitHub public, actif | API GitHub : `Gnol86/Halo`, public et non archivé. |
+| Description, sujets, tickets ouverts | Description `Whole-home lighting management for Home Assistant.`, cinq sujets dont `hacs` et `home-assistant`, issues activées. |
+| Licence reconnue par la validation HACS | Licence MIT présente à la racine et identifiée par l’API GitHub. |
+| README expliquant l’utilisation | Présentation anglaise à la racine et traduction `docs/README.fr.md` : installation, premiers réglages et limites. |
+| Manifeste HACS à la racine | `hacs.json` : nom `Halo`, minimum Home Assistant `2026.10.0`. Aucune restriction géographique. |
+| Une seule intégration, distribuable complet | Domaine unique `custom_components/halo/`, panneau compilé, traductions et images inclus ; fichiers identiques à v0.2.0. |
+| Manifeste de l’intégration complet | `domain`, `name`, `version`, `documentation`, `issue_tracker` et `codeowners` présents ; version `0.2.0`, propriétaire `@Gnol86`. |
+| Image de marque embarquée | `brand/icon.png` 256 × 256 et `icon@2x.png` 512 × 512, PNG RGBA vérifiés. |
+| Aucun remplacement d’une intégration du cœur | Domaine propre `halo` ; aucun dossier correspondant dans le registre des composants du cœur consulté via GitHub. Halo ne sert pas de variante alpha/bêta d’une intégration du cœur. |
+| Compatibilité avec un dépôt personnalisé | Action officielle HACS réussie sur v0.2.0 ; cette action utilise les validations de HACS. L’installation et la mise à jour domestiques ne sont pas déduites de ce contrôle. |
+| Actions HACS et Hassfest sans contrôle désactivé | [HACS](https://github.com/Gnol86/Halo/actions/runs/38011179346/job/114091326735) et [Hassfest](https://github.com/Gnol86/Halo/actions/runs/38011179346/job/114091326791) réussis avant publication ; aucun champ `ignore` dans le workflow HACS. |
+| Release complète après les validations | [v0.2.0](https://github.com/Gnol86/Halo/releases/tag/v0.2.0), publiée le 10 octobre à 00:57:45 UTC après la fin des deux contrôles ; ni brouillon ni préversion. |
+| Soumission par le propriétaire ou un contributeur majeur | Compte GitHub authentifié `Gnol86`, propriétaire du dépôt avec droits administrateur. |
+| Absence de doublon ou retrait antérieur | `Gnol86/Halo` absent de `integration`, `blacklist` et `removed` ; aucune PR correspondante trouvée lors de la préparation. |
+| PR modifiable, depuis une branche personnelle | À vérifier après création ; ajout unique dans `integration`, tri alphabétique insensible à la casse et JSON valide. |
+| Modèle et preuves complets | Toutes les cases doivent être justifiées ; liens vers release, action HACS et Hassfest obligatoires. Ne pas demander explicitement de revue aux mainteneurs. |
+
+Les captures d’écran sont exigées pour les thèmes et plugins, pas pour une intégration. Une version minimale de Home Assistant et une restriction de pays doivent refléter la compatibilité réelle ; Halo n’impose aucun pays. La documentation ne fixe pas de seuil de popularité pour soumettre une intégration.
+
+Le [nouveau contrôle officiel HACS](https://github.com/Gnol86/Halo/actions/runs/38048474644) réussit le 10 octobre 2026 : **9 vérifications sur 9**, sans exclusion, version distante détectée `v0.2.0`. Les fichiers distribuables n’ont pas changé depuis cette release ; aucune nouvelle version applicative n’est nécessaire pour cet ajout au catalogue.
+
+### État de la démarche
+
+- [x] Vérifier les exigences officielles, les métadonnées GitHub et les preuves de la release 0.2.0.
+- [x] Préparer les README anglais/français et actualiser la décision de soumission dans la documentation.
+- [ ] Publier la documentation et vérifier les nouveaux contrôles GitHub.
+- [ ] Ouvrir la PR d’ajout dans `hacs/default` avec le modèle rempli et les preuves.
+- [ ] Obtenir la fusion par les mainteneurs.
+- [ ] Confirmer la présence dans le catalogue distribué après le scan HACS.
+
+HACS annonce que l’examen des nouvelles demandes peut prendre plusieurs mois. Une PR ouverte ou des contrôles réussis ne constituent donc pas une inclusion. Les validations matérielles de la [feuille de route](ROADMAP.md) restent à réaliser ; la demande de référencement ne les transforme pas en essais effectués.
 
 ## Validation et limites
 

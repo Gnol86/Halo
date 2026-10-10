@@ -14,7 +14,7 @@ Halo est une intégration personnalisée Home Assistant destinée à gérer tout
 
 Le socle initial est implémenté : ajout depuis l’interface Home Assistant, entrée de configuration unique, chargement/déchargement/rechargement, textes de configuration anglais et français, icônes locales, tests et workflows préparés. Les vérifications historiques et leurs limites sont consignées dans [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
-Limite vérifiée le 9 octobre 2026 : HACS 2.0.5 ne charge pas les icônes embarquées pour sa liste de dépôts. L’image du README utilise une URL absolue GitHub ; les ressources `brand/` restent celles prévues pour Home Assistant. Le [diagnostic des deux emplacements](docs/HACS.md#affichage-du-lotus) distingue cette limite externe de la correction du README. Le référencement par défaut reste un jalon final.
+Limite vérifiée le 9 octobre 2026 : HACS 2.0.5 ne charge pas les icônes embarquées pour sa liste de dépôts. L’image du README utilise une URL absolue GitHub ; les ressources `brand/` restent celles prévues pour Home Assistant. Le [diagnostic des deux emplacements](docs/HACS.md#affichage-du-lotus) distingue cette limite externe de la correction du README. La soumission au catalogue par défaut est demandée le 10 octobre 2026, en remplacement de son report initial.
 
 **Une première implémentation du panneau et du moteur d’éclairage est disponible dans le dépôt.** La refonte compacte est implémentée et vérifiée localement, notamment dans Home Assistant 2026.10.0 isolé avec des lampes simulées. Cela ne vaut ni déploiement dans le logement, ni validation matérielle de tous les parcours. Les résultats et limites sont consignés dans [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
@@ -37,7 +37,7 @@ La **recette transversale du 10 octobre 2026** inventorie les 68 critères A01�
 | Localisation complète et sélection de langue du panneau | Catalogues anglais/français et sélection de langue implémentés ; tests locaux. |
 | Direction du dashboard | Actée et implémentée : pilotage prioritaire, liste de pièces et détail, sous-vues compactes et thème Home Assistant sans palette propre. |
 | Releases GitHub | [v0.2.0](https://github.com/Gnol86/Halo/releases/tag/v0.2.0) publiée le 10 octobre 2026, après v0.1.0 et v0.1.1. Six jobs réussis avec HACS et Hassfest, 28 fichiers distribuables de l’archive contrôlés. Installation dans HACS et validation matérielle distinctes ; preuves dans la documentation de développement. |
-| Référencement au catalogue HACS par défaut | Jalon final, après développement et validation. Les installations comme dépôt personnalisé sont distinctes. |
+| Référencement au catalogue HACS par défaut | Soumission demandée le 10 octobre 2026 ; exigences et preuves examinées dans [docs/HACS.md](docs/HACS.md#référencement-au-catalogue). Acceptation et disponibilité effective non acquises. Les essais matériels restent distincts. |
 
 ## 2. Installation et panneau Halo
 
@@ -80,6 +80,8 @@ Les droits sont contrôlés côté serveur pour les commandes concernées. Masqu
 ## 3. Langues
 
 **L’anglais est la langue de référence de l’intégration.** Les menus, réglages, aides, erreurs et statuts propres à Halo disposent d’une traduction française complète.
+
+**Documentation de présentation — décision du 10 octobre 2026 :** le [README principal](README.md) est rédigé en anglais et renvoie dès son introduction à sa [version française dans `docs/README.fr.md`](docs/README.fr.md). Les deux versions présentent les mêmes fonctionnalités disponibles, prérequis, étapes d’installation, premiers réglages et limites de validation ; elles sont maintenues ensemble. Les documents détaillés existants restent en français.
 
 - Le dashboard suit la langue effective de l’interface Home Assistant de l’utilisateur.
 - `fr` et ses variantes utilisent le français ; toute autre langue utilise l’anglais tant qu’elle n’est pas prise en charge.
@@ -584,7 +586,7 @@ Le choix des contrôles natifs de scène repose sur les [mécanismes officiels v
 | Date | Décision | Conséquence |
 | --- | --- | --- |
 | 9 octobre 2026 | Initialiser Halo avec une identité de lotus et une structure adaptée à Home Assistant et HACS. | Le socle est préparé avant les fonctions d’éclairage. |
-| 9 octobre 2026 | Reporter initialement la disponibilité HACS à la fin du projet. | Décision ensuite précisée : les releases GitHub sont autorisées maintenant ; l’inclusion au catalogue par défaut reste un jalon final. |
+| 9 octobre 2026 | Reporter initialement la disponibilité HACS à la fin du projet. | Releases GitHub autorisées ensuite le même jour ; report de la soumission au catalogue remplacé par la demande explicite du 10 octobre 2026. |
 | 9 octobre 2026 | Maintenir `PROJET.md`, `DESIGN.md` et `README.md` en temps réel. | Chaque évolution est documentée dans la même tâche. |
 | 9 octobre 2026 | Adopter le panneau unique, les appareils par pièce et les règles d’automatisation décrites ici. | Spécification actée ; fonctionnalités à développer. |
 | 9 octobre 2026 | Unifier la pause manuelle et rendre son extinction automatique configurable par pièce. | Le réglage est activé par défaut ; scènes et ajustements naturels restent suspendus pendant la pause. |
@@ -601,7 +603,9 @@ Le choix des contrôles natifs de scène repose sur les [mécanismes officiels v
 | 10 octobre 2026 | Ajouter une veilleuse fixe pendant l’absence dans la section Ambiances, sans sixième onglet. | Configuration désactivée par défaut ; seuils communs, extinction lumineuse propre à la veilleuse, retour normal soumis au seuil et édition native réutilisée. Implémentation, tests automatisés et parcours Home Assistant isolé réalisés ; publication et essais matériels distincts. |
 | 10 octobre 2026 | Mener une recette locale transversale avant une éventuelle mise en production. | Matrice des 68 critères, capteurs et lampes simulés, tests de concurrence et d’échec de stockage, parcours dans Home Assistant isolé et correction des défauts prouvés. Aucune publication ni autorisation de déploiement domestique déduite de cette recette. |
 | 10 octobre 2026 | Définir l’autorisation sans capteur lumineux par pièce : Toujours, plage horaire ou hauteur du soleil. | Défaut compatible, capteur configuré prioritaire même indisponible, veilleuse soumise à la même autorisation et extinction distincte de l’éclairage normal. Implémenté et vérifié localement ; suivi séparé de la recette précédente, sans publication ni déploiement domestique. |
+| 10 octobre 2026 | Présenter l’intégration dans un README anglais avec une version française dans `docs/`. | Présentation, installation, premiers réglages et limites documentés dans les deux langues, avec liens réciproques et maintien conjoint. |
+| 10 octobre 2026 | Demander l’inclusion de Halo au catalogue HACS par défaut dès maintenant. | Audit des exigences officielles, publication de la documentation et soumission depuis le compte propriétaire après vérification. L’acceptation par HACS et les validations matérielles restent distinctes. |
 
 La distribution conserve la structure standard `custom_components/halo/`, avec le panneau compilé et les images embarquées. Une release GitHub publiée fournit la version à HACS ; un tag seul ne suffit pas. Chaque tag de publication correspond à la version du manifeste et de `pyproject.toml`, sans le préfixe `v`. Les notes de release décrivent les changements, le minimum Home Assistant et les limites connues. La publication ne vaut pas validation des équipements du logement.
 
-La [procédure de release](docs/HACS.md) et la demande ultérieure d’inclusion HACS sont distinctes. Le référencement au catalogue reste un jalon final, sans soumission automatique depuis le workflow de release.
+La [procédure de release](docs/HACS.md) et la demande d’inclusion HACS sont distinctes. La soumission au catalogue est désormais demandée, sans automatisme depuis le workflow de release. Le statut doit distinguer demande ouverte, fusion par les mainteneurs et disponibilité effective après le scan HACS.

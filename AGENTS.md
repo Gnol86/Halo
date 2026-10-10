@@ -18,7 +18,7 @@ Préserver tous les réglages métier dans les sous-vues, le brouillon transvers
 
 L’anglais est la langue de référence du produit. Le panneau doit suivre la langue effective de l’interface Home Assistant : français pour `fr` et ses variantes, anglais autrement, avec des catalogues extensibles. Préserver les noms personnalisés et les identifiants techniques. Cette règle produit ne change pas la communication avec Arnaud, qui reste en français.
 
-Les **releases GitHub sont désormais demandées**, pour fournir des versions identifiables aux installations comme dépôt personnalisé HACS. Cette décision du 9 octobre 2026 remplace le report initial de toute publication. Le **référencement au catalogue HACS par défaut reste prévu à la fin du projet** ; aucune soumission à `hacs/default` ne découle d’une release. La procédure et son statut se trouvent dans [docs/HACS.md](docs/HACS.md).
+Les **releases GitHub sont demandées** depuis le 9 octobre 2026 pour fournir des versions identifiables aux installations comme dépôt personnalisé HACS. Le **10 octobre 2026, Arnaud demande aussi la soumission au catalogue HACS par défaut**, ce qui remplace son report à la fin du projet. Préparer et vérifier les prérequis puis soumettre à `hacs/default` ; la fusion et l’apparition effective dans le catalogue restent à vérifier séparément. Une release ne déclenche aucune soumission automatique. La procédure, les preuves et le statut se trouvent dans [docs/HACS.md](docs/HACS.md).
 
 ## Documents à lire
 
@@ -26,7 +26,7 @@ Avant de travailler sur le projet, lire :
 
 1. [PROJET.md](PROJET.md) : référence des objectifs, fonctionnalités, comportements et décisions produit.
 2. [DESIGN.md](DESIGN.md) : référence des règles de design et d’interaction du dashboard.
-3. [README.md](README.md) : état présenté aux utilisateurs et installation.
+3. [README.md](README.md) : présentation anglaise, état disponible et installation ; sa [version française](docs/README.fr.md) est conservée dans `docs/`.
 
 Selon la tâche, consulter également [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md), [docs/ROADMAP.md](docs/ROADMAP.md) et [docs/HACS.md](docs/HACS.md). La feuille de route organise les jalons ; les spécifications détaillées appartiennent à `PROJET.md` et `DESIGN.md`.
 
@@ -39,6 +39,7 @@ Pour une évolution de l’interface, consulter aussi [PRODUCT.md](PRODUCT.md) e
 - Dès qu’une fonctionnalité, un comportement, une priorité ou une décision produit est ajouté, précisé, modifié ou abandonné, mettre à jour `PROJET.md` dans la même tâche.
 - Dès qu’une règle visuelle, une interaction ou une décision concernant le dashboard évolue, mettre à jour `DESIGN.md` dans la même tâche.
 - Dès qu’une évolution change les fonctionnalités disponibles, l’installation, la configuration, la compatibilité, les limites ou le statut de distribution, mettre à jour `README.md` dans la même tâche. Il doit décrire fidèlement ce qu’un utilisateur peut réellement utiliser ; identifier explicitement les fonctions seulement prévues.
+- Maintenir ensemble le README anglais et `docs/README.fr.md`, avec les mêmes informations et des liens réciproques. Les documents détaillés existants restent en français.
 - Quand une décision concerne plusieurs de ces documents, les mettre à jour ensemble et vérifier leur cohérence.
 - Une proposition ou une question ouverte doit rester explicitement marquée comme telle. Ne pas transformer une idée en décision validée ni inventer des règles pour remplir une rubrique.
 - Lors de l’implémentation, actualiser le statut et les preuves de validation des éléments concernés. « Implémenté » ne signifie pas « testé dans une instance Home Assistant ».

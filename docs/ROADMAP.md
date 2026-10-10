@@ -69,7 +69,12 @@ Le 9 octobre 2026, Arnaud demande des releases GitHub pour distribuer des versio
 - [x] Publier et vérifier [v0.2.0](https://github.com/Gnol86/Halo/releases/tag/v0.2.0) le 10 octobre 2026 : six jobs de release réussis, 28 fichiers distribuables comparés au tag, sans déploiement domestique.
 - [ ] Vérifier son installation et sa mise à jour comme dépôt personnalisé HACS dans une instance de test.
 
-## 5. Référencement HACS, en dernier
+## 5. Référencement HACS
 
-- [ ] Achever les validations matérielles et suivre la [liste d’inclusion au catalogue](HACS.md#référencement-au-catalogue-en-dernier).
-- [ ] Demander l’inclusion au catalogue HACS par défaut, puis vérifier son apparition après acceptation par les mainteneurs.
+La demande explicite du 10 octobre 2026 remplace le report à la fin du projet. Les validations matérielles de la section 3 restent à compléter indépendamment de la soumission.
+
+- [x] Examiner les exigences actuelles et consigner les preuves dans la [liste d’inclusion au catalogue](HACS.md#référencement-au-catalogue).
+- [x] Préparer la présentation et les instructions d’installation dans les README anglais et français.
+- [ ] Soumettre l’ajout de `Gnol86/Halo` à `hacs/default` depuis une branche du fork personnel, avec les preuves de validation.
+- [ ] Obtenir la fusion par les mainteneurs HACS.
+- [ ] Vérifier l’apparition effective dans le catalogue après le scan HACS.
