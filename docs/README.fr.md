@@ -90,20 +90,22 @@ Chaque pièce configurée expose aussi des entités Home Assistant : une lumièr
 
 **Données indisponibles.** Une mesure manquante n'est jamais interprétée comme zéro ou comme une absence confirmée. Un capteur lumineux configuré reste prioritaire même lorsqu'il est indisponible ; Halo ne bascule pas silencieusement sur les règles horaires ou solaires. Les ajustements naturels sont également suspendus lorsque les données solaires nécessaires sont indisponibles.
 
-## Documentation et développement
+## Contribuer
 
-La documentation détaillée du projet est actuellement en français.
+Les signalements de problèmes et les contributions sont les bienvenus. Pour [ouvrir un ticket](https://github.com/Gnol86/Halo/issues), indique tes versions de Halo et de Home Assistant, l'intégration des lampes concernées, les étapes de reproduction et le comportement attendu puis observé.
 
-- [Spécification fonctionnelle](../PROJET.md) — règles d'éclairage, valeurs par défaut et critères d'acceptation.
-- [Design du panneau](../DESIGN.md) — navigation, interactions et intégration au thème Home Assistant.
-- [Architecture](ARCHITECTURE.md) — moteur, stockage, entités et contrats du panneau.
-- [Guide de développement](DEVELOPMENT.md) — environnement, vérifications et résultats de validation consignés.
-- [Feuille de route](ROADMAP.md) — travail réalisé et validations restantes.
-- [HACS et releases](HACS.md) — distribution et procédure de publication.
+Lance les vérifications Python depuis la racine du dépôt :
 
-Le [rapport de recette générale](QA-2026-10-10.md) et le [rapport des autorisations d'éclairage](QA-LIGHTING-FALLBACK-2026-10-10.md) précisent le périmètre et les limites des vérifications locales. Le comportement matériel, les effets propres aux fournisseurs et les transitions physiques restent à valider sur les équipements cibles.
+```sh
+uv sync --frozen
+uv run --frozen ruff check .
+uv run --frozen ruff format --check .
+uv run --frozen pytest
+```
 
-Les signalements de problèmes et les contributions sont les bienvenus. Pour [ouvrir un ticket](https://github.com/Gnol86/Halo/issues), indique tes versions de Halo et de Home Assistant, l'intégration des lampes concernées, les étapes de reproduction et le comportement attendu puis observé. Consulte le guide de développement avant de modifier le code.
+Pour modifier le panneau, utilise Node.js 24 et lance `npm ci`, `npm run check`, `npm test` et `npm run build` depuis la racine du dépôt. Inclus le fichier reconstruit `custom_components/halo/frontend/halo-panel.js` avec tes changements. Consulte le [README du panneau](../frontend/README.md) pour l'aperçu simulé et le fonctionnement de l'interface.
+
+Les tests automatisés et les aperçus simulés ne valident ni le comportement matériel, ni les effets propres aux fournisseurs, ni les transitions physiques sur les équipements cibles.
 
 ## Soutien et licence
 

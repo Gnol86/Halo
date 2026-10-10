@@ -90,20 +90,22 @@ Each configured room also exposes Home Assistant entities: a room light, a statu
 
 **Unavailable data.** Missing sensor readings are never treated as zero or as confirmed absence. A configured illuminance sensor remains authoritative even when unavailable; Halo does not silently switch to time or sun rules. Natural adjustments also pause when the required sun data is unavailable.
 
-## Documentation and development
+## Contributing
 
-The detailed project documentation is currently in French.
+Bug reports and contributions are welcome. When [opening an issue](https://github.com/Gnol86/Halo/issues), include your Halo and Home Assistant versions, the relevant light integration, steps to reproduce, and expected versus observed behavior.
 
-- [Functional specification](PROJET.md) — lighting rules, defaults and acceptance criteria.
-- [Panel design](DESIGN.md) — navigation, interactions and Home Assistant theme integration.
-- [Architecture](docs/ARCHITECTURE.md) — engine, storage, entities and panel contracts.
-- [Development guide](docs/DEVELOPMENT.md) — environment, checks and recorded validation results.
-- [Roadmap](docs/ROADMAP.md) — completed work and remaining validation.
-- [HACS and releases](docs/HACS.md) — distribution and publication process.
+Run Python checks from the repository root:
 
-For the scope and limits of the local checks, see the [general QA report](docs/QA-2026-10-10.md) and the [lighting-permission QA report](docs/QA-LIGHTING-FALLBACK-2026-10-10.md). Hardware behavior, provider-specific effects and physical transitions still need validation on the target equipment.
+```sh
+uv sync --frozen
+uv run --frozen ruff check .
+uv run --frozen ruff format --check .
+uv run --frozen pytest
+```
 
-Bug reports and contributions are welcome. When [opening an issue](https://github.com/Gnol86/Halo/issues), include your Halo and Home Assistant versions, the relevant light integration, steps to reproduce, and expected versus observed behavior. See the development guide before changing code.
+For panel changes, use Node.js 24 and run `npm ci`, `npm run check`, `npm test` and `npm run build` from the repository root. Include the rebuilt `custom_components/halo/frontend/halo-panel.js` with your changes. See the [panel README](frontend/README.md) for the simulated preview and panel behavior.
+
+Automated tests and simulated previews do not validate hardware behavior, provider-specific effects or physical transitions on the target equipment.
 
 ## Support and license
 
