@@ -11,6 +11,10 @@ from test_engine import room_engine as room_engine
 
 from custom_components.halo.engine import HaloRoomEngine
 
+# Freeze before room_engine starts: otherwise its recorded absence can be in
+# the future when configure() moves the clock back to a fixed scenario date.
+pytestmark = pytest.mark.freeze_time("2026-01-01T00:00:00+00:00")
+
 
 async def configure(
     hass,

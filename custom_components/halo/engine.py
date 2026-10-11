@@ -21,7 +21,9 @@ from homeassistant.helpers.event import (
 )
 from homeassistant.util import dt as dt_util
 
+from .activity import async_record_command
 from .conditions import UNAVAILABLE, condition_entities, evaluate_condition, number
+from .external_scenes import composition
 from .lighting import fallback_permission, solar_elevation
 from .models import DEFAULT_PRESENCE_RETURN_WINDOW, ROOM_DEFAULTS
 from .natural import (
@@ -482,8 +484,9 @@ class HaloRoomEngine:
             or new.context.parent_id in self._own_contexts
         ):
             return True
-        # A user context always wins over the fallback for devices dropping context.
-        if new.context.user_id:
+        # Identified interventions win over the fallback for devices dropping
+        # context; the parent of one of our own commands was checked above.
+        if new.context.user_id or new.context.parent_id:
             return False
         # Provider feedback may discard the context (notably Hue). The bounded
         # grace period belongs only to this room; known foreign contexts win.
@@ -531,9 +534,12 @@ class HaloRoomEngine:
                 value = number(new.attributes.get(key))
                 previous = number(old.attributes.get(key))
                 goal = target["brightness_pct"] * 255 / 100
+                # Off lamps commonly expose None. With no starting value,
+                # accept only feedback matching the commanded target.
+                if previous is None:
+                    previous = goal
                 if (
                     value is None
-                    or previous is None
                     or not min(previous, goal) - 2 <= value <= max(previous, goal) + 2
                 ):
                     return False
@@ -545,16 +551,25 @@ class HaloRoomEngine:
                 elif isinstance(goal, (int, float)):
                     previous = number(old.attributes.get(key))
                     value = number(value)
-                    if (
-                        previous is None
-                        or value is None
-                        or not min(previous, goal) - 1
-                        <= value
-                        <= max(previous, goal) + 1
-                    ):
+                    if previous is None:
+                        previous = goal
+                    if value is None:
+                        return False
+                    if key == "color_temp_kelvin":
+                        if min(previous, goal, value) <= 0:
+                            return False
+                        # Hue and other bridges quantize white temperature in
+                        # integer mireds. One Kelvin is too strict (5500 K can
+                        # return as 5524 K), so compare the transition in mireds.
+                        previous, goal, value = (
+                            1_000_000 / item for item in (previous, goal, value)
+                        )
+                    if not min(previous, goal) - 1 <= value <= max(previous, goal) + 1:
                         return False
                 else:
                     previous = old.attributes.get(key)
+                    if previous is None:
+                        previous = goal
                     if not value or not previous or len(value) != len(goal):
                         return False
                     if any(
@@ -822,7 +837,10 @@ class HaloRoomEngine:
             if self.room.get("allow_off_during_pause", True) and (
                 absence_due or (lux_due and self._normal_off_enabled())
             ):
-                await self._all_off(absence=absence_due)
+                await self._all_off(
+                    reason="absence" if absence_due else self._lighting_block_reason(),
+                    absence=absence_due,
+                )
             return
         if not self.available and not (scene and scene.get("type") == "home_assistant"):
             self._reason = "unavailable"
@@ -837,7 +855,7 @@ class HaloRoomEngine:
             absence_due or (lux_due and self._normal_off_enabled())
         ):
             self._reason = "absence" if absence_due else self._lighting_block_reason()
-            await self._all_off(absence=absence_due)
+            await self._all_off(reason=self._reason, absence=absence_due)
             self._applied_scene = None
             self._nightlight_mode = False
             return
@@ -944,11 +962,32 @@ class HaloRoomEngine:
                         and state.state == "on"
                     }
                     transition = "natural"
-                await self._apply(targets, transition, force=True)
+                if presence_return or trigger == "presence" and self._presence is True:
+                    reason = "presence"
+                elif trigger == "resume":
+                    reason = "resume"
+                elif trigger in {"lux", "lighting"}:
+                    reason = "lighting_allowed"
+                else:
+                    reason = "base"
+                natural = self._natural_targets() if reason == "base" else {}
+                await self._apply(
+                    targets,
+                    transition,
+                    force=True,
+                    reason={
+                        entity_id: "natural"
+                        if entity_id in natural and desired.get("state", "on") == "on"
+                        else reason
+                        for entity_id, desired in targets.items()
+                    },
+                )
                 if generation != self._generation or self._stopped:
                     return
             else:
-                await self._apply(self._natural_targets(only_on=True), "natural")
+                await self._apply(
+                    self._natural_targets(only_on=True), "natural", reason="natural"
+                )
             self._nightlight_mode = False
             if self.room.get("natural_enabled", True) and self.room.get("associations"):
                 self._reason = "natural" if self._solar() is not None else "unavailable"
@@ -1004,7 +1043,7 @@ class HaloRoomEngine:
                 return True
             self._nightlight_mode = True
             self._reason = self._lighting_block_reason()
-            await self._all_off()
+            await self._all_off(reason=self._reason)
             return True
         if paused and self._presence is True:
             self._reason = "nightlight"
@@ -1018,7 +1057,9 @@ class HaloRoomEngine:
             for entity_id in self.room["lights"]
         }
         await self._apply(
-            targets, "lux_on" if trigger in {"lux", "lighting"} else "turn_off"
+            targets,
+            "lux_on" if trigger in {"lux", "lighting"} else "turn_off",
+            reason="nightlight",
         )
         return True
 
@@ -1088,13 +1129,14 @@ class HaloRoomEngine:
         )
 
     async def _all_off(
-        self, context: Context | None = None, *, absence: bool = False
+        self, context: Context | None = None, *, reason: str, absence: bool = False
     ) -> None:
         self._scene_feedback.clear()
         await self._apply(
             {entity_id: {"state": "off"} for entity_id in self.room["lights"]},
             "turn_off",
             context=context,
+            reason=reason,
             absence=absence,
         )
 
@@ -1110,7 +1152,12 @@ class HaloRoomEngine:
         self._scene_feedback.clear()
         if scene.get("type") != "home_assistant":
             await self._apply(
-                scene.get("lights", {}), category, force=True, context=context
+                scene.get("lights", {}),
+                category,
+                force=True,
+                context=context,
+                reason="scene",
+                scene_name=scene.get("name", scene["id"]),
             )
             return generation == self._generation and not self._stopped
         if problem := self.manager.scene_problem(scene):
@@ -1133,6 +1180,15 @@ class HaloRoomEngine:
         for entity_id in self._scene_feedback:
             self._expected.pop(entity_id, None)
             self._last_commands.pop(entity_id, None)
+        async_record_command(
+            self.hass,
+            own_context,
+            scene["scene_entity_id"],
+            "scene_action",
+            "scene",
+            scene_name=scene.get("name", scene["id"]),
+            related_lights=composition(self.hass, [scene["scene_entity_id"]]).lights,
+        )
         try:
             with self.manager.external_scene_context(own_context):
                 await self.hass.services.async_call(
@@ -1161,6 +1217,8 @@ class HaloRoomEngine:
         targets: dict[str, dict[str, Any]],
         category: str | None,
         *,
+        reason: str | dict[str, str],
+        scene_name: str | None = None,
         force: bool = False,
         context: Context | None = None,
         absence: bool = False,
@@ -1211,10 +1269,19 @@ class HaloRoomEngine:
                 # Only the first actual command of this absence opens a window.
                 self._absence_off_started_at = dt_util.utcnow().timestamp()
                 self._absence_off_handled = True
+            action = "turn_on" if turn_on else "turn_off"
+            async_record_command(
+                self.hass,
+                own_context,
+                entity_id,
+                "adjust" if turn_on and state.state == "on" else action,
+                reason[entity_id] if isinstance(reason, dict) else reason,
+                scene_name=scene_name,
+            )
             try:
                 await self.hass.services.async_call(
                     "light",
-                    "turn_on" if turn_on else "turn_off",
+                    action,
                     data,
                     blocking=True,
                     context=own_context,
@@ -1265,7 +1332,11 @@ class HaloRoomEngine:
                         self._runtime["manual_scene_id"] = scene["id"]
                 else:
                     await self._apply(
-                        self._ambience(), "turn_on", force=True, context=context
+                        self._ambience(),
+                        "turn_on",
+                        force=True,
+                        context=context,
+                        reason="manual",
                     )
             except HomeAssistantError as error:
                 self._last_error = str(error)
@@ -1280,7 +1351,7 @@ class HaloRoomEngine:
         async with self._lock:
             self._require_no_editor()
             self._pause(block_nightlight=True)
-            await self._all_off(context)
+            await self._all_off(context, reason="manual")
             await self._evaluate("explicit")
 
     async def async_activate_scene(
@@ -1436,13 +1507,15 @@ class HaloRoomEngine:
             if set(lights) - set(self.room["lights"]):
                 raise ValueError("light_not_in_room")
             self._edit["until"] = dt_util.utcnow().timestamp() + _EDIT_TTL
-            await self._apply(lights, None, force=True)
+            await self._apply(lights, None, force=True, reason="preview")
             self._schedule(dt_util.utcnow().timestamp())
             self.manager.async_notify()
 
     async def _restore_edit(self) -> None:
         if self._edit:
-            await self._apply(self._edit["snapshot"], None, force=True)
+            await self._apply(
+                self._edit["snapshot"], None, force=True, reason="restore"
+            )
             self._last_commands.clear()
 
     async def async_commit_edit(
