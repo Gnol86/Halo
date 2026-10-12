@@ -269,6 +269,7 @@ class HaloRoomEngine:
         """Cancel every listener and deadline; no light commands during unload."""
         self._stopped = True
         self._generation += 1
+        self._expected.clear()
         self._scene_feedback.clear()
         self._cancel_presence_return()
         self._presence_returned_at = None
@@ -288,6 +289,7 @@ class HaloRoomEngine:
         if self._stopped:
             return
         self._generation += 1
+        self._expected.clear()
         self._scene_feedback.clear()
         self._failed_scenes.clear()
         self._scene_errors.clear()
@@ -367,6 +369,7 @@ class HaloRoomEngine:
             ):
                 trigger = "availability"
                 self._last_commands.pop(entity_id, None)
+                self._expected.pop(entity_id, None)
             elif old.state != new.state or any(
                 old.attributes.get(key) != new.attributes.get(key)
                 for key in _LIGHT_ATTRIBUTES
@@ -433,6 +436,7 @@ class HaloRoomEngine:
             trigger = "condition"
         if trigger == "manual" and not self._edit:
             self._generation += 1
+            self._expected.clear()
             self._scene_feedback.clear()
             self._cancel_presence_return()
         self.hass.async_create_task(self._async_wakeup(trigger))
@@ -493,9 +497,13 @@ class HaloRoomEngine:
         if not new.context.parent_id and self._scene_feedback.get(entity_id, 0) > now:
             return True
         expected = self._expected.get(entity_id)
-        if not expected or expected["until"] < now or not old:
+        if not expected or expected["until"] <= now or not old:
             return False
         target = expected["target"]
+        # Providers may report the target before an intermediate physical value.
+        # Always compare with the immutable departure values of this command,
+        # never with the last report (which may already be the target).
+        start = expected["start"]
         fading_off = target["state"] == "off" and old.state == new.state == "on"
         if new.state != target["state"] and not fading_off:
             return False
@@ -532,7 +540,7 @@ class HaloRoomEngine:
                 continue
             if key == "brightness" and "brightness_pct" in target:
                 value = number(new.attributes.get(key))
-                previous = number(old.attributes.get(key))
+                previous = number(start.get(key))
                 goal = target["brightness_pct"] * 255 / 100
                 # Off lamps commonly expose None. With no starting value,
                 # accept only feedback matching the commanded target.
@@ -549,7 +557,7 @@ class HaloRoomEngine:
                     if value != goal:
                         return False
                 elif isinstance(goal, (int, float)):
-                    previous = number(old.attributes.get(key))
+                    previous = number(start.get(key))
                     value = number(value)
                     if previous is None:
                         previous = goal
@@ -567,13 +575,18 @@ class HaloRoomEngine:
                     if not min(previous, goal) - 1 <= value <= max(previous, goal) + 1:
                         return False
                 else:
-                    previous = old.attributes.get(key)
+                    previous = start.get(key)
                     if previous is None:
                         previous = goal
                     if not value or not previous or len(value) != len(goal):
                         return False
+                    # XY coordinates are normalized: a whole-unit tolerance
+                    # would swallow virtually any physical color adjustment.
+                    tolerance = 0.001 if key == "xy_color" else 1
                     if any(
-                        not min(start, end) - 1 <= current <= max(start, end) + 1
+                        not min(start, end) - tolerance
+                        <= current
+                        <= max(start, end) + tolerance
                         for start, end, current in zip(
                             previous, goal, value, strict=True
                         )
@@ -595,6 +608,7 @@ class HaloRoomEngine:
             await self._evaluate(trigger)
 
     def _pause(self, *, block_nightlight: bool = False) -> None:
+        self._expected.clear()
         self._scene_feedback.clear()
         self._cancel_presence_return()
         self._nightlight_mode = False
@@ -1249,11 +1263,20 @@ class HaloRoomEngine:
                 parent_id=context.id if context else None,
                 user_id=context.user_id if context else None,
             )
-            until = dt_util.utcnow().timestamp() + (data.get("transition") or 0) + 5
-            self._own_contexts[own_context.id] = max(
-                until, dt_util.utcnow().timestamp() + 60
-            )
-            self._expected[entity_id] = {"target": target, "until": until}
+            now = dt_util.utcnow().timestamp()
+            until = now + (data.get("transition") or 0) + 5
+            self._own_contexts[own_context.id] = max(until, now + 60)
+            self._expected[entity_id] = {
+                "target": target,
+                # Only an actual, supported transition admits intermediate
+                # values. Immediate commands retain target-only tolerance.
+                "start": deepcopy(
+                    {key: state.attributes.get(key) for key in _LIGHT_ATTRIBUTES}
+                )
+                if data.get("transition")
+                else {},
+                "until": until,
+            }
             if (
                 absence
                 and not turn_on
@@ -1289,6 +1312,7 @@ class HaloRoomEngine:
             except HomeAssistantError as error:
                 self._lamp_errors[entity_id] = str(error)
                 self._last_commands.pop(entity_id, None)
+                self._expected.pop(entity_id, None)
                 _LOGGER.warning("Halo could not command %s: %s", entity_id, error)
             else:
                 self._last_commands[entity_id] = target

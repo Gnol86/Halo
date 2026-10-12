@@ -615,8 +615,10 @@ async def test_native_editor_cancel_and_expiry_restore_effect_exact_rgbww(
 
 def test_effect_transition_feedback_and_manual_effect_change(room_engine):
     engine, _, _, _ = room_engine
+    initial = {"brightness": 128, "effect": "off", "rgbw_color": [10, 20, 30, 40]}
     engine._expected["light.one"] = {
         "until": dt_util.utcnow().timestamp() + 60,
+        "start": initial,
         "target": {
             "state": "on",
             "brightness": 180,
@@ -624,7 +626,6 @@ def test_effect_transition_feedback_and_manual_effect_change(room_engine):
             "rgbw_color": [50, 60, 70, 80],
         },
     }
-    initial = {"brightness": 128, "effect": "off", "rgbw_color": [10, 20, 30, 40]}
     old = State("light.one", "on", initial)
     feedback = State(
         "light.one",
@@ -645,6 +646,7 @@ def test_white_transition_feedback_is_not_a_manual_override(room_engine):
     engine, _, _, _ = room_engine
     engine._expected["light.one"] = {
         "until": dt_util.utcnow().timestamp() + 60,
+        "start": {"brightness": 128},
         "target": {"state": "on", "white": 180},
     }
     old = State(
@@ -660,6 +662,7 @@ def test_effect_can_clear_native_colors_without_manual_override(room_engine):
     engine, _, _, _ = room_engine
     engine._expected["light.one"] = {
         "until": dt_util.utcnow().timestamp() + 60,
+        "start": {"effect": "off", "rgb_color": [255, 0, 0]},
         "target": {"state": "on", "effect": "candle"},
     }
     old = State(
