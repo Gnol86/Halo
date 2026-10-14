@@ -21,7 +21,7 @@ from homeassistant.helpers.event import (
 )
 from homeassistant.util import dt as dt_util
 
-from .activity import async_record_command
+from .activity import async_record_command, async_record_manual_pause
 from .conditions import UNAVAILABLE, condition_entities, evaluate_condition, number
 from .external_scenes import composition
 from .lighting import fallback_permission, solar_elevation
@@ -439,7 +439,9 @@ class HaloRoomEngine:
             self._expected.clear()
             self._scene_feedback.clear()
             self._cancel_presence_return()
-        self.hass.async_create_task(self._async_wakeup(trigger))
+        self.hass.async_create_task(
+            self._async_wakeup(trigger, event if trigger == "manual" else None)
+        )
 
     def _presence_value(self, state: State | None) -> bool | None:
         if state is None or state.state in UNAVAILABLE:
@@ -497,14 +499,24 @@ class HaloRoomEngine:
         if not new.context.parent_id and self._scene_feedback.get(entity_id, 0) > now:
             return True
         expected = self._expected.get(entity_id)
-        if not expected or expected["until"] <= now or not old:
+        if not expected or not old:
+            return False
+        transitioning = expected["until"] > now
+        # Late provider reports may still round the last requested target.
+        # Keep that narrow tolerance after the transition, without extending
+        # its intermediate-value range or hiding a new physical on/off action.
+        if not transitioning and old.state != new.state:
             return False
         target = expected["target"]
         # Providers may report the target before an intermediate physical value.
         # Always compare with the immutable departure values of this command,
         # never with the last report (which may already be the target).
-        start = expected["start"]
-        fading_off = target["state"] == "off" and old.state == new.state == "on"
+        start = expected["start"] if transitioning else {}
+        fading_off = (
+            transitioning
+            and target["state"] == "off"
+            and old.state == new.state == "on"
+        )
         if new.state != target["state"] and not fading_off:
             return False
         if fading_off:
@@ -596,7 +608,9 @@ class HaloRoomEngine:
                 return False
         return True
 
-    async def _async_wakeup(self, trigger: str) -> None:
+    async def _async_wakeup(
+        self, trigger: str, manual_event: Event | None = None
+    ) -> None:
         if self._stopped:
             return
         async with self._lock:
@@ -605,6 +619,13 @@ class HaloRoomEngine:
             if trigger == "manual" and not self._edit:
                 self._pause(block_nightlight=not self.is_on)
                 self._last_commands.clear()
+                if manual_event is not None:
+                    async_record_manual_pause(
+                        self.hass,
+                        manual_event.data["old_state"],
+                        manual_event.data["new_state"],
+                        _LIGHT_ATTRIBUTES,
+                    )
             await self._evaluate(trigger)
 
     def _pause(self, *, block_nightlight: bool = False) -> None:

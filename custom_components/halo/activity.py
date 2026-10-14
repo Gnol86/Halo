@@ -4,7 +4,7 @@ from collections.abc import Collection
 from typing import Any
 
 from homeassistant.const import EVENT_LOGBOOK_ENTRY
-from homeassistant.core import Context, HomeAssistant, callback
+from homeassistant.core import Context, HomeAssistant, State, callback
 
 from .const import EVENT_LIGHT_COMMAND, NAME
 
@@ -50,6 +50,51 @@ _FR = {
     "preview": "aperçu pendant l'édition réelle",
     "restore": "restauration des lampes après édition",
 }
+
+
+@callback
+def async_record_manual_pause(
+    hass: HomeAssistant, old: State, new: State, attributes: Collection[str]
+) -> None:
+    """Keep the observed values and origin in the lamp's native Activity.
+
+    An unidentified device report is evidence of a state change, not proof
+    that a person touched the lamp.
+    """
+    french = hass.config.language.lower().replace("_", "-").split("-", 1)[0] == "fr"
+    origin = (
+        ("commande utilisateur identifiée" if french else "identified user command")
+        if new.context.user_id
+        else (
+            "commande externe identifiée" if french else "identified external command"
+        )
+        if new.context.parent_id
+        else ("origine non identifiée" if french else "unidentified origin")
+    )
+    changes = {"state": (old.state, new.state)}
+    changes.update(
+        (key, (old.attributes.get(key), new.attributes.get(key))) for key in attributes
+    )
+    detail = "; ".join(
+        f"{key}: {before} → {after}"
+        for key, (before, after) in changes.items()
+        if before != after
+    )
+    name = new.attributes.get("friendly_name", new.entity_id)
+    message = (
+        f"{NAME} : pause de la pièce après changement observé sur {name}"
+        if french
+        else f"{NAME}: room paused after an observed change on {name}"
+    )
+    hass.bus.async_fire(
+        EVENT_LOGBOOK_ENTRY,
+        {
+            "name": NAME,
+            "message": f"{message} ({origin}) — {detail}",
+            "entity_id": new.entity_id,
+        },
+        context=new.context,
+    )
 
 
 @callback

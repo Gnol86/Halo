@@ -2,7 +2,8 @@
 
 import pytest
 from homeassistant.components.light import LightEntityFeature
-from homeassistant.core import Context
+from homeassistant.const import EVENT_LOGBOOK_ENTRY
+from homeassistant.core import Context, State
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.util import color
 from test_engine import advance, enable, natural_profile, scene
@@ -168,7 +169,7 @@ async def test_missing_previous_value_does_not_accept_unrelated_feedback(
     assert engine.status["pause_until"] is not None
 
 
-@pytest.mark.parametrize("elapsed,kelvin", [(1, 4500), (6, 4001)])
+@pytest.mark.parametrize("elapsed,kelvin", [(1, 4500), (6, 4500)])
 async def test_white_override_or_late_feedback_still_pauses(
     hass, freezer, room_engine, elapsed, kelvin
 ):
@@ -184,6 +185,134 @@ async def test_white_override_or_late_feedback_still_pauses(
     )
     await hass.async_block_till_done()
     assert engine.status["pause_until"] is not None
+
+
+@pytest.mark.parametrize("elapsed", [66, 145, 600])
+@pytest.mark.parametrize(
+    "target,feedback",
+    [
+        ({"brightness_pct": 50.777784173125}, {"brightness": 130}),
+        ({"color_temp_kelvin": 4000}, {"color_temp_kelvin": 4001}),
+    ],
+)
+async def test_late_rounding_at_last_target_does_not_pause(
+    hass, freezer, room_engine, elapsed, target, feedback
+):
+    engine, _, _, _ = room_engine
+    await reported_transition(
+        hass, room_engine, {"brightness": 220, "color_temp_kelvin": 3000}, target
+    )
+    await advance(hass, freezer, elapsed)
+    old = hass.states.get("light.one")
+    hass.states.async_set(old.entity_id, "on", {**old.attributes, **feedback})
+    await hass.async_block_till_done()
+    assert engine.status["pause_until"] is None
+
+
+async def test_captured_hue_settling_after_148_seconds_does_not_pause(
+    hass, freezer, room_engine
+):
+    """Replay the October 14 capture: 127, then 128, then 127 after expiry."""
+    engine, _, _, _ = room_engine
+    await reported_transition(
+        hass,
+        room_engine,
+        {"brightness": 129, "color_temp_kelvin": 2000},
+        {"brightness_pct": 49.663491413125, "color_temp_kelvin": 2000},
+    )
+    entries = []
+    unsubscribe = hass.bus.async_listen(EVENT_LOGBOOK_ENTRY, entries.append)
+    try:
+        for delay, brightness in ((22.817, 128), (125.098, 127)):
+            await advance(hass, freezer, delay)
+            old = hass.states.get("light.one")
+            hass.states.async_set(
+                old.entity_id, "on", {**old.attributes, "brightness": brightness}
+            )
+            await hass.async_block_till_done()
+            assert engine.status["pause_until"] is None
+        assert not entries
+    finally:
+        unsubscribe()
+
+
+@pytest.mark.parametrize("origin", ["user", "automation"])
+async def test_identified_small_change_after_transition_still_pauses(
+    hass, freezer, room_engine, origin
+):
+    engine, _, _, _ = room_engine
+    await reported_transition(
+        hass, room_engine, {"brightness": 220}, {"brightness_pct": 50.777784173125}
+    )
+    await advance(hass, freezer, 145)
+    old = hass.states.get("light.one")
+    context = (
+        Context(user_id="user")
+        if origin == "user"
+        else Context(parent_id="other-automation")
+    )
+    hass.states.async_set(
+        old.entity_id, "on", {**old.attributes, "brightness": 130}, context=context
+    )
+    await hass.async_block_till_done()
+    assert engine.status["pause_until"] is not None
+
+
+async def test_late_rounding_stays_anchored_to_command_not_successive_reports(
+    hass, freezer, room_engine
+):
+    engine, _, _, _ = room_engine
+    await reported_transition(
+        hass, room_engine, {"brightness": 220}, {"brightness_pct": 50.777784173125}
+    )
+    await advance(hass, freezer, 145)
+    for brightness in (130, 131, 132):
+        old = hass.states.get("light.one")
+        hass.states.async_set(
+            old.entity_id, "on", {**old.attributes, "brightness": brightness}
+        )
+        await hass.async_block_till_done()
+        assert (engine.status["pause_until"] is not None) is (brightness == 132)
+
+
+async def test_late_rounding_does_not_block_short_absence_return(
+    hass, freezer, room_engine
+):
+    engine, _, room, _ = room_engine
+    room.update(absence_delay=0, lux_off=True)
+    room["base"] = {"light.one": {"state": "on", "brightness_pct": 50.777784173125}}
+    await enable(hass, engine)
+    hass.states.async_set("binary_sensor.presence", "on")
+    await hass.async_block_till_done()
+    await advance(hass, freezer, 145)
+    old = hass.states.get("light.one")
+    hass.states.async_set(old.entity_id, "on", {**old.attributes, "brightness": 130})
+    await hass.async_block_till_done()
+    hass.states.async_set("binary_sensor.presence", "off")
+    await hass.async_block_till_done()
+    assert not engine.is_on
+    await advance(hass, freezer, 24)
+    hass.states.async_set("binary_sensor.presence", "on")
+    await hass.async_block_till_done()
+    assert engine.status["pause_until"] is None
+    assert engine.is_on
+
+
+@pytest.mark.parametrize("power", ["on", "off"])
+async def test_expired_target_cannot_hide_a_new_power_change(
+    hass, freezer, room_engine, power
+):
+    engine, _, _, _ = room_engine
+    await reported_transition(
+        hass, room_engine, {"brightness": 220}, {"brightness": 180}
+    )
+    if power == "off":
+        await engine._apply({"light.one": {"state": "off"}}, None, reason="absence")
+    await advance(hass, freezer, 145)
+    attrs = dict(hass.states.get("light.one").attributes)
+    old = State("light.one", "off" if power == "on" else "on", attrs)
+    new = State("light.one", power, attrs, context=Context())
+    assert not engine._own_change("light.one", old, new)
 
 
 async def reported_transition(hass, room_engine, start, target, duration=60):

@@ -49,6 +49,57 @@ def humanify(hass, events):
     return processor.humanify(iter(async_event_to_row(event) for event in events))
 
 
+@pytest.mark.parametrize("language", ["en", "fr-BE"])
+@pytest.mark.parametrize("origin", ["user", "automation", "unidentified"])
+async def test_manual_pause_records_observed_values_and_actual_origin(
+    hass, room_engine, activity, language, origin
+):
+    hass.config.language = language
+    engine, _, _, _ = room_engine
+    await enable(hass, engine)
+    hass.states.async_set("binary_sensor.presence", "on")
+    await hass.async_block_till_done()
+    activity.clear()
+    old = hass.states.get("light.one")
+    context = (
+        Context(user_id="user")
+        if origin == "user"
+        else Context(parent_id="external")
+        if origin == "automation"
+        else Context()
+    )
+    hass.states.async_set(
+        old.entity_id,
+        "on",
+        {**old.attributes, "friendly_name": "Ma lampe", "brightness": 42},
+        context=context,
+    )
+    await hass.async_block_till_done()
+    assert engine.status["pause_until"] is not None
+    entries = [event for event in activity if event.event_type == EVENT_LOGBOOK_ENTRY]
+    assert len(entries) == 1
+    assert entries[0].context is context
+    assert entries[0].data["entity_id"] == "light.one"
+    message = entries[0].data["message"]
+    assert "Ma lampe" in message
+    assert "brightness: 128 → 42" in message
+    if language == "fr-BE":
+        assert "pause de la pièce" in message
+        assert {
+            "user": "commande utilisateur identifiée",
+            "automation": "commande externe identifiée",
+            "unidentified": "origine non identifiée",
+        }[origin] in message
+    else:
+        assert "room paused" in message
+        assert {
+            "user": "identified user command",
+            "automation": "identified external command",
+            "unidentified": "unidentified origin",
+        }[origin] in message
+    assert any(row.get("message") == message for row in humanify(hass, activity))
+
+
 @pytest.mark.parametrize(
     "language,label",
     [
