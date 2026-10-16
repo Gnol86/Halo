@@ -489,6 +489,11 @@ class HaloRoomEngine:
             new.context.id in self._own_contexts
             or new.context.parent_id in self._own_contexts
         ):
+            for member_id, member in (
+                self._expected.get(entity_id, {}).get("members", {}).items()
+            ):
+                if state := self._available_state(member_id):
+                    member["observed"] = state
             return True
         # Identified interventions win over the fallback for devices dropping
         # context; the parent of one of our own commands was checked above.
@@ -501,6 +506,114 @@ class HaloRoomEngine:
         expected = self._expected.get(entity_id)
         if not expected or not old:
             return False
+        if (group_change := self._group_feedback(old, new, expected, now)) is not None:
+            return group_change
+        return self._matches_expected_feedback(old, new, expected, now)
+
+    def _group_feedback(
+        self, old: State, new: State, expected: dict[str, Any], now: float
+    ) -> bool | None:
+        """Check Hue's separate member reports before trusting its aggregate."""
+        members = expected.get("members")
+        member_ids = new.attributes.get("entity_id")
+        if (
+            not members
+            or not new.attributes.get("is_hue_group")
+            or not isinstance(member_ids, (list, tuple))
+            or set(member_ids) != set(members)
+        ):
+            return None
+        observed = {
+            entity_id: self._available_state(entity_id) for entity_id in members
+        }
+        if any(state is None for state in observed.values()):
+            return None
+        changed = False
+        for entity_id, member in members.items():
+            before, after = member["observed"], observed[entity_id]
+            if before.state == after.state and all(
+                before.attributes.get(key) == after.attributes.get(key)
+                for key in _LIGHT_ATTRIBUTES
+            ):
+                continue
+            changed = True
+            own_context = (
+                after.context.id in self._own_contexts
+                or after.context.parent_id in self._own_contexts
+            )
+            if own_context:
+                continue
+            if after.context.user_id or after.context.parent_id:
+                return False
+            # A pending off command can finish after its nominal transition.
+            # Once observed, a later on/off cycle is checked against that off
+            # snapshot, so a new physical turn-on is never accepted here.
+            completion = member["target"]["state"] == after.state == "off"
+            if not self._matches_expected_feedback(
+                before,
+                after,
+                {**member, "until": now + 1} if completion else member,
+                now,
+            ):
+                return False
+        all_off = all(state.state == "off" for state in observed.values())
+        if expected["target"]["state"] == "off" and all_off:
+            # Hue updates member-derived colors before grouped_light.on. With
+            # no on members its mode falls back to xy, clearing Kelvin while
+            # the group still says on. This is confirmed completion, not a
+            # longer interval in which arbitrary color changes are ignored.
+            accepted = new.state == "off" or old.state == new.state == "on"
+        elif changed and new.state == "on":
+            active = [state for state in observed.values() if state.state == "on"]
+            aggregate: dict[str, Any] = {"state": "on"}
+            brightness = [
+                value
+                for state in active
+                if (value := number(state.attributes.get("brightness"))) is not None
+            ]
+            if brightness:
+                aggregate["brightness"] = sum(brightness) / len(brightness)
+            mode = new.attributes.get("color_mode")
+            if mode == "color_temp":
+                temperatures = [
+                    value
+                    for state in active
+                    if state.attributes.get("color_mode") == "color_temp"
+                    and (value := number(state.attributes.get("color_temp_kelvin")))
+                    is not None
+                ]
+                if temperatures:
+                    aggregate["color_temp_kelvin"] = sum(temperatures) / len(
+                        temperatures
+                    )
+            elif mode == "xy":
+                colors = [
+                    state.attributes["xy_color"]
+                    for state in active
+                    if state.attributes.get("xy_color") is not None
+                ]
+                if colors:
+                    aggregate["xy_color"] = [
+                        sum(values) / len(values)
+                        for values in zip(*colors, strict=True)
+                    ]
+            # Unchanged bulbs can still report the old target. Compare the
+            # group with the current member average, not the final room target.
+            accepted = self._matches_expected_feedback(
+                old, new, {"target": aggregate, "start": {}, "until": now + 1}, now
+            )
+        else:
+            return None
+        if accepted:
+            for entity_id, member in members.items():
+                member["observed"] = observed[entity_id]
+        return accepted
+
+    @staticmethod
+    def _matches_expected_feedback(
+        old: State, new: State, expected: dict[str, Any], now: float
+    ) -> bool:
+        """Match command feedback without changing its departure or target."""
         transitioning = expected["until"] > now
         # Late provider reports may still round the last requested target.
         # Keep that narrow tolerance after the transition, without extending
@@ -1298,6 +1411,34 @@ class HaloRoomEngine:
                 else {},
                 "until": until,
             }
+            member_ids = state.attributes.get("entity_id")
+            if state.attributes.get("is_hue_group") and isinstance(
+                member_ids, (list, tuple)
+            ):
+                members = {}
+                for member_id in member_ids:
+                    member = self._available_state(member_id)
+                    if not member or member_id == entity_id:
+                        members = {}
+                        break
+                    members[member_id] = {
+                        "observed": member,
+                        "target": {
+                            "state": target["state"],
+                            **(lamp_parameters(member, params) if turn_on else {}),
+                        },
+                        "start": deepcopy(
+                            {
+                                key: member.attributes.get(key)
+                                for key in _LIGHT_ATTRIBUTES
+                            }
+                        )
+                        if data.get("transition")
+                        else {},
+                        "until": until,
+                    }
+                if members:
+                    self._expected[entity_id]["members"] = members
             if (
                 absence
                 and not turn_on
