@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 from homeassistant.components.light import LightEntityFeature
-from homeassistant.core import Context, HomeAssistant, State
+from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
@@ -28,9 +28,7 @@ async def room_engine(hass: HomeAssistant):
         "lux_hysteresis": 20,
         "lux_off": False,
         "absence_delay": 120,
-        "manual_pause": 900,
         "lux_off_delay": 30,
-        "allow_off_during_pause": True,
         "automation_enabled": False,
         "natural_enabled": True,
         "base": {},
@@ -155,7 +153,7 @@ async def test_presence_absence_cancellation_and_timeout(hass, freezer, room_eng
     hass.states.async_set("binary_sensor.presence", "on")
     await hass.async_block_till_done()
     assert engine.is_on
-    assert engine.status["pause_until"] is None
+    assert "pause_until" not in engine.status
     assert len(calls) == 2
     hass.states.async_set("binary_sensor.presence", "off")
     await hass.async_block_till_done()
@@ -193,82 +191,6 @@ async def test_lux_drop_hysteresis_and_event_transition(hass, room_engine):
     hass.states.async_set("sensor.lux", "110")
     await hass.async_block_till_done()
     assert engine.status["dark"] is False
-
-
-@pytest.mark.parametrize("allow", [False, True])
-async def test_manual_pause_absence_policy_and_return(
-    hass, freezer, room_engine, allow
-):
-    engine, _, room, _ = room_engine
-    room["allow_off_during_pause"] = allow
-    hass.states.async_set("binary_sensor.presence", "on")
-    await hass.async_block_till_done()
-    await enable(hass, engine)
-    await engine.async_turn_on()
-    assert engine.status["pause_until"]
-    hass.states.async_set("binary_sensor.presence", "off")
-    await hass.async_block_till_done()
-    await advance(hass, freezer, 121)
-    assert engine.is_on is not allow
-    assert engine.status["pause_until"]
-    hass.states.async_set("binary_sensor.presence", "on")
-    await hass.async_block_till_done()
-    assert engine.status["pause_until"] is None
-    assert engine.is_on
-
-
-@pytest.mark.parametrize("allow", [False, True])
-async def test_manual_pause_high_lux_policy(hass, freezer, room_engine, allow):
-    engine, _, room, _ = room_engine
-    room.update(lux_off=True, allow_off_during_pause=allow)
-    hass.states.async_set("binary_sensor.presence", "on")
-    await hass.async_block_till_done()
-    await enable(hass, engine)
-    await engine.async_turn_on()
-    hass.states.async_set("sensor.lux", "200")
-    await hass.async_block_till_done()
-    await advance(hass, freezer, 29)
-    assert engine.is_on
-    await advance(hass, freezer, 2)
-    assert engine.is_on is not allow
-
-
-async def test_manual_off_holds_and_survives_restart(hass, freezer, room_engine):
-    engine, manager, _, _ = room_engine
-    hass.states.async_set("binary_sensor.presence", "on")
-    await hass.async_block_till_done()
-    await enable(hass, engine)
-    await engine.async_turn_off()
-    assert not engine.is_on
-    deadline = engine.status["pause_until"]
-    await engine.async_stop()
-    replacement = HaloRoomEngine(hass, manager, "living")
-    await replacement.async_start()
-    assert replacement.status["pause_until"] == deadline
-    assert not replacement.is_on
-    await advance(hass, freezer, 901)
-    assert replacement.is_on
-    assert replacement.status["pause_until"] is None
-    await replacement.async_stop()
-
-
-async def test_manual_color_and_halo_feedback_are_distinct(hass, room_engine):
-    engine, _, _, _ = room_engine
-    hass.states.async_set("binary_sensor.presence", "on")
-    await hass.async_block_till_done()
-    await enable(hass, engine)
-    assert engine.status["pause_until"] is None
-    state = hass.states.get("light.one")
-    hass.states.async_set(
-        "light.one",
-        "on",
-        {**state.attributes, "brightness": 40},
-        context=Context(user_id="test-user"),
-    )
-    await hass.async_block_till_done()
-    assert engine.status["pause_until"]
-    await engine.async_resume()
-    assert engine.status["pause_until"] is None
 
 
 async def test_priority_autonomous_scene_and_natural_exit(hass, room_engine):
@@ -313,7 +235,7 @@ async def test_scene_without_power_permission_waits_for_presence(hass, room_engi
     assert hass.states.get("light.two").state == "off"
     await engine.async_set_mode("automation", False)
     await engine.async_activate_scene("cinema")
-    assert engine.status["pause_until"]
+    assert "pause_until" not in engine.status
     assert room["automation_enabled"] is False
 
 
@@ -363,7 +285,7 @@ async def test_natural_adjusts_only_on_members_and_suspends_without_sun(
     await engine.async_reconfigure()
     await enable(hass, engine)
     await engine.async_turn_on()
-    await engine.async_resume()
+    await engine.async_set_mode("automation", True)
     initial = hass.states.get("light.two")
     # A lamp already off when normal natural updates begin must stay off.
     hass.states.async_set(
@@ -457,7 +379,7 @@ async def test_live_preview_exclusivity_cancel_and_expiry(hass, freezer, room_en
     )
     assert engine.is_on
     assert engine.status["editing"]
-    assert not engine.status["pause_until"]
+    assert "pause_until" not in engine.status
     await engine.async_end_edit(token, save=False)
     assert not engine.is_on
     assert not room["automation_enabled"]
@@ -502,7 +424,7 @@ async def test_profile_edit_and_natural_toggle_keep_off_lamps_off(hass, room_eng
     state = hass.states.get("light.one")
     hass.states.async_set("light.one", "on", state.attributes)
     await hass.async_block_till_done()
-    await engine.async_resume()
+    await engine.async_set_mode("automation", True)
     # Establish a mixed room without an intervention currently holding automation.
     state = hass.states.get("light.two")
     hass.states.async_set(
@@ -613,78 +535,6 @@ async def test_native_editor_cancel_and_expiry_restore_effect_exact_rgbww(
     assert other[0].data == {"entity_id": "light.two"}
 
 
-def test_effect_transition_feedback_and_manual_effect_change(room_engine):
-    engine, _, _, _ = room_engine
-    initial = {"brightness": 128, "effect": "off", "rgbw_color": [10, 20, 30, 40]}
-    engine._expected["light.one"] = {
-        "until": dt_util.utcnow().timestamp() + 60,
-        "start": initial,
-        "target": {
-            "state": "on",
-            "brightness": 180,
-            "effect": "candle",
-            "rgbw_color": [50, 60, 70, 80],
-        },
-    }
-    old = State("light.one", "on", initial)
-    feedback = State(
-        "light.one",
-        "on",
-        {
-            **initial,
-            "brightness": 150,
-            "effect": "candle",
-            "rgbw_color": [30, 40, 50, 60],
-        },
-    )
-    assert engine._own_change("light.one", old, feedback)
-    different = State("light.one", "on", {**feedback.attributes, "effect": "colorloop"})
-    assert not engine._own_change("light.one", feedback, different)
-
-
-def test_white_transition_feedback_is_not_a_manual_override(room_engine):
-    engine, _, _, _ = room_engine
-    engine._expected["light.one"] = {
-        "until": dt_util.utcnow().timestamp() + 60,
-        "start": {"brightness": 128},
-        "target": {"state": "on", "white": 180},
-    }
-    old = State(
-        "light.one",
-        "on",
-        {"brightness": 128, "color_mode": "rgb", "rgb_color": [255, 0, 0]},
-    )
-    feedback = State("light.one", "on", {"brightness": 150, "color_mode": "white"})
-    assert engine._own_change("light.one", old, feedback)
-
-
-def test_effect_can_clear_native_colors_without_manual_override(room_engine):
-    engine, _, _, _ = room_engine
-    engine._expected["light.one"] = {
-        "until": dt_util.utcnow().timestamp() + 60,
-        "start": {"effect": "off", "rgb_color": [255, 0, 0]},
-        "target": {"state": "on", "effect": "candle"},
-    }
-    old = State(
-        "light.one",
-        "on",
-        {"effect": "off", "color_mode": "rgb", "rgb_color": [255, 0, 0]},
-    )
-    feedback = State("light.one", "on", {"effect": "candle", "color_mode": "onoff"})
-    assert engine._own_change("light.one", old, feedback)
-
-
-async def test_manual_effect_change_starts_room_pause(hass, room_engine):
-    engine, _, _, _ = room_engine
-    state = hass.states.get("light.one")
-    await enable(hass, engine)
-    hass.states.async_set(
-        "light.one", state.state, {**state.attributes, "effect": "candle"}
-    )
-    await hass.async_block_till_done()
-    assert engine.status["pause_until"] is not None
-
-
 def test_natural_values_replace_native_base_brightness_and_white_mode(room_engine):
     engine, manager, room, _ = room_engine
     room["base"] = {
@@ -762,11 +612,11 @@ async def test_transition_feedback_without_context_and_real_override(hass, room_
         },
     )
     await hass.async_block_till_done()
-    assert engine.status["pause_until"] is None
+    assert "pause_until" not in engine.status
     state = hass.states.get("light.one")
     hass.states.async_set("light.one", "on", {**state.attributes, "brightness": 40})
     await hass.async_block_till_done()
-    assert engine.status["pause_until"]
+    assert "pause_until" not in engine.status
 
 
 async def test_stop_during_command_prevents_remaining_members_and_safe_room_removal(
@@ -836,22 +686,6 @@ async def test_failed_preview_commit_preserves_editor_for_retry(
     await engine.async_preview(token, {"light.one": {"state": "on"}})
     await engine.async_end_edit(token, save=False)
     assert not engine.status["editing"]
-
-
-async def test_explicit_scene_status_tracks_actual_manual_scene_until_resume(
-    hass, room_engine
-):
-    engine, _, room, _ = room_engine
-    room["scenes"] = [scene("conditional"), scene("explicit")]
-    room["scenes"][1]["conditions"] = None
-    await engine.async_reconfigure()
-    hass.states.async_set("media_player.tv", "on")
-    await hass.async_block_till_done()
-    await engine.async_activate_scene("explicit")
-    assert engine.status["scene_id"] == "explicit"
-    assert engine.status["pause_until"]
-    await engine.async_resume()
-    assert engine.status["scene_id"] == "conditional"
 
 
 async def test_unknown_presence_does_not_count_as_absence(hass, freezer, room_engine):
@@ -944,52 +778,6 @@ async def test_lighting_status_sensor_failure_is_not_lamp_unavailability(
     assert engine.lighting_status == {"mode": "manual", "scene_id": None}
 
 
-async def test_lighting_status_keeps_explicit_scene_after_restart(hass, room_engine):
-    """An explicit scene remains identified during its persisted manual hold."""
-    engine, manager, room, _ = room_engine
-    room["scenes"] = [scene("explicit")]
-    room["scenes"][0]["lights"]["light.one"]["effect"] = "candle"
-    state = hass.states.get("light.one")
-    hass.states.async_set(
-        "light.one",
-        "off",
-        {
-            **state.attributes,
-            "supported_features": LightEntityFeature.EFFECT,
-            "effect_list": ["candle", "off"],
-        },
-    )
-    await engine.async_reconfigure()
-    await engine.async_activate_scene("explicit")
-    await hass.async_block_till_done()
-    assert hass.states.get("light.one").attributes["effect"] == "candle"
-    assert engine.lighting_status == {"mode": "scene", "scene_id": "explicit"}
-    deadline = engine.status["pause_until"]
-
-    await engine.async_stop()
-    replacement = HaloRoomEngine(hass, manager, "living")
-    await replacement.async_start()
-    try:
-        assert replacement.status["pause_until"] == deadline
-        assert replacement.lighting_status == {
-            "mode": "scene",
-            "scene_id": "explicit",
-        }
-        state = hass.states.get("light.one")
-        hass.states.async_set(
-            "light.one",
-            "on",
-            {**state.attributes, "effect": "off"},
-            context=Context(user_id="test-user"),
-        )
-        await hass.async_block_till_done()
-        assert replacement.lighting_status == {"mode": "manual", "scene_id": None}
-        await replacement.async_turn_off()
-        assert replacement.lighting_status == {"mode": "off", "scene_id": None}
-    finally:
-        await replacement.async_stop()
-
-
 async def test_lighting_status_does_not_report_scene_during_edit(hass, room_engine):
     """Preview changes no longer describe the explicitly launched scene."""
     engine, _, room, _ = room_engine
@@ -1003,24 +791,116 @@ async def test_lighting_status_does_not_report_scene_during_edit(hass, room_engi
     assert engine.lighting_status == {"mode": "scene", "scene_id": "cinema"}
 
 
-@pytest.mark.parametrize("automation_enabled", [False, True])
-async def test_lighting_status_zero_pause_does_not_keep_manual_scene(
-    hass, room_engine, automation_enabled
+async def test_explicit_on_is_not_erased_in_its_own_call(hass, room_engine):
+    """An absent room accepts the command, then follows its normal next tick."""
+    engine, manager, room, calls = room_engine
+    room["absence_delay"] = 0
+    await enable(hass, engine)
+    calls.clear()
+    await engine.async_turn_on()
+    await hass.async_block_till_done()
+    assert engine.is_on
+    assert calls and all(call.service == "turn_on" for call in calls)
+    assert "pause_until" not in manager.runtime_state["living"]
+    calls.clear()
+    await engine._async_wakeup("tick")
+    assert not engine.is_on
+    assert calls and all(call.service == "turn_off" for call in calls)
+
+
+async def test_explicit_off_is_followed_by_next_autonomous_scene_evaluation(
+    hass, room_engine
 ):
-    """A zero-length pause immediately returns to the existing engine policy."""
-    engine, _, room, _ = room_engine
-    room["scenes"] = [scene("conditional"), scene("explicit")]
-    room["scenes"][1]["conditions"] = None
-    room["manual_pause"] = 0
-    room["automation_enabled"] = automation_enabled
-    hass.states.async_set("binary_sensor.presence", "on")
+    engine, _, room, calls = room_engine
+    room["scenes"] = [scene(autonomous=True)]
     hass.states.async_set("media_player.tv", "on")
     await engine.async_reconfigure()
+    await enable(hass, engine)
+    calls.clear()
+    await engine.async_turn_off()
     await hass.async_block_till_done()
+    assert not engine.is_on
+    assert calls and all(call.service == "turn_off" for call in calls)
+    calls.clear()
+    await engine._async_wakeup("tick")
+    assert engine.is_on
+    assert calls and calls[0].service == "turn_on"
+    assert engine.lighting_status == {"mode": "scene", "scene_id": "cinema"}
+
+
+async def test_explicit_scene_is_one_shot_before_conditional_scene_returns(
+    hass, room_engine
+):
+    engine, _, room, calls = room_engine
+    room["scenes"] = [scene("conditional", autonomous=True), scene("explicit")]
+    room["scenes"][1]["conditions"] = None
+    room["scenes"][1]["lights"]["light.one"]["brightness_pct"] = 80
+    hass.states.async_set("media_player.tv", "on")
+    await engine.async_reconfigure()
+    await enable(hass, engine)
     await engine.async_activate_scene("explicit")
-    assert engine.status["pause_until"] is None
-    assert engine.lighting_status == (
-        {"mode": "scene", "scene_id": "conditional"}
-        if automation_enabled
-        else {"mode": "manual", "scene_id": None}
-    )
+    await hass.async_block_till_done()
+    assert hass.states.get("light.one").attributes["brightness"] == 204
+    assert engine.lighting_status == {"mode": "scene", "scene_id": "explicit"}
+    assert "manual_scene_id" not in engine._runtime
+    calls.clear()
+    await engine._async_wakeup("tick")
+    assert hass.states.get("light.one").attributes["brightness"] == 51
+    assert engine.lighting_status == {"mode": "scene", "scene_id": "conditional"}
+    assert calls
+    calls.clear()
+    await engine._async_wakeup("tick")
+    assert not calls
+
+
+async def test_explicit_scene_does_not_deduplicate_away_natural_return(
+    hass, room_engine
+):
+    engine, manager, room, _ = room_engine
+    manager.config["profiles"]["day"] = natural_profile()
+    room["associations"] = [{"profile_id": "day", "lights": room["lights"]}]
+    room["scenes"] = [scene("explicit") | {"conditions": None}]
+    hass.states.async_set("binary_sensor.presence", "on")
+    await engine.async_reconfigure()
+    await enable(hass, engine)
+    assert hass.states.get("light.one").attributes["brightness"] == 153
+    await engine.async_activate_scene("explicit")
+    assert hass.states.get("light.one").attributes["brightness"] == 51
+    await engine._async_wakeup("tick")
+    assert hass.states.get("light.one").attributes["brightness"] == 153
+    assert engine.lighting_status == {"mode": "natural", "scene_id": None}
+
+
+async def test_explicit_off_is_not_a_persisted_hold_after_reload(hass, room_engine):
+    engine, manager, _, _ = room_engine
+    hass.states.async_set("binary_sensor.presence", "on")
+    await hass.async_block_till_done()
+    await enable(hass, engine)
+    await engine.async_turn_off()
+    assert not engine.is_on
+    await engine.async_stop()
+    restored = HaloRoomEngine(hass, manager, "living")
+    try:
+        await restored.async_start()
+        assert restored.is_on
+        assert "pause_until" not in restored.status
+    finally:
+        await restored.async_stop()
+
+
+@pytest.mark.parametrize("action", ["on", "off", "scene"])
+async def test_explicit_commands_preserve_disabled_automation(
+    hass, room_engine, action
+):
+    engine, _, room, _ = room_engine
+    room["scenes"] = [scene("explicit") | {"conditions": None}]
+    if action == "on":
+        await engine.async_turn_on()
+    elif action == "off":
+        await engine.async_turn_off()
+    else:
+        await engine.async_activate_scene("explicit")
+    assert room["automation_enabled"] is False
+    assert "pause_until" not in engine.status
+    await engine._async_wakeup("tick")
+    assert engine.status["reason"] == "disabled"

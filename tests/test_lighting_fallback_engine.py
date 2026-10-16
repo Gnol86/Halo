@@ -386,24 +386,23 @@ async def test_autonomous_scenes_keep_priority_and_regular_scenes_wait(
     assert engine.status["reason"] == "scene"
 
 
-async def test_manual_pause_disabled_and_editor_remain_authoritative(
+async def test_explicit_command_keeps_policy_but_modes_and_editor_suspend(
     hass, freezer, room_engine
 ):
     engine, _, room, calls = room_engine
     await configure(hass, freezer, room_engine, mode="sun", turn_off=True)
-    room["allow_off_during_pause"] = False
     await engine.async_turn_on(Context(user_id="user"))
     assert engine.is_on
     calls.clear()
     await sun(hass, -1)
     await sun(hass, 1)
     await advance(hass, freezer, 30)
-    assert not calls and engine.status["reason"] == "manual_pause"
+    assert calls and engine.status["reason"] == "sun_above_threshold"
     await engine.async_set_mode("automation", False)
     calls.clear()
     await sun(hass, -1)
     assert not calls and engine.status["reason"] == "disabled"
-    await engine.async_resume()
+    await engine.async_set_mode("automation", True)
     token = await engine.async_begin_edit("user")
     calls.clear()
     await sun(hass, 1)
@@ -412,22 +411,21 @@ async def test_manual_pause_disabled_and_editor_remain_authoritative(
     await engine.async_end_edit(token, save=False)
 
 
-async def test_restart_recomputes_permission_and_restores_pause(
+async def test_restart_recomputes_permission_after_explicit_off(
     hass, freezer, room_engine
 ):
     engine, manager, _, calls = room_engine
     await configure(hass, freezer, room_engine, mode="sun")
     await engine.async_turn_off(Context(user_id="user"))
     await sun(hass, -1)
-    pause = engine.status["pause_until"]
     await engine.async_stop()
     restored = HaloRoomEngine(hass, manager, "living")
     calls.clear()
     try:
         await restored.async_start()
         assert restored.status["lighting_allowed"] is True
-        assert restored.status["pause_until"] == pause
-        assert not calls
+        assert "pause_until" not in restored.status
+        assert calls and restored.is_on
     finally:
         await restored.async_stop()
 
@@ -475,7 +473,6 @@ async def test_fallback_change_does_not_interrupt_newer_manual_command(
 ):
     engine, _, room, calls = room_engine
     await configure(hass, freezer, room_engine, mode="sun", turn_off=True)
-    room["allow_off_during_pause"] = False
     entered, finish = asyncio.Event(), asyncio.Event()
 
     async def slow_on(call):
@@ -497,7 +494,7 @@ async def test_fallback_change_does_not_interrupt_newer_manual_command(
     await manual
     await hass.async_block_till_done()
     assert {call.data["entity_id"] for call in calls} == {"light.one", "light.two"}
-    assert engine.status["reason"] == "manual_pause"
+    assert engine.status["reason"] == "base"
 
 
 @pytest.mark.parametrize("ambience", ["base", "scene"])
@@ -544,12 +541,9 @@ async def test_reopening_cancels_slow_off_and_reapplies_full_ambience_with_lux_o
     assert not calls
 
 
-@pytest.mark.parametrize(
-    ("manual_off", "allow_off", "expected"),
-    [(False, True, True), (False, False, False), (True, True, False)],
-)
-async def test_nightlight_solar_open_respects_manual_pause_policy(
-    hass, freezer, room_engine, manual_off, allow_off, expected
+@pytest.mark.parametrize("manual_off", [False, True])
+async def test_nightlight_solar_open_after_explicit_command(
+    hass, freezer, room_engine, manual_off
 ):
     engine, _, room, calls = room_engine
     await configure(hass, freezer, room_engine, mode="sun", present=False)
@@ -557,21 +551,15 @@ async def test_nightlight_solar_open_respects_manual_pause_policy(
         "enabled": True,
         "lights": {"light.one": {"state": "on", "brightness_pct": 5}},
     }
-    room["allow_off_during_pause"] = allow_off
     await engine.async_reconfigure()
     if manual_off:
         await engine.async_turn_off(Context(user_id="user"))
     else:
         await engine.async_turn_on(Context(user_id="user"))
-    pause = engine.status["pause_until"]
     calls.clear()
     await sun(hass, -1)
-    assert engine.status["pause_until"] == pause
-    if expected:
-        assert engine.lighting_status["mode"] == "nightlight"
-        assert calls and calls[0].data["transition"] == 10
-    else:
-        assert not calls
+    assert engine.lighting_status["mode"] == "nightlight"
+    assert calls and calls[0].data["transition"] == 10
 
 
 async def test_reconfiguration_discards_previous_solar_confirmation(

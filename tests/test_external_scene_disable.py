@@ -13,8 +13,7 @@ from test_manager import configured
 from custom_components.halo.manager import HaloError
 
 
-@pytest.mark.parametrize("initial_action", ["enable", "resume"])
-async def test_disable_preempts_slow_recall_and_queued_evaluation(hass, initial_action):
+async def test_disable_preempts_slow_recall_and_queued_evaluation(hass):
     entry, area, manager = await configured(hass)
     hass.states.async_set("scene.native", "unknown", {"entity_id": ["light.bulb"]})
     hass.states.async_set("input_boolean.tv", "on")
@@ -45,22 +44,16 @@ async def test_disable_preempts_slow_recall_and_queued_evaluation(hass, initial_
 
     hass.services.async_register("scene", "turn_on", recall)
     hass.services.async_register("light", "turn_on", lamp)
-    operation = (
-        manager.async_set_mode(area.id, "automation", True)
-        if initial_action == "enable"
-        else manager.async_resume(area.id)
-    )
+    operation = manager.async_set_mode(area.id, "automation", True)
     active = hass.async_create_task(operation)
     await started.wait()
     engine = manager.engines[area.id]
-    assert engine._scene_feedback
     disable = hass.async_create_task(
         manager.async_set_mode(area.id, "automation", False)
     )
     await asyncio.sleep(0)
     assert not disable.done()
     assert manager.config["rooms"][area.id]["automation_enabled"]
-    assert not engine._scene_feedback
     # Queue another reevaluation behind the engine lock. Merely invalidating
     # the in-flight generation would not prevent this from running a fallback.
     hass.states.async_set("input_boolean.tv", "on", {"sample": 1})
@@ -70,7 +63,6 @@ async def test_disable_preempts_slow_recall_and_queued_evaluation(hass, initial_
     assert len(native_calls) == 1
     assert not lamp_calls
     assert not engine._automation_suspensions
-    assert not engine._scene_feedback
     assert not manager.config["rooms"][area.id]["automation_enabled"]
     assert engine.status["reason"] == "disabled"
     await hass.config_entries.async_unload(entry.entry_id)

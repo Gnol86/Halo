@@ -50,7 +50,7 @@ class HaloRoomLight(HaloRoomEntity, LightEntity):
         )
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        """Turn off the room and enter the common manual pause."""
+        """Turn off the room with a one-shot command."""
         await self.manager.async_room_command(
             self.room_id, "turn_off", context=self._context
         )

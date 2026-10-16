@@ -118,18 +118,3 @@ def scene_problem(hass: HomeAssistant, scene: dict) -> str | None:
     if state is None or state.state == "unavailable":
         return "external_scene_unavailable"
     return None
-
-
-def feedback_lights(
-    hass: HomeAssistant, room_lights: list[str], entity_id: str
-) -> set[str]:
-    """Return configured room entities potentially affected by the native call."""
-    source = composition(hass, [entity_id])
-    if not source.complete:
-        return set(room_lights)
-    affected = set()
-    for light in room_lights:
-        target = composition(hass, [light])
-        if not target.complete or target.lights & source.lights:
-            affected.add(light)
-    return affected

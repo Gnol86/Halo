@@ -79,8 +79,6 @@ async def _handle(
             manager.check_control(connection.user, room_id)
             if command in ("turn_on", "turn_off"):
                 await manager.async_room_command(room_id, command, context)
-            elif command == "resume":
-                await manager.async_resume(room_id, context)
             elif command in ("automation", "natural"):
                 if "enabled" not in msg:
                     raise HaloError("invalid_config", "Mode commands require enabled")
@@ -147,7 +145,7 @@ def async_register(hass: HomeAssistant) -> None:
             room
             | {
                 probatio.Required("command"): probatio.In(
-                    ["turn_on", "turn_off", "resume", "automation", "natural", "scene"]
+                    ["turn_on", "turn_off", "automation", "natural", "scene"]
                 ),
                 probatio.Optional("enabled"): bool,
                 probatio.Optional("scene_id"): str,

@@ -12,7 +12,6 @@ from test_manager import configured
 
 from custom_components.halo.external_scenes import (
     composition,
-    feedback_lights,
     inspect_scene,
     scene_problem,
 )
@@ -78,9 +77,6 @@ async def test_metadata_expands_known_groups_without_side_effects(hass):
         "other_entities": ["switch.tv"],
         "blocked": False,
     }
-    assert feedback_lights(hass, ["light.pair", "light.unrelated"], "scene.native") == {
-        "light.pair"
-    }
     assert hass.states.get("scene.native").state == "unknown"
     assert scene_problem(hass, linked()) is None
 
@@ -90,7 +86,6 @@ async def test_opaque_or_partial_composition_never_claims_room_lights_missing(ha
     result = inspect_scene(hass, ["light.one"], "scene.native")
     assert not result["complete"]
     assert result["missing_lights"] == result["outside_lights"] == []
-    assert feedback_lights(hass, ["light.one"], "scene.native") == {"light.one"}
     hass.states.async_set("light.hue", "on", {"is_hue_group": True})
     hass.states.async_set(
         "scene.native", "unknown", {"entity_id": ["light.hue", "light.outside"]}
@@ -171,7 +166,7 @@ async def test_unknown_source_rejected_and_link_cannot_use_capture(hass):
     await hass.config_entries.async_unload(entry.entry_id)
 
 
-async def test_source_and_outside_target_permissions_before_manual_pause(
+async def test_source_and_outside_target_permissions_before_commands(
     hass, hass_admin_user
 ):
     entry, area, manager = await configured(hass)
@@ -191,11 +186,14 @@ async def test_source_and_outside_target_permissions_before_manual_pause(
                 await manager.async_activate_scene(
                     area.id, "linked", Context(user_id=user.id)
                 )
-        assert not manager.runtime_state[area.id].get("pause_until")
+        assert manager.engines[area.id].lighting_status == {
+            "mode": "off",
+            "scene_id": None,
+        }
     await hass.config_entries.async_unload(entry.entry_id)
 
 
-@pytest.mark.parametrize("command", ["turn_on", "turn_off", "mode", "resume", "scene"])
+@pytest.mark.parametrize("command", ["turn_on", "turn_off", "mode", "scene"])
 async def test_recursion_guard_rejects_before_waiting_for_any_lock(hass, command):
     entry, area, manager = await configured(hass)
     context = Context()
@@ -205,8 +203,6 @@ async def test_recursion_guard_rejects_before_waiting_for_any_lock(hass, command
             with pytest.raises(HaloError, match="cannot control Halo"):
                 if command == "mode":
                     await manager.async_set_mode(area.id, "automation", True, Context())
-                elif command == "resume":
-                    await manager.async_resume(area.id, Context())
                 elif command == "scene":
                     await manager.async_activate_scene(area.id, "linked", Context())
                 else:

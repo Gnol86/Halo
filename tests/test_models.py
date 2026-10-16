@@ -27,9 +27,9 @@ def test_defaults_and_transition_semantics():
     }
     room = validate_config(config)["rooms"]["living"]
     assert room["automation_enabled"] is False
-    assert room["allow_off_during_pause"] is True
+    assert "allow_off_during_pause" not in room
     assert room["absence_delay"] == 0
-    assert room["manual_pause"] == 7200
+    assert "manual_pause" not in room
     assert room["transitions"] == {
         "turn_on": 0,
         "turn_off": None,
@@ -82,14 +82,12 @@ def test_normalization_preserves_existing_durations_and_explicit_omissions():
     config["transitions"] = transitions
     config["rooms"]["living"].update(
         absence_delay=120,
-        manual_pause=900,
         transitions={"turn_on": None, "lux_on": 0, "natural": 4.25},
     )
     normalized = validate_config(config)
     assert normalized["transitions"] == transitions
     room = normalized["rooms"]["living"]
     assert room["absence_delay"] == 120
-    assert room["manual_pause"] == 900
     assert room["transitions"] == {
         "turn_on": None,
         "lux_on": 0,
@@ -250,3 +248,20 @@ def test_invalid_association_profile_identifier_is_validation_error(profile_id):
         validate_config(
             {"rooms": {"room": {"associations": [{"profile_id": profile_id}]}}}
         )
+
+
+@pytest.mark.parametrize(
+    "legacy",
+    [
+        {"manual_pause": 7200, "allow_off_during_pause": False},
+        {"manual_pause": None, "allow_off_during_pause": "obsolete"},
+    ],
+)
+def test_retired_pause_settings_are_dropped_from_old_configs(legacy):
+    config = configuration()
+    config["rooms"]["living"].update(legacy)
+    normalized = validate_config(config)
+    assert not legacy.keys() & normalized["rooms"]["living"].keys()
+    assert normalized["rooms"]["living"]["lights"] == ["light.floor", "light.ceiling"]
+    assert validate_config(normalized) == normalized
+    assert legacy.items() <= config["rooms"]["living"].items()

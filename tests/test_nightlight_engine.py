@@ -182,39 +182,7 @@ async def test_natural_updates_do_not_touch_nightlights_but_resume_fully(
     assert engine.lighting_status["mode"] == "natural"
 
 
-@pytest.mark.parametrize("allow", [True, False])
-async def test_manual_pause_uses_nightlight_only_when_off_is_allowed(
-    hass, freezer, room_engine, allow
-):
-    engine, _, room, calls = room_engine
-    await configured(hass, room_engine)
-    room["allow_off_during_pause"] = allow
-    await engine.async_turn_on(Context(user_id="test-user"))
-    pause = engine.status["pause_until"]
-    calls.clear()
-    await depart(hass, freezer, room_engine)
-    assert engine.status["pause_until"] == pause
-    if allow:
-        await assert_nightlight(hass, engine)
-        calls.clear()
-        hass.states.async_set("binary_sensor.presence", "on")
-        await hass.async_block_till_done()
-        assert engine.status["pause_until"] == pause
-        assert not calls
-        # A longer, confirmed absence still ends the manual hold normally.
-        hass.states.async_set("binary_sensor.presence", "off")
-        await hass.async_block_till_done()
-        await advance(hass, freezer, 31)
-        hass.states.async_set("binary_sensor.presence", "on")
-        await hass.async_block_till_done()
-        assert engine.status["pause_until"] is None
-        assert hass.states.get("light.two").state == "on"
-    else:
-        assert not calls
-        assert hass.states.get("light.two").state == "on"
-
-
-async def test_explicit_room_off_blocks_nightlight_across_restart_until_pause_ends(
+async def test_explicit_room_off_does_not_block_nightlight_after_reload(
     hass, freezer, room_engine
 ):
     engine, manager, _, calls = room_engine
@@ -222,15 +190,14 @@ async def test_explicit_room_off_blocks_nightlight_across_restart_until_pause_en
     await depart(hass, freezer, room_engine)
     await engine.async_turn_off(Context(user_id="test-user"))
     assert not engine.is_on
-    assert manager.runtime_state["living"]["nightlight_blocked"] is True
+    assert "nightlight_blocked" not in manager.runtime_state["living"]
     await engine.async_stop()
     restored = HaloRoomEngine(hass, manager, "living")
     calls.clear()
     try:
         await restored.async_start()
         await hass.async_block_till_done()
-        assert not calls and not restored.is_on
-        await advance(hass, freezer, 900)
+        assert calls and restored.is_on
         await assert_nightlight(hass, restored)
         assert "nightlight_blocked" not in manager.runtime_state["living"]
     finally:
@@ -305,7 +272,7 @@ async def test_presence_return_interrupts_pending_nightlight_sequence(
     assert not any(call.service == "turn_off" for call in calls)
     assert [call.data.get("brightness_pct") for call in calls] == [5, 80, 90]
     assert calls[-1].data["transition"] == 1
-    assert engine.status["pause_until"] is None
+    assert "pause_until" not in engine.status
 
 
 async def test_manual_command_interrupts_pending_nightlight_sequence(
@@ -338,7 +305,9 @@ async def test_manual_command_interrupts_pending_nightlight_sequence(
     assert not engine.is_on
     calls.clear()
     await advance(hass, freezer, 30)
-    assert not calls
+    assert calls
+    assert engine.lighting_status["mode"] == "nightlight"
+    assert calls[0].data["brightness_pct"] == 5
 
 
 async def test_nightlight_recovers_fixed_targets_after_restart(
@@ -406,7 +375,7 @@ async def test_fixed_native_color_and_effect_survive_nightlight_application(
     }
     hass.states.async_set("light.one", "on", attributes)
     await hass.async_block_till_done()
-    await engine.async_resume()
+    await engine.async_set_mode("automation", True)
     room["nightlight"]["lights"]["light.one"] = {
         "state": "on",
         "brightness_pct": 5,
@@ -450,7 +419,7 @@ async def test_reconfiguration_updates_only_fixed_nightlight_targets(
     assert engine.lighting_status["mode"] == "nightlight"
 
 
-async def test_physical_whole_room_off_blocks_absence_nightlight(
+async def test_physical_whole_room_off_keeps_absence_nightlight_active(
     hass, freezer, room_engine
 ):
     engine, _, _, calls = room_engine
@@ -463,10 +432,10 @@ async def test_physical_whole_room_off_blocks_absence_nightlight(
     await hass.async_block_till_done()
     calls.clear()
     await depart(hass, freezer, room_engine)
-    assert not calls
-    assert not engine.is_on
-    assert engine._runtime["nightlight_blocked"] is True
-    await engine.async_resume()
+    assert calls
+    await assert_nightlight(hass, engine)
+    assert "nightlight_blocked" not in engine._runtime
+    await engine.async_set_mode("automation", True)
     await assert_nightlight(hass, engine)
 
 

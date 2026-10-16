@@ -72,7 +72,7 @@ async def test_one_failed_lamp_is_not_hidden_by_another_successful_lamp(
         )
 
     hass.services.async_register("light", "turn_on", recovered)
-    await engine.async_resume()
+    await engine.async_set_mode("automation", True)
     await hass.async_block_till_done()
     assert engine.status["error"] is None
     assert hass.states.get("light.one").state == "on"

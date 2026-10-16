@@ -20,7 +20,7 @@ from homeassistant.helpers.storage import Store
 
 from .const import DOMAIN
 from .engine import HaloRoomEngine
-from .external_scenes import composition, feedback_lights, inspect_scene, scene_problem
+from .external_scenes import composition, inspect_scene, scene_problem
 from .models import (
     default_config,
     initial_config,
@@ -86,14 +86,40 @@ class HaloManager:
     async def async_load(self) -> None:
         """Load versioned settings and start one engine per saved room."""
         stored = await self._store.async_load()
+        migrated = False
         if stored is not None:
             self.config = validate_config(stored["config"])
-            self.runtime_state = stored.get("runtime", {})
+            migrated = any(
+                {"manual_pause", "allow_off_during_pause"} & room.keys()
+                for room in stored["config"].get("rooms", {}).values()
+            )
+            self.runtime_state = deepcopy(stored.get("runtime", {}))
+            for runtime in self.runtime_state.values():
+                for key in (
+                    "pause_until",
+                    "manual_scene_id",
+                    "nightlight_blocked",
+                    "absence_confirmed",
+                ):
+                    if key in runtime:
+                        runtime.pop(key)
+                        migrated = True
             self.revision = stored.get("revision", 0)
             self._last_stored = deepcopy(stored)
         else:
             self.config = initial_config()
+        # Persist a new installation or this migration before engines start.
+        # Unrelated legacy normalization retains its usual save lifecycle.
+        if stored is None or migrated:
             await self.async_persist_runtime()
+        registry = er.async_get(self.hass)
+        for entity in er.async_entries_for_config_entry(registry, self.entry.entry_id):
+            if (
+                entity.domain == "button"
+                and entity.platform == DOMAIN
+                and entity.unique_id.endswith("_resume")
+            ):
+                registry.async_remove(entity.entity_id)
         self._loaded = True
         for room_id in self.config["rooms"]:
             engine = self.engines[room_id] = HaloRoomEngine(self.hass, self, room_id)
@@ -210,12 +236,6 @@ class HaloManager:
         """Resolve native scene availability and recursion without any commands."""
         return scene_problem(self.hass, scene)
 
-    def scene_feedback_lights(self, room_id: str, scene: dict) -> set[str]:
-        """Limit contextless feedback tolerance to the initiating room."""
-        return feedback_lights(
-            self.hass, self.config["rooms"][room_id]["lights"], scene["scene_entity_id"]
-        )
-
     @contextmanager
     def external_scene_context(self, context: Context) -> Iterator[None]:
         """Propagate a recursion guard through awaited service calls and children."""
@@ -247,7 +267,7 @@ class HaloManager:
     async def async_authorize_scene(
         self, room_id: str, scene: dict, context: Context | None
     ) -> None:
-        """Check the source and known targets before a manual pause or service call."""
+        """Check the source and known targets before issuing any service call."""
         if scene.get("type", "halo") != "home_assistant":
             return
         if problem := self.scene_problem(scene):
@@ -288,9 +308,7 @@ class HaloManager:
                 "edit_locked", "A scene editor currently controls this room"
             )
 
-    async def _commit_config(
-        self, config: dict, *, resume_room_id: str | None = None
-    ) -> None:
+    async def _commit_config(self, config: dict) -> None:
         """Publish new settings only after the durable write has succeeded."""
         async with self._store_lock:
             data = deepcopy(
@@ -304,20 +322,9 @@ class HaloManager:
                     "revision": self.revision + 1,
                 }
             )
-            if resume_room_id is not None:
-                runtime = data["runtime"].setdefault(resume_room_id, {})
-                for key in ("pause_until", "manual_scene_id", "nightlight_blocked"):
-                    runtime.pop(key, None)
             await self._store.async_save(data)
             self.config = config
             self.revision += 1
-            if resume_room_id is not None:
-                # Detector callbacks can record an absence while storage waits,
-                # even with the room lock held. Publish only the pause reset;
-                # never replace newer event data with the stored snapshot.
-                runtime = self.runtime_state[resume_room_id]
-                for key in ("pause_until", "manual_scene_id", "nightlight_blocked"):
-                    runtime.pop(key, None)
             self._last_stored = data
 
     async def async_save_config(self, config: dict, revision: int) -> None:
@@ -440,21 +447,6 @@ class HaloManager:
         finally:
             if release:
                 release()
-
-    async def async_resume(self, room_id: str, context: Context | None = None) -> None:
-        self._reject_external_scene_reentry(context)
-        await self._authorize_context(room_id, context)
-        async with self._config_lock:
-            self._check_idle(room_id)
-            updated = deepcopy(self.config)
-            updated["rooms"][room_id]["automation_enabled"] = True
-
-            async def commit() -> None:
-                await self._commit_config(updated, resume_room_id=room_id)
-
-            await self._engine(room_id).async_resume(context=context, commit=commit)
-            await self.async_persist_runtime()
-            self.async_notify()
 
     async def async_activate_scene(
         self, room_id: str, scene_id: str, context: Context | None = None

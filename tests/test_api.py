@@ -254,10 +254,10 @@ async def test_editor_owner_preview_and_cancel(
         await other.close()
 
 
-async def test_scene_save_and_manual_pause_survive_reload(
+async def test_scene_save_survives_reload_without_a_manual_hold(
     hass: HomeAssistant, api
 ) -> None:
-    """Scene configuration and manual pause deadlines persist in HA storage."""
+    """Scene configuration persists without creating a manual override."""
     initial = await configure(api)
     editor = await request(api.client, "halo/edit/begin", room_id=api.room_id)
     scene = {
@@ -283,14 +283,13 @@ async def test_scene_save_and_manual_pause_survive_reload(
         scene_id="cinema",
     )
     assert applied["success"], applied
-    pause = applied["result"]["status"][api.room_id]["pause_until"]
-    assert pause is not None
+    assert "pause_until" not in applied["result"]["status"][api.room_id]
     before = api.entry.runtime_data
     assert await hass.config_entries.async_reload(api.entry.entry_id)
     await hass.async_block_till_done()
     after = (await request(api.client, "halo/get"))["result"]
     assert api.entry.runtime_data is not before
-    assert after["status"][api.room_id]["pause_until"] == pause
+    assert "pause_until" not in after["status"][api.room_id]
     assert after["config"]["rooms"][api.room_id]["scenes"][0]["name"] == "Cinéma"
     assert not after["config"]["rooms"][api.room_id]["automation_enabled"]
 
@@ -866,3 +865,21 @@ async def test_renaming_an_active_link_does_not_recall_it(hass, api):
     )
     assert response["success"], response
     assert len(calls) == 1
+
+
+async def test_old_browser_pause_fields_are_discarded_and_resume_is_rejected(api):
+    api.config["rooms"][api.room_id].update(
+        manual_pause=7200, allow_off_during_pause=False
+    )
+    snapshot = await configure(api)
+    assert "manual_pause" not in snapshot["config"]["rooms"][api.room_id]
+    assert "allow_off_during_pause" not in snapshot["config"]["rooms"][api.room_id]
+    assert "pause_until" not in snapshot["status"][api.room_id]
+    rejected = await request(
+        api.client, "halo/command", room_id=api.room_id, command="resume"
+    )
+    assert not rejected["success"]
+    assert rejected["error"]["code"] == "invalid_format"
+    after = (await request(api.client, "halo/get"))["result"]
+    assert after["revision"] == snapshot["revision"]
+    assert after["config"] == snapshot["config"]

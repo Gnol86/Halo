@@ -13,12 +13,12 @@ Halo is a custom Home Assistant integration that brings presence, ambient light,
 One integration covers your home. The panel is included, follows your Home Assistant theme and works on desktop and mobile. No YAML or separate dashboard card is required to configure Halo. Its lighting engine runs inside Home Assistant and keeps working when the panel is closed.
 
 <a href="https://raw.githubusercontent.com/Gnol86/Halo/main/docs/images/room-control-en.png">
-  <img src="https://raw.githubusercontent.com/Gnol86/Halo/main/docs/images/room-control-en.png" alt="Halo room controls: seven rooms with live lighting states, Movie night active in the living room, and an ordered list of Halo and Home Assistant scenes" width="1000">
+  <img src="https://raw.githubusercontent.com/Gnol86/Halo/main/docs/images/room-control-en.png" alt="Simulated Halo room controls: eight areas, six configured rooms, natural lighting in the living room, and three Halo scenes" width="1000">
 </a>
 
-*Control every room from one panel. See which rooms use a scene, natural light, a manual pause or a nightlight, and launch an ambience with one click.*
+*Control every room from one panel. See which rooms use a scene, natural light, direct control or a nightlight, and launch an ambience with one click.*
 
-Screenshots show Halo running in Home Assistant with fictional rooms and simulated devices. Select a screenshot to view it at full size.
+Screenshots show the local Halo panel preview with fictional rooms and simulated devices. No household instance is connected. Select a screenshot to view it at full size.
 
 > **Project status:** Halo is in early development, with published GitHub releases for installation through a HACS custom repository. Automated tests and targeted checks in an isolated Home Assistant instance use simulated lights; validation across real household hardware remains to be completed. The [default HACS catalog submission](https://github.com/hacs/default/pull/11771) is open and awaiting review; Halo is not yet listed.
 
@@ -32,7 +32,7 @@ Screenshots show Halo running in Home Assistant with fictional rooms and simulat
 | **Scenes and priorities** | Create room scenes with conditions based on entity states, numeric values, time or the sun. Order scenes by priority and choose whether each may turn the lights on automatically. |
 | **Home Assistant scenes** | Link an existing scene to run it directly, or import an independent copy of its settings for the lights in your room when the source configuration is accessible. |
 | **Nightlights** | Keep selected lights at fixed settings during confirmed absence, while turning the other room lights off. Nightlights follow the room's lighting permission. |
-| **Manual control** | Manual changes pause automatic scene changes and natural adjustments for the whole room. Resume explicitly or let the configured pause rules take over. |
+| **Direct control** | Turn lights on or off and launch scenes without suspending room automation. Turn **Automation** off when you want to keep control. |
 | **Transitions** | Set global transition durations for everyday lighting, natural adjustments, scenes and shutoff, with overrides for each room and support based on each light's capabilities. |
 
 The panel includes searchable room and entity lists, live status, and scene editing through Home Assistant's native light controls. English and French are included: the panel follows each user's Home Assistant interface language, using French for its regional variants and English otherwise. Custom room, profile and scene names stay unchanged.
@@ -86,7 +86,7 @@ Update Halo through HACS, or replace the `custom_components/halo` folder with th
 
 Use **Control** to create or launch scenes, and **Settings** to customize room transitions. Changes remain in a shared draft as you move between tabs, rooms and profiles, until you save or discard them.
 
-Each configured room also exposes Home Assistant entities: a room light, a status sensor, automatic-lighting and natural-light switches, a resume button, and its scenes. Use them in your own dashboards and automations.
+Each configured room also exposes Home Assistant entities: a room light, a status sensor, automatic-lighting and natural-light switches, and its scenes. Use them in your own dashboards and automations.
 
 ## A closer look
 
@@ -95,7 +95,7 @@ Each configured room also exposes Home Assistant entities: a room light, a statu
 Choose a presence source, allow time before switching off an empty room, and set the illuminance threshold and hysteresis. Live readings help you understand when Halo permits lighting.
 
 <a href="https://raw.githubusercontent.com/Gnol86/Halo/main/docs/images/room-automation-en.png">
-  <img src="https://raw.githubusercontent.com/Gnol86/Halo/main/docs/images/room-automation-en.png" alt="Living room automation settings with a presence sensor, a 300-second absence delay, a 120-lux turn-on threshold and 10-lux hysteresis" width="1000">
+  <img src="https://raw.githubusercontent.com/Gnol86/Halo/main/docs/images/room-automation-en.png" alt="Simulated living room automation settings with a presence sensor, a zero-second absence delay, a 50-lux turn-on threshold and 20-lux hysteresis" width="1000">
 </a>
 
 ### Natural light profiles
@@ -103,26 +103,18 @@ Choose a presence source, allow time before switching off an empty room, and set
 Shape brightness and white temperature around the sun's elevation, then reuse the profile across rooms. The rising-sun curves below use a smooth progression; morning and evening can be configured separately.
 
 <a href="https://raw.githubusercontent.com/Gnol86/Halo/main/docs/images/natural-profiles-en.png">
-  <img src="https://raw.githubusercontent.com/Gnol86/Halo/main/docs/images/natural-profiles-en.png" alt="Natural light profile editor showing reusable profiles and rising-sun curves from 25 to 95 percent brightness and 2700 to 5500 kelvins" width="1000">
+  <img src="https://raw.githubusercontent.com/Gnol86/Halo/main/docs/images/natural-profiles-en.png" alt="Simulated natural profile editor with three profiles, linked morning and evening S-curves, 20 to 100 percent brightness and 2200 to 6000 kelvins between -6.5 and 45.5 degrees of sun elevation" width="1000">
 </a>
 
 ## How the lighting rules work
 
-**Everyday lighting.** When presence and lighting permission allow it, Halo applies the first eligible conditional scene. If none applies, it uses the room's base ambience and active natural profiles. A scene explicitly allowed to turn lights on can do so independently of presence and ambient light, while still respecting manual pauses and disabled automation.
+**Everyday lighting.** When presence and lighting permission allow it, Halo applies the first eligible conditional scene. If none applies, it uses the room's base ambience and active natural profiles. A scene explicitly allowed to turn lights on can do so independently of presence and ambient light, while still respecting disabled automation and live editing.
 
-**Your manual choices.** Changing a light or explicitly launching a scene starts a room-wide pause. The pause ends when its timer expires, when you return after a sufficiently long confirmed absence, or when you select **Resume automation**. Automatic shutoff during a manual pause is configurable per room and enabled by default. Turning the entire room off manually blocks automatic relighting, including nightlights, for that pause.
+**Your manual choices.** Manual light changes and explicitly launched scenes are one-shot commands. They never suspend room automation. Halo does not immediately cancel its own explicit command, but its next normal automatic action may replace that setting or scene. To keep control, turn **Automation** off for the room; explicit commands remain available. Live scene editing still temporarily suspends automation while you work.
 
-**Manual-pause correction in 0.2.2.** Feedback matching a recent Halo command tolerates white-temperature rounding by bridges such as Hue and attributes missing while a lamp is off, preventing false manual pauses. Identified user commands and other automations still take priority. This correction is included in 0.2.2; validation on household hardware remains separate.
+**Upgrading to 0.3.0.** Manual pauses have been removed entirely, including their detection, timers, settings, Activity messages and **Resume automation** buttons. Previously saved pauses are cleared before the lighting engine starts. If room automation is enabled, its normal rules apply immediately after the new version loads. Existing presence protection, unavailable-device handling and live-editing safeguards remain in place.
 
-**Transition feedback correction in 0.2.3.** Halo remembers each transition's starting brightness and color, so an intermediate report arriving after one near the target no longer creates a false manual pause. Intermediate-value recognition remains limited to the transmitted transition plus five seconds; immediate commands and lights without transition support only accept matching target values. Identified user commands and other automations remain priorities. A new command replaces the previous expectation, and manual interventions or failed commands invalidate it. Unexpected physical color changes also remain detectable, with tighter rounding tolerance for XY colors.
-
-**Late feedback correction in 0.2.4.** Small brightness and white-temperature rounding around the last commanded target remains recognizable after the transition ends. The wider transition range still expires, and late feedback cannot hide a new on/off change or accumulate drift away from the target. Identified manual commands retain priority. This fixes an event captured on household Hue hardware: brightness changed from 128 to 127 out of 255 almost 148 seconds after Halo's command, incorrectly starting a two-hour pause in 0.2.3. The exact event is covered by a regression test; the existing rules protecting real manual pauses during brief presence dropouts are unchanged.
-
-**Hue group feedback correction in 0.2.5.** Halo checks known group members as well as the group. Hue can still report a group as on and switch its color mode after its last bulb has turned off; confirmed member shutoff now identifies this delayed group feedback. Late brightness and temperature averages are also checked against the members' individual targets. An incompatible member change or an identified external command still triggers a pause when the group reports the change. The normal transition window and rounding tolerances are unchanged.
-
-Without an identifiable origin, a physical adjustment inside the expected transition range during its short window, or within the final target's small rounding tolerance afterwards, cannot reliably be distinguished from device feedback. Group recognition requires available member entities and only runs when the group emits an update; directly selecting the individual bulbs gives Halo their individual events. Unidentified changes unrelated to a pending command still trigger pauses; 0.2.5 does not claim to resolve device reports whose origin remains unknown. Tests cover simulated feedback and manual interventions; they do not validate every household device. The exact sequences behind the October 12 household pauses remain unavailable because their brightness and color values were not recorded.
-
-**Pause diagnostics in 0.2.4.** When a light change triggers a pause, native Activity records the light, changed values and detected origin: an identified user command, an identified external command or an unidentified origin. An unidentified report is not treated as proof that someone operated the light.
+Custom dashboards or automations using Halo's removed resume buttons must be updated; use the existing **Automation** switch to enable or disable automatic control. The `halo/command` action `resume` and the `pause_until` status field are no longer available. Old `manual_pause` and `allow_off_during_pause` configuration fields are discarded when loaded or saved. The status sensor keeps the machine value `manual` for compatibility, now displayed as **Direct control**; it does not indicate or create a pause.
 
 **Activity attribution in 0.2.2.** Light activity records commands from **Halo** and their reason: presence, the scene's custom name, nightlight, natural light, manual control or automatic shutoff. Commands are recorded as requests, separately from the light's reported state. When the light provider preserves context, the native activity detail also identifies Halo and the reason as the origin. Adjustments and commands whose feedback loses context still have a request entry. Linked Home Assistant scenes record their activation on the scene and its known light targets; Halo does not invent the contents of opaque scenes.
 
@@ -132,7 +124,7 @@ Activity and Recorder must be enabled and their filters still apply. Messages us
 
 **Linked and imported scenes.** A linked Home Assistant scene runs in full and may control devices outside the Halo room. Halo does not restore those outside devices when the scene ends. An imported copy only includes matching lights selected in the room and stays independent of later source changes. Scenes whose settings are not exposed, including some provider scenes, can be linked but cannot necessarily be imported.
 
-**Unavailable data.** Missing sensor readings are never treated as zero or as confirmed absence. A configured illuminance sensor remains authoritative even when unavailable; Halo does not silently switch to time or sun rules. Natural adjustments also pause when the required sun data is unavailable.
+**Unavailable data.** Missing sensor readings are never treated as zero or as confirmed absence. A configured illuminance sensor remains authoritative even when unavailable; Halo does not silently switch to time or sun rules. Natural adjustments also wait when the required sun data is unavailable.
 
 ## Contributing
 

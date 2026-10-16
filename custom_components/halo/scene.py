@@ -27,7 +27,7 @@ async def async_setup_entry(
 
 
 class HaloScene(HaloRoomEntity, Scene):
-    """Launch a named ambience and activate the room's manual pause."""
+    """Launch a named ambience without suspending automatic lighting."""
 
     def __init__(self, manager: Any, room_id: str, scene_id: str) -> None:
         super().__init__(manager, room_id, f"scene_{scene_id}")

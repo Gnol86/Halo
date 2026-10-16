@@ -18,7 +18,7 @@ function fixture(admin = true): Snapshot {
     lights: { "light.colour": { state: "on", brightness_pct: 20 }, "light.simple": { state: "off" } } }];
   return { revision: 7, is_admin: admin, areas: [{ id: "lounge", name: "Salon personnalisé" }, { id: "kitchen", name: "Cuisine" }],
     config: { sun_entity_id: "sun.sun", presence_return_window: 30, profiles: {}, rooms: { lounge: room }, transitions: { turn_on: null, lux_on: null, natural: null, scene: null, turn_off: null } },
-    status: { lounge: { reason: "manual_pause", is_on: true, available: true, pause_until: "2026-10-09T22:00:00Z" } },
+    status: { lounge: { reason: "disabled", is_on: true, available: true } },
     lights: [{ entity_id: "light.colour", name: "Lampe couleur", area_id: "lounge", available: true, supported_color_modes: ["rgb"], supported_features: 32 },
       { entity_id: "light.simple", name: "Lampe simple", area_id: "lounge", available: true, supported_color_modes: ["onoff"], supported_features: 0 },
       { entity_id: "light.extra", name: "Lampe libre", area_id: "kitchen", available: true, supported_color_modes: ["brightness"], supported_features: 0 }],
@@ -99,6 +99,25 @@ function inputByLabel(panel: InstanceType<typeof HaloPanel>, text: string): HTML
 }
 
 afterEach(() => { window.document.body.replaceChildren(); });
+
+test("room controls keep direct commands and automation without pause controls in both languages", async () => {
+  for (const locale of ["fr-BE", "en"]) {
+    const { panel, hass, calls } = await mount();
+    panel.hass = { ...hass, locale: { language: locale } }; await settle(panel);
+    await openRoom(panel, locale === "en" ? "Control" : "Pilotage");
+    assert.doesNotMatch(panel.shadowRoot!.textContent!, /Pause manuelle|Manual pause|Reprendre|Resume|Pause jusqu’à|Pause until/);
+    assert.match(panel.shadowRoot!.textContent!, locale === "en" ? /Disable Automation to keep control/ : /Désactive Automatisation pour garder la main/);
+    button(panel, locale === "en" ? "Turn on" : "Allumer").click(); await settle(panel);
+    button(panel, locale === "en" ? "Turn off" : "Éteindre").click(); await settle(panel);
+    button(panel, locale === "en" ? "Run" : "Lancer").click(); await settle(panel);
+    inputByLabel(panel, locale === "en" ? "Automation" : "Automatisation").click(); await settle(panel);
+    assert.deepEqual(calls.filter((call) => call.type === "halo/command").map((call) => call.command), ["turn_on", "turn_off", "scene", "automation"]);
+    await selectRoomTab(panel, locale === "en" ? "Automation" : "Automatisation");
+    assert.doesNotMatch(panel.shadowRoot!.textContent!, /Pause manuelle|Manual pause|Autoriser l’extinction automatique pendant|Allow automatic turn-off during/);
+    assert.ok(inputByLabel(panel, locale === "en" ? "Absence delay" : "Délai d’absence"));
+    panel.remove();
+  }
+});
 
 test("natural graphs place entered elevations at the exact curve thresholds, including close and boundary values", async () => {
   const curves: Curve[] = [
@@ -213,11 +232,12 @@ test("panel follows HA user locale and keeps custom names without changing entit
   const { panel, hass } = await mount();
   assert.match(panel.shadowRoot!.textContent!, /Pièces/);
   assert.match(panel.shadowRoot!.textContent!, /Salon personnalisé/);
-  assert.match(panel.shadowRoot!.textContent!, /Pause manuelle/);
+  assert.match(panel.shadowRoot!.textContent!, /Désactivé/);
   panel.hass = { ...hass, locale: { language: "de" } };
   await settle(panel);
   assert.match(panel.shadowRoot!.textContent!, /Rooms/);
   assert.match(panel.shadowRoot!.textContent!, /Salon personnalisé/);
+  assert.match(panel.shadowRoot!.textContent!, /Disabled/);
 });
 
 test("native control color scheme follows the effective HA theme and inherits when it is absent", async () => {
@@ -307,9 +327,7 @@ test("the global presence return window saves zero and fractional durations thro
   const label = "Délai de protection de présence (secondes)";
   assert.equal(inputByLabel(panel, label).value, "30");
   assert.match(panel.shadowRoot!.textContent!, /uniquement les pièces où l’extinction sur forte luminosité est désactivée/);
-  assert.match(panel.shadowRoot!.textContent!, /Dans toutes les pièces, le retour ne termine une pause manuelle qu’après une absence continue/);
-  assert.match(panel.shadowRoot!.textContent!, /ce délai de protection et que le délai d’absence de la pièce/);
-  assert.match(panel.shadowRoot!.textContent!, /Zéro désactive le rallumage rapide et conserve uniquement le délai d’absence/);
+  assert.match(panel.shadowRoot!.textContent!, /Zéro désactive le rallumage rapide/);
   for (const value of ["0", "45.5", "604800"]) {
     const field = inputByLabel(panel, label);
     field.value = value; field.dispatchEvent(new Event("input", { bubbles: true })); await settle(panel);
@@ -324,8 +342,7 @@ test("the global presence return window saves zero and fractional durations thro
   }
   panel.hass = { ...hass, locale: { language: "en" } }; await settle(panel);
   assert.equal(inputByLabel(panel, "Presence protection delay (seconds)").value, "604800");
-  assert.match(panel.shadowRoot!.textContent!, /In every room, returning only ends a manual pause after a continuous absence/);
-  assert.match(panel.shadowRoot!.textContent!, /Zero disables quick turn-on and uses only the room’s absence delay/);
+  assert.match(panel.shadowRoot!.textContent!, /Zero disables quick turn-on/);
 });
 
 test("the global presence return window rejects missing, negative, excessive and non-finite values", async () => {
@@ -485,7 +502,8 @@ test("configuring a room is explicit, preserves safe defaults and sends the draf
   const room = (save.config as Snapshot["config"]).rooms.kitchen;
   assert.deepEqual(room.lights, ["light.extra"]);
   assert.equal(room.automation_enabled, false);
-  assert.equal(room.allow_off_during_pause, true);
+  assert.equal("allow_off_during_pause" in room, false);
+  assert.equal("manual_pause" in room, false);
 });
 
 test("new remote configuration does not overwrite unsaved changes and disables stale save", async () => {
@@ -948,7 +966,7 @@ test("a typed import name survives state refreshes and is confirmed without requ
   name.value = "Lecture Halo saisie";
   name.dispatchEvent(new Event("input", { bubbles: true }));
   await settle(panel);
-  emit({ ...importFixture(), status: { lounge: { reason: "manual_pause", is_on: false, available: true } } });
+  emit({ ...importFixture(), status: { lounge: { reason: "absence", is_on: false, available: true } } });
   await settle(panel);
   assert.equal(name.value, "Lecture Halo saisie");
   assert.equal(panel.shadowRoot!.activeElement, name);
@@ -1710,7 +1728,7 @@ test("late room command replies cannot restore old revisions, privileged views o
     const command = new Promise<Snapshot>((resolve) => { release = resolve; });
     const { panel, hass, emit } = await mount(true, fixture(), { command: () => command });
     await openRoom(panel);
-    button(panel, "Reprendre").click(); await settle(panel);
+    inputByLabel(panel, "Automatisation").click(); await settle(panel);
     const latest = fixture(change !== "rights"); latest.revision = 9;
     latest.config.rooms.lounge.absence_delay = 35;
     emit(latest); await settle(panel);

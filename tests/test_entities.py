@@ -18,7 +18,6 @@ from custom_components.halo.const import DOMAIN
 PLATFORMS = [
     Platform.LIGHT,
     Platform.SWITCH,
-    Platform.BUTTON,
     Platform.SCENE,
     Platform.SENSOR,
 ]
@@ -35,7 +34,6 @@ class RoomManagerStub:
         self.listeners: set[Callable[[], None]] = set()
         self.async_room_command = AsyncMock()
         self.async_set_mode = AsyncMock()
-        self.async_resume = AsyncMock()
         self.async_activate_scene = AsyncMock()
 
     def async_add_listener(self, listener: Callable[[], None]) -> Callable[[], None]:
@@ -69,7 +67,7 @@ class RoomManagerStub:
 
 @pytest.fixture
 async def platforms(hass: HomeAssistant):
-    """Run all five real HA entity platforms with a controlled manager."""
+    """Run all four real HA entity platforms with a controlled manager."""
     entry = MockConfigEntry(domain=DOMAIN, unique_id=DOMAIN, title="Halo", data={})
     entry.add_to_hass(hass)
     manager = RoomManagerStub(hass, entry)
@@ -112,7 +110,7 @@ async def test_native_entities_device_and_real_state(
     await hass.async_block_till_done()
 
     entries = er.async_entries_for_config_entry(registry, platforms.entry.entry_id)
-    assert len(entries) == 6
+    assert len(entries) == 5
     assert len({entry.device_id for entry in entries}) == 1
     device = dr.async_get(hass).async_get_device_by_identifier(
         (DOMAIN, area.id), platforms.entry.entry_id
@@ -146,7 +144,7 @@ async def test_native_entities_device_and_real_state(
 async def test_services_preserve_context_and_modes(
     hass: HomeAssistant, platforms: RoomManagerStub, hass_admin_user
 ) -> None:
-    """Room commands, switches, resume and scenes reach the engine with context."""
+    """Room commands, switches and scenes reach the engine with context."""
     area = ar.async_get(hass).async_create("Bedroom")
     platforms.add_room(area.id)
     await hass.async_block_till_done()
@@ -180,7 +178,6 @@ async def test_services_preserve_context_and_modes(
             platforms.async_set_mode,
             (area.id, "natural", False),
         ),
-        ("button", "press", "resume", platforms.async_resume, (area.id,)),
         (
             "scene",
             "turn_on",
@@ -246,7 +243,7 @@ async def test_scenes_rename_delete_and_room_recreate(
     platforms.add_room(area.id)
     await hass.async_block_till_done()
     assert (
-        len(er.async_entries_for_config_entry(registry, platforms.entry.entry_id)) == 6
+        len(er.async_entries_for_config_entry(registry, platforms.entry.entry_id)) == 5
     )
     assert hass.states.get(entity_id(hass, "light", area.id, "light")).state == "off"
 
@@ -267,7 +264,7 @@ async def test_rapid_room_configuration_changes(
     await hass.async_block_till_done()
     registry = er.async_get(hass)
     entries = er.async_entries_for_config_entry(registry, platforms.entry.entry_id)
-    assert len(entries) == 6
+    assert len(entries) == 5
     assert (
         registry.async_get_entity_id("scene", DOMAIN, f"{area.id}_scene_cinema") is None
     )
@@ -301,7 +298,7 @@ async def test_entity_labels_translated_and_custom_names_preserved(
     prefix = "component.halo.entity.sensor.room_status.state."
     assert translations[prefix + "off"] == ("Éteint" if language == "fr" else "Off")
     assert translations[prefix + "manual"] == (
-        "Manuel" if language == "fr" else "Manual"
+        "Commande directe" if language == "fr" else "Direct control"
     )
     assert translations[prefix + "natural"] == (
         "Lumière naturelle" if language == "fr" else "Natural lighting"

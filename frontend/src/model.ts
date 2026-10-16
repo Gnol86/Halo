@@ -16,8 +16,8 @@ export function newLightingFallback(): LightingFallback {
 }
 export function newRoom(id: string): Room {
   return { id, lights: [], presence_entity_id: null, presence_states: ["on"], lux_entity_id: null,
-    lux_threshold: null, lux_hysteresis: 0, lux_off: false, lighting_fallback: newLightingFallback(), absence_delay: 0, manual_pause: 7200,
-    lux_off_delay: 30, allow_off_during_pause: true, automation_enabled: false, natural_enabled: true,
+    lux_threshold: null, lux_hysteresis: 0, lux_off: false, lighting_fallback: newLightingFallback(), absence_delay: 0,
+    lux_off_delay: 30, automation_enabled: false, natural_enabled: true,
     transitions: { turn_on: "inherit", lux_on: "inherit", natural: "inherit", scene: "inherit", turn_off: "inherit" },
     base: {}, nightlight: { enabled: false, lights: {} }, associations: [], scenes: [] };
 }

@@ -24,17 +24,12 @@
         "name": "Natural lighting"
       }
     },
-    "button": {
-      "resume": {
-        "name": "Resume automation"
-      }
-    },
     "sensor": {
       "room_status": {
         "name": "Status",
         "state": {
           "off": "Off",
-          "manual": "Manual",
+          "manual": "Direct control",
           "natural": "Natural lighting",
           "nightlight": "Nightlight"
         }

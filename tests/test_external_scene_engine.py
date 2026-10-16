@@ -2,11 +2,10 @@
 
 import asyncio
 from contextlib import nullcontext
-from datetime import timedelta
 from unittest.mock import AsyncMock, Mock
 
 import pytest
-from homeassistant.core import Context, State
+from homeassistant.core import Context
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.util import dt as dt_util
 from test_engine import advance, enable, scene
@@ -43,7 +42,6 @@ async def linked_engine(hass, room_engine):
         return None
 
     manager.scene_problem = Mock(side_effect=scene_problem)
-    manager.scene_feedback_lights = Mock(return_value={"light.one"})
     manager.external_scene_context = Mock(side_effect=lambda _context: nullcontext())
     manager.async_authorize_scene = AsyncMock()
 
@@ -82,7 +80,7 @@ async def test_native_unknown_scene_full_recall_and_partial_lamps(hass, linked_e
     assert hass.states.get("light.one").attributes["effect"] == "candle"
     assert hass.states.get("light.outside").state == "on"
     assert hass.states.get("light.two").state == "off"
-    assert not engine.status["pause_until"]
+    assert "pause_until" not in engine.status
     assert engine.lighting_status == {"mode": "scene", "scene_id": "native"}
     manager.external_scene_context.assert_called_once_with(calls[0].context)
 
@@ -192,7 +190,6 @@ async def test_failed_scene_falls_through_without_tick_or_timestamp_retry(
     hass.states.async_set("media_player.tv", "on")
     await hass.async_block_till_done()
     assert len(calls) == 2
-    assert not engine._scene_feedback
 
 
 async def test_explicit_native_scene_preserves_context_and_name_with_automation_off(
@@ -205,7 +202,7 @@ async def test_explicit_native_scene_preserves_context_and_name_with_automation_
     assert calls[0].context.user_id == "user"
     assert calls[0].context.parent_id == context.id
     manager.async_authorize_scene.assert_awaited_once()
-    assert engine.status["pause_until"]
+    assert "pause_until" not in engine.status
     assert engine.lighting_status == {"mode": "scene", "scene_id": "native"}
 
 
@@ -220,13 +217,12 @@ async def test_explicit_native_scene_failure_does_not_claim_active_scene(
     hass.services.async_register("scene", "turn_on", fail)
     with pytest.raises(HomeAssistantError, match="cannot recall"):
         await engine.async_activate_scene("native")
-    assert not engine._runtime.get("manual_scene_id")
-    assert not engine._scene_feedback
+    assert engine._applied_scene is None
     assert engine.status["error"] == "cannot recall"
 
 
 @pytest.mark.parametrize("action", ["scene", "turn_on"])
-async def test_explicit_authorization_failure_precedes_pause(
+async def test_explicit_authorization_failure_precedes_lamp_commands(
     hass, linked_engine, action
 ):
     engine, manager, _, _, calls = linked_engine
@@ -239,67 +235,42 @@ async def test_explicit_authorization_failure_precedes_pause(
         else:
             await engine.async_turn_on(Context(user_id="reader"))
     assert not calls
-    assert not engine.status["pause_until"]
+    assert "pause_until" not in engine.status
 
 
-async def test_opaque_feedback_tolerated_only_during_effective_transition(
-    hass, freezer, linked_engine
-):
+async def test_opaque_feedback_never_suspends_automation(hass, freezer, linked_engine):
     engine, manager, _, _, _ = linked_engine
     manager.config["transitions"] = {"scene": 10}
     await activate_condition(hass, engine)
     await advance(hass, freezer, 14)
     hass.states.async_set("light.one", "on", {"brightness": 100})
     await hass.async_block_till_done()
-    assert not engine.status["pause_until"]
+    assert "pause_until" not in engine.status
     await advance(hass, freezer, 1)
     hass.states.async_set("light.one", "on", {"brightness": 101})
     await hass.async_block_till_done()
-    assert engine.status["pause_until"]
+    assert "pause_until" not in engine.status
 
 
 @pytest.mark.parametrize(
     "context", [Context(user_id="user"), Context(parent_id="foreign_automation")]
 )
-async def test_identified_intervention_has_priority_over_feedback_tolerance(
+async def test_identified_intervention_never_suspends_automation(
     hass, linked_engine, context
 ):
     engine, _, _, _, _ = linked_engine
     await activate_condition(hass, engine)
     hass.states.async_set("light.one", "on", {"brightness": 200}, context=context)
     await hass.async_block_till_done()
-    assert engine.status["pause_until"]
-    assert not engine._scene_feedback
+    assert "pause_until" not in engine.status
 
 
-async def test_unaffected_room_lamp_does_not_receive_feedback_tolerance(
-    hass, linked_engine
-):
+async def test_unaffected_room_lamp_never_suspends_automation(hass, linked_engine):
     engine, _, _, _, _ = linked_engine
     await activate_condition(hass, engine)
     hass.states.async_set("light.two", "on")
     await hass.async_block_till_done()
-    assert engine.status["pause_until"]
-
-
-@pytest.mark.parametrize(
-    "action", ["disable", "edit", "reconfigure", "stop", "manual_off"]
-)
-async def test_tolerance_cancelled_at_control_boundaries(hass, linked_engine, action):
-    engine, _, _, _, _ = linked_engine
-    await engine.async_activate_scene("native")
-    assert engine._scene_feedback
-    if action == "disable":
-        await engine.async_set_mode("automation", False)
-    elif action == "edit":
-        await engine.async_begin_edit("admin")
-    elif action == "reconfigure":
-        await engine.async_reconfigure()
-    elif action == "stop":
-        await engine.async_stop()
-    else:
-        await engine.async_turn_off()
-    assert not engine._scene_feedback
+    assert "pause_until" not in engine.status
 
 
 async def test_manual_command_queued_during_native_recall_wins(hass, linked_engine):
@@ -321,29 +292,14 @@ async def test_manual_command_queued_during_native_recall_wins(hass, linked_engi
     await asyncio.gather(task, manual)
     await hass.async_block_till_done()
     assert not engine.is_on
-    assert not engine._runtime.get("manual_scene_id")
+    assert engine._applied_scene is None
     assert len(calls) == 1
-
-
-async def test_own_context_recognized_even_after_fallback_tolerance_expires(
-    hass, freezer, linked_engine
-):
-    engine, _, _, _, calls = linked_engine
-    await activate_condition(hass, engine)
-    freezer.move_to(dt_util.utcnow() + timedelta(seconds=6))
-    old = hass.states.get("light.one")
-    assert engine._own_change(
-        "light.one",
-        old,
-        State("light.one", "on", {"brightness": 180}, context=calls[0].context),
-    )
 
 
 async def test_unknown_composition_tolerates_contextless_provider_feedback(
     hass, linked_engine
 ):
     engine, manager, _, _, calls = linked_engine
-    manager.scene_feedback_lights.return_value = {"light.one", "light.two"}
     hass.states.async_set("scene.native", "unknown")
 
     async def opaque_recall(call):
@@ -355,7 +311,7 @@ async def test_unknown_composition_tolerates_contextless_provider_feedback(
     hass.services.async_register("scene", "turn_on", opaque_recall)
     await activate_condition(hass, engine)
     assert len(calls) == 1
-    assert not engine.status["pause_until"]
+    assert "pause_until" not in engine.status
     assert engine.lighting_status == {"mode": "scene", "scene_id": "native"}
 
 
@@ -471,3 +427,40 @@ async def test_native_scene_that_leaves_room_off_is_not_replayed_on_sensor_updat
     hass.states.async_set("binary_sensor.presence", "on", {"battery": 75})
     await hass.async_block_till_done()
     assert len(calls) == 1
+
+
+@pytest.mark.parametrize("keep_context", [False, True])
+@pytest.mark.parametrize("source", ["light.one", "scene.explicit"])
+async def test_native_availability_feedback_does_not_erase_explicit_scene(
+    hass, linked_engine, keep_context, source
+):
+    engine, _, room, _, calls = linked_engine
+    room["scenes"].append(linked_scene("explicit") | {"conditions": None})
+    hass.states.async_set("scene.explicit", "unknown", {"entity_id": ["light.one"]})
+    await engine.async_reconfigure()
+
+    async def recover_lamp(call):
+        calls.append(call)
+        if call.data["entity_id"] == "scene.explicit":
+            context = call.context if keep_context else Context()
+            hass.states.async_set(source, "unavailable", context=context)
+            hass.states.async_set(
+                source, "on" if source == "light.one" else "unknown", context=context
+            )
+            hass.states.async_set(
+                "light.one", "on", {"brightness": 180}, context=context
+            )
+            await hass.async_block_till_done()
+
+    hass.services.async_register("scene", "turn_on", recover_lamp)
+    await activate_condition(hass, engine)
+    calls.clear()
+    await engine.async_activate_scene("explicit")
+    await hass.async_block_till_done()
+    assert [call.data["entity_id"] for call in calls] == ["scene.explicit"]
+    assert engine.lighting_status == {"mode": "scene", "scene_id": "explicit"}
+    assert not engine._active_service_targets
+    # A later external availability recovery still retries automatic lighting.
+    hass.states.async_set("light.one", "unavailable")
+    await hass.async_block_till_done()
+    assert calls[-1].data["entity_id"] == "scene.native"

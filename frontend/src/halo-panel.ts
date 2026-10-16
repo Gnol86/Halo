@@ -405,7 +405,7 @@ export class HaloPanel extends LitElement {
       <span class="badge">${this.t(status.available === false ? "unavailable" : status.is_on ? "on" : "off")}</span>
       ${status.lighting_allowed !== undefined ? html`<p class="help status-line lighting-authorization">${this.t("lightingAuthorization")}: ${this.t(status.lighting_allowed === null ? "unavailable" : status.lighting_allowed ? "lightingAllowed" : "lightingBlocked")}${status.lighting_source && status.lighting_source in sourceLabels ? ` · ${this.t(sourceLabels[status.lighting_source])}` : ""}</p>` : nothing}
       ${status.error === "nightlight_group_conflict" ? html`<p class="notice error" role="alert">${this.t("nightlight_group_conflict")}</p>` : nothing}
-      ${([["pause_until", "pauseUntil"], ["absence_deadline", "absenceDeadline"], ["lux_off_deadline", "luxDeadline"], ["lighting_off_deadline", "sunDeadline"]] as const).map(([field, label]) => {
+      ${([["absence_deadline", "absenceDeadline"], ["lux_off_deadline", "luxDeadline"], ["lighting_off_deadline", "sunDeadline"]] as const).map(([field, label]) => {
         if (field === "lighting_off_deadline" && status.lighting_source !== "sun") return nothing;
         const value = status[field];
         if (!value) return nothing;
@@ -418,10 +418,10 @@ export class HaloPanel extends LitElement {
     const actual = this.snapshot?.config.rooms[room.id] ?? room;
     const disabled = this.busy || this.editing || !this.snapshot?.config.rooms[room.id];
     return html`<div class="room-toolbar"><div class="actions"><button ?disabled=${disabled} @click=${() => this.command(room.id, "turn_on")}><ha-icon icon="mdi:lightbulb-on-outline"></ha-icon>${this.t("turnOn")}</button>
-      <button ?disabled=${disabled} @click=${() => this.command(room.id, "turn_off")}><ha-icon icon="mdi:lightbulb-off-outline"></ha-icon>${this.t("turnOff")}</button>
-      <button ?disabled=${disabled || this.dirty} @click=${() => this.command(room.id, "resume")}><ha-icon icon="mdi:play-circle-outline"></ha-icon>${this.t("resumeShort")}</button></div>
+      <button ?disabled=${disabled} @click=${() => this.command(room.id, "turn_off")}><ha-icon icon="mdi:lightbulb-off-outline"></ha-icon>${this.t("turnOff")}</button></div>
       <div class="room-modes">${this.check("automationShort", actual.automation_enabled, (enabled) => { void this.command(room.id, "automation", { enabled }); }, disabled || this.dirty)}
         ${this.check("natural", actual.natural_enabled, (enabled) => { void this.command(room.id, "natural", { enabled }); }, disabled || this.dirty)}</div></div>
+      <p class="help compact-help">${this.t("directControlHelp")}</p>
       ${this.dirty ? html`<p class="help compact-help">${this.t(this.snapshot?.config.rooms[room.id] ? "saveModesFirst" : "saveFirst")}</p>` : nothing}`;
   }
 
@@ -522,7 +522,7 @@ export class HaloPanel extends LitElement {
         ${room.lux_entity_id ? html`<p class="help">${this.t("currentValue")}: ${this.currentEntityValue(room.lux_entity_id)}<br>
           ${this.t("effectiveLow")}: ${room.lux_threshold ?? "—"}${unit} · ${this.t("effectiveHigh")}: ${room.lux_threshold == null ? "—" : room.lux_threshold + room.lux_hysteresis}${unit}<br>
           ${this.t("luxDelay")}: ${room.lux_off_delay}</p>` : nothing}
-        <p class="help">${this.t("nightlightReturnHelp")}</p><p class="help">${this.t("nightlightPauseHelp")}</p>
+        <p class="help">${this.t("nightlightReturnHelp")}</p><p class="help">${this.t("nightlightAutomationHelp")}</p>
         ${room.lux_entity_id ? html`<p class="help">${this.t("nightlightSensorHelp")}</p>` : nothing}</details>
       ${unknownGroups.length ? html`<p class="help">${this.t("nightlightUnknownGroups")}: ${unknownGroups.map((id) => this.light(id).name).join(", ")}</p>` : nothing}
       <button class="nightlight-automation" @click=${() => this.selectRoomSection("automation")}>${this.t("nightlightAutomation")}</button>
@@ -545,8 +545,7 @@ export class HaloPanel extends LitElement {
         ${this.check("luxOff", room.lux_off, (value) => this.modifyRoom((current) => { current.lux_off = value; }))}
         ${room.lux_off || room.nightlight?.enabled || Object.keys(room.nightlight?.lights ?? {}).length ? this.numberField("luxDelay", room.lux_off_delay, (value) => this.modifyRoom((current) => { current.lux_off_delay = value ?? 30; }), { min: 0, required: true }) : nothing}
         ${this.help("luxHelp")}` : this.renderLightingFallback(room)}</div>
-      <div class="settings-group"><div class="section-heading"><h3>${this.t("manual")}</h3>${this.help("pauseHelp")}</div>${this.numberField("pauseDuration", room.manual_pause / 60, (value) => this.modifyRoom((current) => { current.manual_pause = (value ?? 120) * 60; }), { min: 0, required: true })}
-      ${this.check("allowOff", room.allow_off_during_pause, (value) => this.modifyRoom((current) => { current.allow_off_during_pause = value; }))}</div></section>`;
+      </section>`;
   }
 
   private renderLightingFallback(room: Room) {
@@ -1070,7 +1069,7 @@ export class HaloPanel extends LitElement {
       <section class="settings-group"><h3>${this.t("presenceReturn")}</h3>
         ${this.numberField("presenceReturnWindow", config.presence_return_window, (value) => { if (value !== null) this.modify((draft) => { draft.presence_return_window = value; }); }, { min: 0, max: 604800, required: true })}
         <details class="help-details"><summary><ha-icon icon="mdi:information-outline"></ha-icon>${this.t("howItWorks")}</summary>
-          <p class="help">${this.t("presenceReturnHelp")}</p><p class="help">${this.t("presenceReturnPauseHelp")}</p><p class="help">${this.t("presenceReturnZeroHelp")}</p></details></section>
+          <p class="help">${this.t("presenceReturnHelp")}</p><p class="help">${this.t("presenceReturnZeroHelp")}</p></details></section>
       <section class="settings-group"><h3>${this.t("transitions")}</h3>${this.renderTransitions(config.transitions, (category, value) => this.modify((draft) => { draft.transitions[category] = value; }))}</section></div>`;
   }
 

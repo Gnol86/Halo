@@ -10,12 +10,10 @@ from test_manager import configured
 from custom_components.halo.manager import HaloError
 
 
-@pytest.mark.parametrize("command", ["automation", "natural", "resume"])
+@pytest.mark.parametrize("command", ["automation", "natural"])
 async def test_storage_failure_before_mode_change_preserves_saved_state(hass, command):
-    """A failed durable write must not publish a new mode or clear a pause."""
+    """A failed durable write must not publish a new mode or corrupt runtime."""
     entry, area, manager = await configured(hass)
-    manager.runtime_state[area.id]["pause_until"] = 4102444800
-    manager.runtime_state[area.id]["nightlight_blocked"] = True
     await manager.async_persist_runtime()
     original = deepcopy(manager.config)
     runtime = deepcopy(manager.runtime_state)
@@ -23,10 +21,7 @@ async def test_storage_failure_before_mode_change_preserves_saved_state(hass, co
     engine = manager.engines[area.id]
     with patch.object(manager._store, "async_save", side_effect=OSError("disk full")):
         with pytest.raises(OSError, match="disk full"):
-            if command == "resume":
-                await manager.async_resume(area.id)
-            else:
-                await manager.async_set_mode(area.id, command, command == "automation")
+            await manager.async_set_mode(area.id, command, command == "automation")
         assert manager.config == original
         assert manager.runtime_state == runtime
         assert manager.revision == revision
@@ -37,7 +32,6 @@ async def test_storage_failure_before_mode_change_preserves_saved_state(hass, co
 async def test_failed_room_removal_keeps_engine_listening(hass):
     """Even a failure while stopping a room must leave its existing engine active."""
     entry, area, manager = await configured(hass)
-    manager.runtime_state[area.id]["pause_until"] = 4102444800
     original = deepcopy(manager.config)
     revision = manager.revision
     removed = deepcopy(original)
@@ -53,10 +47,8 @@ async def test_failed_room_removal_keeps_engine_listening(hass):
 
 
 async def test_room_removal_commits_without_deleted_runtime(hass):
-    """The deletion transaction cannot leave a stale manual hold on disk."""
+    """The deletion transaction cannot leave a stale room data on disk."""
     entry, area, manager = await configured(hass)
-    manager.runtime_state[area.id]["pause_until"] = 4102444800
-    manager.runtime_state[area.id]["nightlight_blocked"] = True
     await manager.async_persist_runtime()
     removed = deepcopy(manager.config)
     removed["rooms"].clear()
@@ -89,14 +81,12 @@ async def test_concurrent_saves_accept_only_one_revision(hass):
     await hass.config_entries.async_unload(entry.entry_id)
 
 
-@pytest.mark.parametrize("command", ["automation", "natural", "resume"])
+@pytest.mark.parametrize("command", ["automation", "natural"])
 async def test_mode_is_not_published_during_delayed_storage(
     hass, hass_admin_user, command
 ):
     """Subscribers see either the old complete state or the durable new state."""
     entry, area, manager = await configured(hass)
-    manager.runtime_state[area.id]["pause_until"] = 4102444800
-    manager.runtime_state[area.id]["nightlight_blocked"] = True
     await manager.async_persist_runtime()
     original = manager.snapshot(hass_admin_user)
     started, finish = asyncio.Event(), asyncio.Event()
@@ -108,26 +98,18 @@ async def test_mode_is_not_published_during_delayed_storage(
         await save(data)
 
     with patch.object(manager._store, "async_save", side_effect=delayed):
-        operation = (
-            manager.async_resume(area.id)
-            if command == "resume"
-            else manager.async_set_mode(area.id, command, command == "automation")
-        )
+        operation = manager.async_set_mode(area.id, command, command == "automation")
         pending = hass.async_create_task(operation)
         await started.wait()
         during = manager.snapshot(hass_admin_user)
         assert during["revision"] == original["revision"]
         assert during["config"] == original["config"]
-        assert manager.runtime_state[area.id]["pause_until"] == 4102444800
         finish.set()
         await pending
     after = manager.snapshot(hass_admin_user)
     assert after["revision"] == original["revision"] + 1
     stored = await manager._store.async_load()
     assert stored["config"] == after["config"]
-    if command == "resume":
-        assert "pause_until" not in stored["runtime"][area.id]
-        assert "nightlight_blocked" not in stored["runtime"][area.id]
     await hass.config_entries.async_unload(entry.entry_id)
 
 
@@ -141,8 +123,8 @@ async def test_invalid_mode_does_not_change_revision(hass, mode, enabled):
     await hass.config_entries.async_unload(entry.entry_id)
 
 
-async def test_resume_commit_preserves_presence_event_during_storage(hass, freezer):
-    """A detector's event timestamp survives a slow durable pause reset."""
+async def test_mode_commit_preserves_presence_event_during_storage(hass, freezer):
+    """A detector's event timestamp survives a slow durable mode change."""
     entry, area, manager = await configured(hass)
     hass.states.async_set("binary_sensor.presence", "on")
     config = deepcopy(manager.config)
@@ -150,7 +132,6 @@ async def test_resume_commit_preserves_presence_event_during_storage(hass, freez
         presence_entity_id="binary_sensor.presence", absence_delay=30
     )
     await manager.async_save_config(config, manager.revision)
-    manager.runtime_state[area.id]["pause_until"] = 4102444800
     await manager.async_persist_runtime()
     started, finish = asyncio.Event(), asyncio.Event()
     save = manager._store.async_save
@@ -161,7 +142,9 @@ async def test_resume_commit_preserves_presence_event_during_storage(hass, freez
         await save(data)
 
     with patch.object(manager._store, "async_save", side_effect=delayed):
-        pending = hass.async_create_task(manager.async_resume(area.id))
+        pending = hass.async_create_task(
+            manager.async_set_mode(area.id, "automation", True)
+        )
         await started.wait()
         hass.states.async_set("binary_sensor.presence", "off")
         absence_started = hass.states.get(
@@ -181,7 +164,7 @@ async def test_resume_commit_preserves_presence_event_during_storage(hass, freez
     await hass.config_entries.async_unload(entry.entry_id)
 
 
-@pytest.mark.parametrize("command", ["natural", "resume"])
+@pytest.mark.parametrize("command", ["natural", "automation"])
 async def test_failed_mode_commit_does_not_strand_preempted_lamps(hass, command):
     """A rejected mode request cannot leave an interrupted old all-on half done."""
     entry, area, manager = await configured(hass)
@@ -224,11 +207,7 @@ async def test_failed_mode_commit_does_not_strand_preempted_lamps(hass, command)
     hass.states.async_set("binary_sensor.presence", "on")
     await started.wait()
     with patch.object(manager._store, "async_save", side_effect=reject_new_config):
-        operation = (
-            manager.async_resume(area.id)
-            if command == "resume"
-            else manager.async_set_mode(area.id, "natural", False)
-        )
+        operation = manager.async_set_mode(area.id, command, False)
         pending = hass.async_create_task(operation)
         for _ in range(3):
             await asyncio.sleep(0)
@@ -243,7 +222,7 @@ async def test_failed_mode_commit_does_not_strand_preempted_lamps(hass, command)
     await hass.config_entries.async_unload(entry.entry_id)
 
 
-@pytest.mark.parametrize("command", ["natural", "resume"])
+@pytest.mark.parametrize("command", ["natural", "automation"])
 async def test_failed_mode_recovery_never_overrides_new_manual_off(hass, command):
     """A newer manual intention cancels recovery of the rejected mode request."""
     entry, area, manager = await configured(hass)
@@ -290,11 +269,7 @@ async def test_failed_mode_recovery_never_overrides_new_manual_off(hass, command
     hass.states.async_set("binary_sensor.presence", "on")
     await started.wait()
     with patch.object(manager._store, "async_save", side_effect=reject_new_config):
-        operation = (
-            manager.async_resume(area.id)
-            if command == "resume"
-            else manager.async_set_mode(area.id, "natural", False)
-        )
+        operation = manager.async_set_mode(area.id, command, False)
         pending = hass.async_create_task(operation)
         for _ in range(3):
             await asyncio.sleep(0)
@@ -314,5 +289,44 @@ async def test_failed_mode_recovery_never_overrides_new_manual_off(hass, command
     assert [target for target, service in calls if service == "turn_on"] == [
         "light.bulb"
     ]
-    assert manager.runtime_state[area.id]["pause_until"]
+    await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_queued_disable_recovery_rechecks_newer_command_after_waiting(hass):
+    """A recovery already queued at release cannot undo a newer explicit off."""
+    entry, area, manager = await configured(hass)
+    hass.states.async_set("binary_sensor.presence", "on")
+    calls = []
+
+    async def lamp(call):
+        calls.append(call.service)
+        hass.states.async_set(
+            call.data["entity_id"],
+            "on" if call.service == "turn_on" else "off",
+            {"supported_color_modes": ["brightness"]},
+            context=call.context,
+        )
+
+    hass.services.async_register("light", "turn_on", lamp)
+    hass.services.async_register("light", "turn_off", lamp)
+    config = deepcopy(manager.config)
+    config["rooms"][area.id].update(
+        presence_entity_id="binary_sensor.presence", automation_enabled=True
+    )
+    await manager.async_save_config(config, manager.revision)
+    await hass.async_block_till_done()
+    assert hass.states.get("light.bulb").state == "on"
+    calls.clear()
+    engine = manager.engines[area.id]
+    release = engine.async_suspend_pending_automation()
+    async with engine._lock:
+        manual = hass.async_create_task(manager.async_room_command(area.id, "turn_off"))
+        # Release sees no new command yet; both tasks must then wait for the lock.
+        release()
+        for _ in range(3):
+            await asyncio.sleep(0)
+    await manual
+    await hass.async_block_till_done()
+    assert calls == ["turn_off"]
+    assert hass.states.get("light.bulb").state == "off"
     await hass.config_entries.async_unload(entry.entry_id)

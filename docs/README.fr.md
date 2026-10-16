@@ -13,12 +13,12 @@ Halo est une intégration personnalisée Home Assistant qui réunit présence, l
 Une seule intégration couvre ton logement. Le panneau est inclus, suit le thème Home Assistant et s'adapte aux ordinateurs comme aux mobiles. La configuration de Halo ne nécessite ni YAML ni carte de dashboard séparée. Son moteur d'éclairage fonctionne dans Home Assistant et reste actif lorsque le panneau est fermé.
 
 <a href="https://raw.githubusercontent.com/Gnol86/Halo/main/docs/images/room-control-fr.png">
-  <img src="https://raw.githubusercontent.com/Gnol86/Halo/main/docs/images/room-control-fr.png" alt="Pilotage de Halo : sept pièces avec leur état d'éclairage, la scène Cinéma active dans le salon et une liste ordonnée de scènes Halo et Home Assistant" width="1000">
+  <img src="https://raw.githubusercontent.com/Gnol86/Halo/main/docs/images/room-control-fr.png" alt="Aperçu simulé du pilotage Halo : huit pièces, dont six configurées, lumière naturelle dans le salon et trois scènes Halo" width="1000">
 </a>
 
-*Pilote toutes tes pièces depuis un seul panneau. Repère celles qui suivent une scène, la lumière naturelle, une pause manuelle ou une veilleuse, puis lance une ambiance en un clic.*
+*Pilote toutes tes pièces depuis un seul panneau. Repère celles qui suivent une scène, la lumière naturelle, une commande directe ou une veilleuse, puis lance une ambiance en un clic.*
 
-Les captures montrent Halo dans Home Assistant, avec des pièces fictives et des appareils simulés. Clique sur une capture pour l’afficher en pleine taille.
+Les captures montrent l’aperçu local du panneau Halo, avec des pièces fictives et des appareils simulés. Aucune instance du logement n’est connectée. Clique sur une capture pour l’afficher en pleine taille.
 
 > **État du projet :** Halo est en début de développement, avec des releases GitHub publiées pour une installation comme dépôt personnalisé HACS. Les tests automatisés et les essais ciblés dans une instance Home Assistant isolée utilisent des lampes simulées ; la validation sur les équipements réels du logement reste à compléter. La [demande d'inclusion au catalogue HACS par défaut](https://github.com/hacs/default/pull/11771) est ouverte et attend son examen ; Halo n'est pas encore référencé.
 
@@ -32,7 +32,7 @@ Les captures montrent Halo dans Home Assistant, avec des pièces fictives et des
 | **Scènes et priorités** | Créer des scènes avec des conditions d'état, de valeur numérique, d'horaire ou de soleil. Classer les scènes par priorité et choisir si chacune peut allumer automatiquement les lumières. |
 | **Scènes Home Assistant** | Lier une scène existante pour la lancer directement, ou importer une copie indépendante de ses réglages pour les lampes de la pièce lorsque la configuration source est accessible. |
 | **Veilleuses** | Conserver certaines lampes avec des réglages fixes pendant une absence confirmée, tout en éteignant les autres. Les veilleuses suivent l'autorisation d'éclairage de la pièce. |
-| **Commandes manuelles** | Une intervention manuelle suspend les changements de scène automatiques et les ajustements naturels pour toute la pièce. Reprendre explicitement ou laisser agir les règles de fin de pause. |
+| **Commande directe** | Allume, éteins et lance des scènes sans suspendre les automatismes de la pièce. Désactive **Automatisation** pour garder la main. |
 | **Transitions** | Définir des durées globales pour l'éclairage quotidien, les ajustements naturels, les scènes et l'extinction, avec des réglages propres à chaque pièce selon les capacités des lampes. |
 
 Le panneau propose une recherche des pièces et des entités, un état actualisé et une édition des scènes avec les commandes natives des lampes Home Assistant. L'anglais et le français sont inclus : le panneau suit la langue de l'interface de chaque utilisateur, en français pour ses variantes régionales et en anglais autrement. Les noms personnalisés des pièces, profils et scènes restent inchangés.
@@ -86,7 +86,7 @@ Mets Halo à jour avec HACS ou remplace le dossier `custom_components/halo` par 
 
 Utilise **Pilotage** pour créer ou lancer des scènes et **Réglages** pour personnaliser les transitions de la pièce. Tes modifications restent dans un brouillon commun lorsque tu changes d'onglet, de pièce ou de profil, jusqu'à leur enregistrement ou leur abandon.
 
-Chaque pièce configurée expose aussi des entités Home Assistant : une lumière de commande, un capteur d'état, des interrupteurs d'éclairage automatique et de lumière naturelle, un bouton de reprise et ses scènes. Tu peux les utiliser dans tes propres dashboards et automatisations.
+Chaque pièce configurée expose aussi des entités Home Assistant : une lumière de commande, un capteur d'état, des interrupteurs d'éclairage automatique et de lumière naturelle et ses scènes. Tu peux les utiliser dans tes propres dashboards et automatisations.
 
 ## Le panneau en détail
 
@@ -95,7 +95,7 @@ Chaque pièce configurée expose aussi des entités Home Assistant : une lumièr
 Choisis une source de présence, laisse un délai avant d'éteindre une pièce vide et règle le seuil lumineux ainsi que l'hystérésis. Les valeurs actuelles des capteurs t'aident à comprendre quand Halo autorise l'éclairage.
 
 <a href="https://raw.githubusercontent.com/Gnol86/Halo/main/docs/images/room-automation-fr.png">
-  <img src="https://raw.githubusercontent.com/Gnol86/Halo/main/docs/images/room-automation-fr.png" alt="Automatisation du salon avec un capteur de présence, un délai d'absence de 300 secondes, un seuil d'allumage de 120 lux et une hystérésis de 10 lux" width="1000">
+  <img src="https://raw.githubusercontent.com/Gnol86/Halo/main/docs/images/room-automation-fr.png" alt="Aperçu simulé de l’automatisation du salon avec un capteur de présence, un délai d’absence de zéro seconde, un seuil d’allumage de 50 lux et une hystérésis de 20 lux" width="1000">
 </a>
 
 ### Profils de lumière naturelle
@@ -103,26 +103,18 @@ Choisis une source de présence, laisse un délai avant d'éteindre une pièce v
 Définis la luminosité et la température du blanc selon la hauteur du soleil, puis réutilise le profil dans plusieurs pièces. Les courbes du soleil montant ci-dessous suivent une progression douce ; le matin et le soir peuvent être configurés séparément.
 
 <a href="https://raw.githubusercontent.com/Gnol86/Halo/main/docs/images/natural-profiles-fr.png">
-  <img src="https://raw.githubusercontent.com/Gnol86/Halo/main/docs/images/natural-profiles-fr.png" alt="Éditeur de profils naturels montrant les profils réutilisables et les courbes du soleil montant, de 25 à 95 pour cent de luminosité et de 2700 à 5500 kelvins" width="1000">
+  <img src="https://raw.githubusercontent.com/Gnol86/Halo/main/docs/images/natural-profiles-fr.png" alt="Aperçu simulé de l’éditeur de profils naturels avec trois profils, courbes en S liées matin et soir, luminosité de 20 à 100 pour cent et température de 2200 à 6000 kelvins entre -6,5 et 45,5 degrés de hauteur du soleil" width="1000">
 </a>
 
 ## Comprendre les règles d'éclairage
 
-**Éclairage quotidien.** Lorsque la présence et l'autorisation d'éclairage le permettent, Halo applique la première scène conditionnelle admissible. Si aucune scène ne s'applique, il utilise l'ambiance de base et les profils naturels actifs de la pièce. Une scène explicitement autorisée à allumer peut agir indépendamment de la présence et de la luminosité, tout en respectant les pauses manuelles et la désactivation des automatismes.
+**Éclairage quotidien.** Lorsque la présence et l'autorisation d'éclairage le permettent, Halo applique la première scène conditionnelle admissible. Si aucune scène ne s'applique, il utilise l'ambiance de base et les profils naturels actifs de la pièce. Une scène explicitement autorisée à allumer peut agir indépendamment de la présence et de la luminosité, tout en respectant la désactivation des automatismes et l’édition en direct.
 
-**Tes choix manuels.** Modifier une lampe ou lancer explicitement une scène déclenche une pause pour toute la pièce. Elle prend fin à l'expiration de son délai, au retour après une absence confirmée suffisamment longue, ou avec **Reprendre l'automatisation**. L'extinction automatique pendant une pause est configurable par pièce et autorisée par défaut. Une extinction manuelle de toute la pièce bloque le rallumage automatique, veilleuses comprises, pendant cette pause.
+**Tes choix manuels.** Les modifications manuelles des lampes et les scènes lancées explicitement sont des commandes ponctuelles. Elles ne suspendent jamais les automatismes de la pièce. Halo n’annule pas immédiatement sa propre commande explicite, mais sa prochaine action automatique normale peut remplacer ce réglage ou cette scène. Pour garder la main, désactive **Automatisation** dans la pièce ; les commandes explicites restent disponibles. L’édition d’une scène en direct suspend toujours temporairement les automatismes pendant ton travail.
 
-**Correction des pauses manuelles dans 0.2.2.** Les retours correspondant à une commande récente de Halo tolèrent l'arrondi de température de blanc des ponts comme Hue et les attributs absents lorsqu'une lampe est éteinte, pour éviter de fausses pauses manuelles. Les commandes identifiées d'un utilisateur ou d'une autre automatisation restent prioritaires. Cette correction est incluse dans 0.2.2 ; sa validation sur les équipements du logement reste distincte.
+**Passage à 0.3.0.** Les pauses manuelles sont entièrement supprimées : détection, délais, réglages, messages d’activité et boutons **Reprendre l’automatisation**. Les anciennes pauses sauvegardées sont effacées avant le démarrage du moteur. Si l’automatisation de la pièce est activée, ses règles normales s’appliquent dès le chargement de la nouvelle version. La protection de présence, la gestion des appareils indisponibles et les garanties de l’édition en direct sont conservées.
 
-**Correction des retours de transition dans 0.2.3.** Halo mémorise la luminosité et la couleur de départ de chaque transition : un retour intermédiaire reçu après une valeur proche de la cible ne crée plus de fausse pause manuelle. La reconnaissance des valeurs intermédiaires reste limitée à la transition transmise plus cinq secondes ; les commandes immédiates et les lampes sans prise en charge des transitions n'acceptent que les valeurs correspondant à la cible. Les commandes identifiées d'un utilisateur ou d'une autre automatisation restent prioritaires. Une nouvelle commande remplace l'attente précédente ; une intervention manuelle ou un échec de commande l'invalide. Les changements physiques de couleur incompatibles restent également détectés, avec une tolérance d'arrondi plus précise pour les couleurs XY.
-
-**Correction des retours tardifs dans 0.2.4.** Les petits arrondis de luminosité et de température de blanc autour de la dernière cible commandée restent reconnaissables après la transition. L'intervalle élargi de transition expire toujours ; les retours tardifs ne peuvent ni masquer un nouvel allumage ou une extinction, ni accumuler un écart à la cible. Les commandes manuelles identifiées restent prioritaires. Cela corrige un événement capturé sur une lampe Hue du logement : sa luminosité est passée de 128 à 127 sur 255 près de 148 secondes après la commande de Halo, déclenchant à tort deux heures de pause dans 0.2.3. L'événement exact est couvert par un test de régression ; les règles protégeant les vraies pauses manuelles pendant une brève perte de présence restent inchangées.
-
-**Correction des retours de groupes Hue dans 0.2.5.** Halo vérifie les membres connus en plus du groupe. Hue peut encore annoncer un groupe allumé et changer son mode de couleur après l'extinction de sa dernière ampoule ; l'extinction confirmée des membres permet maintenant de reconnaître ce retour décalé du groupe. Les moyennes tardives de luminosité et de température sont aussi vérifiées avec les cibles individuelles des membres. Un changement incompatible d'un membre ou une commande externe identifiée déclenche toujours une pause lorsque le groupe remonte le changement. La fenêtre de transition et les tolérances d'arrondi habituelles restent inchangées.
-
-Sans origine identifiable, un réglage physique dans l'intervalle de transition pendant sa courte fenêtre, ou dans la petite tolérance d'arrondi de la cible finale ensuite, ne peut pas être distingué de façon fiable d'un retour matériel. La reconnaissance des groupes nécessite des membres disponibles et ne s'exécute que lorsque le groupe émet une mise à jour ; sélectionner directement les ampoules donne à Halo leurs événements individuels. Les changements non identifiés sans rapport avec une commande en attente déclenchent encore des pauses ; 0.2.5 ne prétend pas résoudre les retours d'origine inconnue. Les tests couvrent des retours simulés et des interventions manuelles ; ils ne valident pas tous les équipements du logement. Les séquences exactes des pauses domestiques du 12 octobre restent indisponibles, car leurs valeurs de luminosité et de couleur n'ont pas été enregistrées.
-
-**Diagnostic des pauses dans 0.2.4.** Lorsqu'un changement de lampe déclenche une pause, l'activité native enregistre la lampe, les valeurs modifiées et l'origine détectée : commande utilisateur identifiée, commande externe identifiée ou origine non identifiée. Un retour d'origine inconnue n'est pas présenté comme la preuve d'une intervention humaine.
+Les tableaux de bord ou automatisations personnalisés utilisant les anciens boutons de reprise Halo doivent être adaptés ; utilise l’interrupteur **Automatisation** existant pour activer ou désactiver le pilotage automatique. L’action `resume` de `halo/command` et le champ de statut `pause_until` ne sont plus disponibles. Les anciens champs de configuration `manual_pause` et `allow_off_during_pause` sont retirés au chargement et à l’enregistrement. Le capteur d’état conserve la valeur technique `manual` pour compatibilité, désormais affichée **Commande directe** ; elle n’indique ni ne crée de pause.
 
 **Activité : origine des commandes dans 0.2.2.** L'activité des lampes enregistre les commandes de **Halo** et leur motif : présence, nom personnalisé de la scène, veilleuse, lumière naturelle, commande manuelle ou extinction automatique. Les commandes sont présentées comme des demandes, distinctes de l'état rapporté par la lampe. Lorsque son intégration conserve le contexte, le détail d'activité natif identifie également Halo et le motif comme origine. Les ajustements et les commandes dont le retour perd le contexte conservent une entrée de demande. Les scènes Home Assistant liées enregistrent leur activation sur la scène et ses lampes connues ; Halo n'invente pas le contenu des scènes opaques.
 

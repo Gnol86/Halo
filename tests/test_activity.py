@@ -49,12 +49,10 @@ def humanify(hass, events):
     return processor.humanify(iter(async_event_to_row(event) for event in events))
 
 
-@pytest.mark.parametrize("language", ["en", "fr-BE"])
 @pytest.mark.parametrize("origin", ["user", "automation", "unidentified"])
-async def test_manual_pause_records_observed_values_and_actual_origin(
-    hass, room_engine, activity, language, origin
+async def test_lamp_changes_create_no_pause_activity(
+    hass, room_engine, activity, origin
 ):
-    hass.config.language = language
     engine, _, _, _ = room_engine
     await enable(hass, engine)
     hass.states.async_set("binary_sensor.presence", "on")
@@ -69,35 +67,12 @@ async def test_manual_pause_records_observed_values_and_actual_origin(
         else Context()
     )
     hass.states.async_set(
-        old.entity_id,
-        "on",
-        {**old.attributes, "friendly_name": "Ma lampe", "brightness": 42},
-        context=context,
+        old.entity_id, "on", {**old.attributes, "brightness": 42}, context=context
     )
     await hass.async_block_till_done()
-    assert engine.status["pause_until"] is not None
-    entries = [event for event in activity if event.event_type == EVENT_LOGBOOK_ENTRY]
-    assert len(entries) == 1
-    assert entries[0].context is context
-    assert entries[0].data["entity_id"] == "light.one"
-    message = entries[0].data["message"]
-    assert "Ma lampe" in message
-    assert "brightness: 128 → 42" in message
-    if language == "fr-BE":
-        assert "pause de la pièce" in message
-        assert {
-            "user": "commande utilisateur identifiée",
-            "automation": "commande externe identifiée",
-            "unidentified": "origine non identifiée",
-        }[origin] in message
-    else:
-        assert "room paused" in message
-        assert {
-            "user": "identified user command",
-            "automation": "identified external command",
-            "unidentified": "unidentified origin",
-        }[origin] in message
-    assert any(row.get("message") == message for row in humanify(hass, activity))
+    assert "pause_until" not in engine.status
+    assert not commands(activity)
+    assert not [event for event in activity if event.event_type == EVENT_LOGBOOK_ENTRY]
 
 
 @pytest.mark.parametrize(
@@ -146,7 +121,7 @@ async def test_presence_attribution_and_live_context(
         processor.humanify(iter([async_event_to_row(feedback)]))[0]["context_name"]
         == f"Halo — {label}"
     )
-    assert engine.status["pause_until"] is None
+    assert "pause_until" not in engine.status
 
 
 async def test_tv_scene_keeps_custom_name_and_does_not_repeat(
@@ -229,7 +204,7 @@ async def test_mixed_base_and_natural_targets_do_not_share_a_false_reason(
 
 
 @pytest.mark.parametrize("cause", ["absence", "bright"])
-async def test_automatic_off_during_pause_keeps_actual_reason(
+async def test_automatic_off_after_explicit_on_keeps_actual_reason(
     hass, freezer, room_engine, activity, cause
 ):
     engine, _, room, _ = room_engine

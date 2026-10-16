@@ -13,7 +13,6 @@ from .websocket import async_register
 PLATFORMS = (
     Platform.LIGHT,
     Platform.SWITCH,
-    Platform.BUTTON,
     Platform.SCENE,
     Platform.SENSOR,
 )

@@ -4,11 +4,11 @@ import { createId, curveInterpolation, dimmable, interpolate, moveItem, newProfi
 import { en, fr, language, translate } from "../src/translations";
 import type { Curve } from "../src/types";
 
-test("room defaults preserve manual turn-off policy and opt-in automation", () => {
+test("room defaults preserve opt-in automation without manual pause settings", () => {
   const room = newRoom("living_room");
   assert.equal(room.automation_enabled, false);
-  assert.equal(room.allow_off_during_pause, true);
-  assert.equal(room.manual_pause, 7200);
+  assert.equal("allow_off_during_pause" in room, false);
+  assert.equal("manual_pause" in room, false);
   assert.equal(room.absence_delay, 0);
   assert.equal(room.lux_off_delay, 30);
   assert.equal(room.lux_threshold, null);

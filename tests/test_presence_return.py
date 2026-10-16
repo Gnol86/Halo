@@ -3,7 +3,6 @@
 import asyncio
 
 import pytest
-from homeassistant.core import Context
 from test_engine import advance, enable, natural_profile, scene
 from test_engine import room_engine as room_engine
 
@@ -67,7 +66,7 @@ async def test_return_reapplies_ambience_with_presence_transition(
     assert engine.is_on
     assert engine.status["dark"] is False
     assert engine.status["lux"] == 200
-    assert engine.status["pause_until"] is None
+    assert "pause_until" not in engine.status
     assert calls and all(call.data.get("transition") == 0 for call in calls)
     first = next(call for call in calls if call.data["entity_id"] == "light.one")
     assert first.service == "turn_on"
@@ -194,7 +193,7 @@ async def test_rooms_allowing_lux_off_do_not_bypass(hass, room_engine):
 
 @pytest.mark.parametrize(
     "invalidate",
-    ["manual", "physical", "editing", "disabled", "reconfigure", "restart"],
+    ["manual", "editing", "disabled", "reconfigure", "restart"],
 )
 async def test_window_is_cleared_by_user_actions_and_lifecycle(
     hass, room_engine, invalidate
@@ -204,13 +203,6 @@ async def test_window_is_cleared_by_user_actions_and_lifecycle(
     await absent(hass, room_engine)
     if invalidate == "manual":
         await engine.async_turn_off()
-    elif invalidate == "physical":
-        state = hass.states.get("light.one")
-        context = Context(user_id="user")
-        hass.states.async_set("light.one", "on", state.attributes, context=context)
-        await hass.async_block_till_done()
-        hass.states.async_set("light.one", "off", state.attributes, context=context)
-        await hass.async_block_till_done()
     elif invalidate == "editing":
         token = await engine.async_begin_edit("user")
         await engine.async_end_edit(token, save=False)
@@ -241,26 +233,28 @@ async def test_manual_extinction_never_opens_window(hass, room_engine):
     await hass.async_block_till_done()
     calls.clear()
     await present(hass)
-    assert engine.status["pause_until"] is not None
+    assert "pause_until" not in engine.status
     assert not engine.is_on
     assert not calls
 
 
-async def test_confirmed_absence_still_ends_manual_pause(hass, freezer, room_engine):
+async def test_explicit_on_keeps_absence_and_presence_return_active(
+    hass, freezer, room_engine
+):
     engine, _, room, calls = room_engine
     await occupied_bright_room(hass, room_engine)
     room["absence_delay"] = 30
     await engine.async_reconfigure()
     await engine.async_turn_on()
-    assert engine.status["pause_until"] is not None
+    assert "pause_until" not in engine.status
     hass.states.async_set("binary_sensor.presence", "off")
     await hass.async_block_till_done()
     await advance(hass, freezer, 30)
     assert not engine.is_on
-    assert engine.status["pause_until"] is not None
+    assert "pause_until" not in engine.status
     calls.clear()
     await present(hass)
-    assert engine.status["pause_until"] is None
+    assert "pause_until" not in engine.status
     assert engine.is_on
     assert all(call.data.get("transition") == 1 for call in calls)
 

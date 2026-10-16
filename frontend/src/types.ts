@@ -74,9 +74,7 @@ export interface Room {
   lux_off: boolean;
   lighting_fallback: LightingFallback;
   absence_delay: number;
-  manual_pause: number;
   lux_off_delay: number;
-  allow_off_during_pause: boolean;
   automation_enabled: boolean;
   natural_enabled: boolean;
   transitions: Transitions;
@@ -107,7 +105,6 @@ export interface RoomStatus {
   state?: string;
   selected_scene?: string | null;
   scene_id?: string | null;
-  pause_until?: string | number | null;
   is_on?: boolean;
   available?: boolean;
   scene_errors?: Record<string, string>;

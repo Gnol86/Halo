@@ -24,17 +24,12 @@
         "name": "Lumière naturelle"
       }
     },
-    "button": {
-      "resume": {
-        "name": "Reprendre l’automatisation"
-      }
-    },
     "sensor": {
       "room_status": {
         "name": "État",
         "state": {
           "off": "Éteint",
-          "manual": "Manuel",
+          "manual": "Commande directe",
           "natural": "Lumière naturelle",
           "nightlight": "Veilleuse"
         }

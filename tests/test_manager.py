@@ -40,7 +40,7 @@ async def test_room_creation_rename_reload_remove(hass):
     assert device is not None
     assert device.area_id == area.id
     assert (
-        len(er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id)) == 5
+        len(er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id)) == 4
     )
     status_sensor = er.async_get(hass).async_get_entity_id(
         "sensor", DOMAIN, f"{area.id}_status"
@@ -53,13 +53,11 @@ async def test_room_creation_rename_reload_remove(hass):
     await hass.async_block_till_done()
     assert devices.async_get(device.id).name == "Salon"
     assert manager.room_name(area.id) == "Salon"
-    manager.runtime_state[area.id]["pause_until"] = 4102444800
     await manager.async_persist_runtime()
     assert await hass.config_entries.async_reload(entry.entry_id)
     await hass.async_block_till_done()
     manager = entry.runtime_data
     assert manager.config["rooms"][area.id]["lights"] == ["light.bulb"]
-    assert manager.runtime_state[area.id]["pause_until"] == 4102444800
     assert (
         er.async_get(hass).async_get_entity_id("sensor", DOMAIN, f"{area.id}_status")
         == status_sensor
@@ -179,8 +177,6 @@ async def test_native_modes_respect_member_permissions(hass):
     context = Context(user_id=user.id)
     with pytest.raises(Unauthorized):
         await manager.async_set_mode(area.id, "automation", True, context)
-    with pytest.raises(Unauthorized):
-        await manager.async_resume(area.id, context)
     assert not manager.config["rooms"][area.id]["automation_enabled"]
 
 
@@ -197,15 +193,13 @@ async def test_failed_load_preserves_invalid_saved_data(hass):
 
 
 @pytest.mark.parametrize(
-    ("absence_delay", "manual_pause", "transitions"),
+    ("absence_delay", "transitions"),
     [
         (
             120,
-            900,
             dict.fromkeys(("turn_on", "lux_on", "natural", "scene", "turn_off")),
         ),
         (
-            0,
             0,
             {
                 "turn_on": None,
@@ -218,16 +212,14 @@ async def test_failed_load_preserves_invalid_saved_data(hass):
     ],
 )
 async def test_saved_defaults_are_not_replaced_when_reloading(
-    hass, absence_delay, manual_pause, transitions
+    hass, absence_delay, transitions
 ):
     entry, area, manager = await configured(hass)
     assert manager.config["rooms"][area.id]["absence_delay"] == 0
-    assert manager.config["rooms"][area.id]["manual_pause"] == 7200
     saved = deepcopy(manager.config)
     saved["transitions"] = transitions
     saved["rooms"][area.id].update(
         absence_delay=absence_delay,
-        manual_pause=manual_pause,
         transitions={
             "turn_on": None,
             "lux_on": 0,
@@ -414,3 +406,84 @@ async def test_hue_group_registry_metadata_survives_unavailability(
         }
         assert lights[entity.entity_id]["is_group"] is expected
         assert lights[entity.entity_id]["group_members"] == []
+
+
+async def test_legacy_pause_migration_is_durable_before_engines_start(hass):
+    """An installed upgrade cannot expose a saved hold to a running engine."""
+    from custom_components.halo.engine import HaloRoomEngine
+
+    entry, area, manager = await configured(hass)
+    hass.states.async_set("binary_sensor.presence", "off")
+    await hass.config_entries.async_unload(entry.entry_id)
+    legacy = deepcopy(manager._last_stored)
+    legacy["config"]["rooms"][area.id].update(
+        manual_pause=7200,
+        allow_off_during_pause=False,
+        presence_entity_id="binary_sensor.presence",
+        absence_delay=30,
+    )
+    absence = hass.states.get("binary_sensor.presence").last_changed.timestamp()
+    legacy["runtime"][area.id] = {
+        "pause_until": 4102444800,
+        "manual_scene_id": "old_scene",
+        "nightlight_blocked": True,
+        "absence_confirmed": True,
+        "absent_since": absence,
+    }
+    await manager._store.async_save(legacy)
+    original_start = HaloRoomEngine.async_start
+    observed = []
+
+    async def checked_start(engine):
+        current = engine.manager
+        stored = await current._store.async_load()
+        assert stored["runtime"][area.id] == {"absent_since": absence}
+        assert current.runtime_state[area.id] == {"absent_since": absence}
+        room = stored["config"]["rooms"][area.id]
+        assert "manual_pause" not in room
+        assert "allow_off_during_pause" not in room
+        assert not room["automation_enabled"]
+        assert stored["revision"] == legacy["revision"]
+        observed.append(engine.room_id)
+        await original_start(engine)
+
+    with patch.object(HaloRoomEngine, "async_start", checked_start):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+    assert observed == [area.id]
+    assert entry.runtime_data.runtime_state[area.id] == {"absent_since": absence}
+    await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_upgrade_removes_only_legacy_halo_resume_buttons(hass):
+    """Registry cleanup includes disabled old buttons but preserves other entities."""
+    entry, area, manager = await configured(hass)
+    await hass.config_entries.async_unload(entry.entry_id)
+    registry = er.async_get(hass)
+    removed = [
+        registry.async_get_or_create(
+            "button",
+            DOMAIN,
+            f"{room}_resume",
+            config_entry=entry,
+            disabled_by=er.RegistryEntryDisabler.USER,
+        ).entity_id
+        for room in (area.id, "deleted_room")
+    ]
+    other_entry = MockConfigEntry(domain=DOMAIN, title="Other", data={})
+    other_entry.add_to_hass(hass)
+    kept = [
+        registry.async_get_or_create(
+            "button", DOMAIN, "other_resume", config_entry=other_entry
+        ).entity_id,
+        registry.async_get_or_create(
+            "button", "test", "other_resume", config_entry=entry
+        ).entity_id,
+        registry.async_get_or_create(
+            "button", DOMAIN, "unrelated_action", config_entry=entry
+        ).entity_id,
+    ]
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    assert all(registry.async_get(entity_id) is None for entity_id in removed)
+    assert all(registry.async_get(entity_id) is not None for entity_id in kept)
+    assert registry.async_get_entity_id("light", DOMAIN, f"{area.id}_light")
+    await hass.config_entries.async_unload(entry.entry_id)

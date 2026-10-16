@@ -165,7 +165,7 @@ const curves=(low,high,warm,cool,interpolation="ease_in_out")=>({
 const morning=curves(20,100,2200,6000);
 const room=(id,lights,overrides={})=>({
   id,lights,presence_entity_id:null,presence_states:["on"],lux_entity_id:null,lux_threshold:null,lux_hysteresis:0,lux_off:false,lighting_fallback:{mode:"always",start:"18:00",end:"08:00",linked:true,morning_below:0,evening_below:0,turn_off:false},
-  absence_delay:0,manual_pause:7200,lux_off_delay:30,allow_off_during_pause:true,automation_enabled:true,natural_enabled:true,
+  absence_delay:0,lux_off_delay:30,automation_enabled:true,natural_enabled:true,
   transitions:inherited(),base:{},nightlight:{enabled:false,lights:{}},associations:[],scenes:[],...overrides,
 });
 const scenes=[
@@ -177,7 +177,7 @@ const rooms={
   lounge:room("lounge",["light.sofa","light.ceiling","light.table"],{presence_entity_id:"binary_sensor.presence",lux_entity_id:"sensor.illuminance",lux_threshold:50,lux_hysteresis:20,nightlight:{enabled:false,lights:{"light.sofa":{state:"on",brightness:30,color_mode:"rgb",rgb_color:[255,180,100],effect:"Candle"}}},associations:[{profile_id:"warm",lights:["light.sofa"],brightness_offset:-30},{profile_id:"daylight",lights:["light.ceiling"],brightness_offset:0}],scenes}),
   kitchen:room("kitchen",["light.kitchen","light.worktop"],{associations:[{profile_id:"daylight",lights:["light.kitchen","light.worktop"],brightness_offset:0}]}),
   bedroom:room("bedroom",["light.bed_left","light.bed_right"],{automation_enabled:false,associations:[{profile_id:"rhythm",lights:["light.bed_left","light.bed_right"],brightness_offset:-15}]}),
-  office:room("office",["light.desk","light.office_ceiling"],{associations:[{profile_id:"daylight",lights:["light.desk","light.office_ceiling"],brightness_offset:0}]}),
+  office:room("office",["light.desk","light.office_ceiling"],{automation_enabled:false,associations:[{profile_id:"daylight",lights:["light.desk","light.office_ceiling"],brightness_offset:0}]}),
   hall:room("hall",["light.hall"],{presence_entity_id:"binary_sensor.hall_presence",absence_delay:30,natural_enabled:false}),
   bathroom:room("bathroom",["light.mirror","light.bathroom_ceiling"],{associations:[{profile_id:"rhythm",lights:["light.mirror","light.bathroom_ceiling"],brightness_offset:0}]}),
 };
@@ -217,12 +217,12 @@ let snapshot={revision:1,is_admin:true,config:{sun_entity_id:"sun.sun",presence_
   daylight:{id:"daylight",name:"Lumière du jour",linked:true,morning:curves(35,100,2700,6500,"linear"),evening:curves(35,100,2700,6500,"linear")},
   rhythm:{id:"rhythm",name:"Réveil et soirée",linked:false,morning:curves(15,95,2400,5500),evening:curves(8,70,2000,4000)},
 },rooms},areas:[{id:"lounge",name:"Salon"},{id:"kitchen",name:"Cuisine"},{id:"bedroom",name:"Chambre"},{id:"office",name:"Bureau"},{id:"hall",name:"Hall d’entrée"},{id:"bathroom",name:"Salle de bain"},{id:"garage",name:"Garage"},{id:"garden",name:"Jardin"}],lights,entities:[...entities,...lights.map(({entity_id,name,state,attributes})=>({entity_id,name,state,attributes}))],status:{
-  lounge:{reason:"natural",is_on:true,available:true,presence:true,lux:30,pause_until:null},
-  kitchen:{reason:"base",is_on:true,available:true,pause_until:null},
-  bedroom:{reason:"disabled",is_on:false,available:true,pause_until:null},
-  office:{reason:"manual_pause",is_on:true,available:true,pause_until:Math.floor(Date.now()/1000)+35*60},
-  hall:{reason:"absence",is_on:false,available:true,presence:false,pause_until:null},
-  bathroom:{reason:"unavailable",is_on:false,available:false,pause_until:null},
+  lounge:{reason:"natural",is_on:true,available:true,presence:true,lux:30},
+  kitchen:{reason:"base",is_on:true,available:true},
+  bedroom:{reason:"disabled",is_on:false,available:true},
+  office:{reason:"disabled",is_on:true,available:true},
+  hall:{reason:"absence",is_on:false,available:true,presence:false},
+  bathroom:{reason:"unavailable",is_on:false,available:false},
 }};
 const sourceScene={id:"reading",name:"Lecture du soir",entities:{"light.sofa":{state:"on",brightness:110,color_mode:"rgb",rgb_color:[255,180,100],effect:"Candle"},"light.ceiling":{state:"off"},"light.kitchen":{state:"on"},"media_player.tv":"off"}};
 let callback;
@@ -253,7 +253,7 @@ const hass={locale:{language:"fr-BE"},themes:{darkMode:false},states:Object.from
   if(message.type==="halo/save"){
     if(message.revision!==snapshot.revision)throw{code:"conflict"};
     snapshot.config=structuredClone(message.config);snapshot.revision++;
-    for(const room of Object.values(snapshot.config.rooms))snapshot.status[room.id]??={reason:"disabled",is_on:false,available:true,pause_until:null};
+    for(const room of Object.values(snapshot.config.rooms))snapshot.status[room.id]??={reason:"disabled",is_on:false,available:true};
     send();
   }
   if(message.type==="halo/edit/begin"){
@@ -276,15 +276,14 @@ const hass={locale:{language:"fr-BE"},themes:{darkMode:false},states:Object.from
     if(["automation","natural"].includes(message.command)){room[message.command+"_enabled"]=message.enabled;snapshot.revision++;status.reason=!room.automation_enabled?"disabled":room.natural_enabled?"natural":"base";}
     if(message.command==="turn_on"||message.command==="turn_off"){
       const on=message.command==="turn_on";applyTargets(Object.fromEntries(room.lights.map(id=>[id,{state:on?"on":"off"}])));status.is_on=on;
-      status.reason="manual_pause";status.pause_until=Math.floor(Date.now()/1000)+room.manual_pause;
+      status.reason=room.automation_enabled?"idle":"disabled";status.scene_id=null;
     }
     if(message.command==="scene"){
       const scene=room.scenes.find(item=>item.id===message.scene_id);if(scene){
         const targets=scene.type==="home_assistant"?(scene.scene_entity_id==="scene.reading"?sourceScene.entities:{"light.sofa":{state:"on",brightness:180,effect:"Candle"}}):scene.lights;
         applyTargets(Object.fromEntries(Object.entries(targets).map(([id,target])=>[id,typeof target==="string"?{state:target}:target])));
-        status.scene_id=scene.id;status.reason="manual_pause";status.pause_until=Math.floor(Date.now()/1000)+room.manual_pause;status.is_on=room.lights.some(id=>hass.states[id]?.state==="on");}
+        status.scene_id=scene.id;status.reason="scene";status.is_on=room.lights.some(id=>hass.states[id]?.state==="on");}
     }
-    if(message.command==="resume"){room.automation_enabled=true;status.pause_until=null;status.scene_id=null;status.reason=room.natural_enabled?"natural":"base";snapshot.revision++;}
     send();
   }
   return structuredClone(snapshot);

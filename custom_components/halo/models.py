@@ -33,9 +33,7 @@ ROOM_DEFAULTS = {
     "lux_off": False,
     "lighting_fallback": LIGHTING_FALLBACK_DEFAULTS.copy(),
     "absence_delay": 0,
-    "manual_pause": 7200,
     "lux_off_delay": 30,
-    "allow_off_during_pause": True,
     "automation_enabled": False,
     "natural_enabled": True,
     "transitions": dict.fromkeys(TRANSITIONS, "inherit"),
@@ -405,6 +403,9 @@ def validate_config(value: Any) -> dict[str, Any]:
     for room_id, supplied in list(rooms.items()):
         _identifier(room_id)
         room = deepcopy(ROOM_DEFAULTS) | _mapping(supplied, "room")
+        # Discard retired settings from storage and older browser drafts.
+        for key in ("manual_pause", "allow_off_during_pause"):
+            room.pop(key, None)
         if room.get("id", room_id) != room_id:
             raise ValueError("Room ID differs from its key")
         room["id"] = room_id
@@ -429,11 +430,10 @@ def validate_config(value: Any) -> dict[str, Any]:
         room["lighting_fallback"] = validate_lighting_fallback(
             room["lighting_fallback"]
         )
-        for key in ("absence_delay", "manual_pause", "lux_off_delay"):
+        for key in ("absence_delay", "lux_off_delay"):
             _number(room[key], key, 0, 604800)
         for key in (
             "lux_off",
-            "allow_off_during_pause",
             "automation_enabled",
             "natural_enabled",
         ):
