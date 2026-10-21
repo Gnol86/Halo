@@ -81,6 +81,10 @@ async def test_lamp_changes_create_no_pause_activity(
         ("en", "presence detected"),
         ("fr", "présence détectée"),
         ("fr-BE", "présence détectée"),
+        ("es", "presencia detectada"),
+        ("es-ES", "presencia detectada"),
+        ("es-MX", "presencia detectada"),
+        ("ES_ar", "presencia detectada"),
         ("de", "presence detected"),
     ],
 )
@@ -124,20 +128,21 @@ async def test_presence_attribution_and_live_context(
     assert "pause_until" not in engine.status
 
 
+@pytest.mark.parametrize(
+    "language,label",
+    [("fr", "scène « TV du salon »"), ("es", "escena «TV du salon»")],
+)
 async def test_tv_scene_keeps_custom_name_and_does_not_repeat(
-    hass, room_engine, activity
+    hass, room_engine, activity, language, label
 ):
-    hass.config.language = "fr"
+    hass.config.language = language
     engine, _, room, calls = room_engine
     room["scenes"] = [scene(autonomous=True) | {"name": "TV du salon"}]
     await engine.async_reconfigure()
     await enable(hass, engine)
     hass.states.async_set("media_player.tv", "on")
     await hass.async_block_till_done()
-    assert all(
-        event.data["name"] == "Halo — scène « TV du salon »"
-        for event in commands(activity)
-    )
+    assert all(event.data["name"] == f"Halo — {label}" for event in commands(activity))
     assert commands(activity)
     count = len(commands(activity))
     await engine._async_wakeup("tick")
@@ -254,9 +259,13 @@ async def test_editor_preview_and_restore_have_explicit_reasons(
     assert {event.data["reason"] for event in commands(activity)} == {"restore"}
 
 
+@pytest.mark.parametrize(
+    "language,request_text", [("en", "requested"), ("es-MX", "encendido solicitado")]
+)
 async def test_failed_service_records_a_request_not_a_success(
-    hass, room_engine, activity
+    hass, room_engine, activity, language, request_text
 ):
+    hass.config.language = language
     engine, _, _, _ = room_engine
 
     async def fail(_call):
@@ -266,7 +275,7 @@ async def test_failed_service_records_a_request_not_a_success(
     await engine.async_turn_on()
     await hass.async_block_till_done()
     assert len(commands(activity)) == 2
-    assert all("requested" in event.data["message"] for event in commands(activity))
+    assert all(request_text in event.data["message"] for event in commands(activity))
     assert not any(row.get("state") == "on" for row in humanify(hass, activity))
 
 

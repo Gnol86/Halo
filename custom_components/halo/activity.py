@@ -50,6 +50,27 @@ _FR = {
     "preview": "aperçu pendant l'édition réelle",
     "restore": "restauration des lampes après édition",
 }
+_ES = {
+    "turn_on": "encendido solicitado",
+    "turn_off": "apagado solicitado",
+    "adjust": "ajuste solicitado",
+    "scene_action": "activación de escena solicitada",
+    "presence": "presencia detectada",
+    "scene": "escena «{scene}»",
+    "nightlight": "luz nocturna",
+    "natural": "luz natural",
+    "base": "ambiente base",
+    "absence": "ausencia confirmada",
+    "bright": "luz ambiental suficiente",
+    "outside_schedule": "fuera del horario de iluminación",
+    "sun_above_threshold": "sol por encima del umbral de iluminación",
+    "lighting_allowed": "iluminación permitida ahora",
+    "refresh": "iluminación automática reevaluada",
+    "manual": "comando manual en Halo",
+    "preview": "vista previa durante la edición en directo",
+    "restore": "restauración de las luces tras la edición",
+}
+_TRANSLATIONS = {"en": _EN, "fr": _FR, "es": _ES}
 
 
 @callback
@@ -65,7 +86,7 @@ def async_record_command(
 ) -> None:
     """Record intent before dispatch, preserving the caller's context lineage."""
     language = hass.config.language.lower().replace("_", "-").split("-", 1)[0]
-    texts = _FR if language == "fr" else _EN
+    texts = _TRANSLATIONS.get(language, _EN)
     detail = texts[reason].format(scene=scene_name)
     data: dict[str, Any] = {
         "entity_id": entity_id,

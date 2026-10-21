@@ -273,9 +273,22 @@ async def test_rapid_room_configuration_changes(
     )
 
 
-@pytest.mark.parametrize("language", ["en", "fr"])
+@pytest.mark.parametrize(
+    "language,labels",
+    [
+        ("en", ("Lighting", "Status", "Off", "Direct control", "Natural lighting")),
+        (
+            "fr",
+            ("Éclairage", "État", "Éteint", "Commande directe", "Lumière naturelle"),
+        ),
+        ("es", ("Iluminación", "Estado", "Apagado", "Control directo", "Luz natural")),
+    ],
+)
 async def test_entity_labels_translated_and_custom_names_preserved(
-    hass: HomeAssistant, platforms: RoomManagerStub, language: str
+    hass: HomeAssistant,
+    platforms: RoomManagerStub,
+    language: str,
+    labels: tuple[str, ...],
 ) -> None:
     """HA localization supplies entity labels without translating user names."""
     # Reload the platforms after changing HA's language, as HA loads entity
@@ -287,22 +300,18 @@ async def test_entity_labels_translated_and_custom_names_preserved(
     assert await hass.config_entries.async_setup(platforms.entry.entry_id)
     await hass.async_block_till_done()
     light = hass.states.get(entity_id(hass, "light", area.id, "light"))
-    expected = "Éclairage" if language == "fr" else "Lighting"
+    expected = labels[0]
     assert light.attributes["friendly_name"] == f"Ma pièce {expected}"
     scene = hass.states.get(entity_id(hass, "scene", area.id, "scene_cinema"))
     assert scene.attributes["friendly_name"] == "Ma pièce Cinéma personnel"
     sensor = hass.states.get(entity_id(hass, "sensor", area.id, "status"))
-    expected = "État" if language == "fr" else "Status"
+    expected = labels[1]
     assert sensor.attributes["friendly_name"] == f"Ma pièce {expected}"
     translations = await async_get_translations(hass, language, "entity", {DOMAIN})
     prefix = "component.halo.entity.sensor.room_status.state."
-    assert translations[prefix + "off"] == ("Éteint" if language == "fr" else "Off")
-    assert translations[prefix + "manual"] == (
-        "Commande directe" if language == "fr" else "Direct control"
-    )
-    assert translations[prefix + "natural"] == (
-        "Lumière naturelle" if language == "fr" else "Natural lighting"
-    )
+    assert translations[prefix + "off"] == labels[2]
+    assert translations[prefix + "manual"] == labels[3]
+    assert translations[prefix + "natural"] == labels[4]
 
 
 async def test_room_status_updates_and_scene_rename(hass, platforms):

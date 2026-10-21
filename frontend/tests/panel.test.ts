@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import { Window } from "happy-dom";
 import { newProfile, newRoom } from "../src/model";
+import { translate } from "../src/translations";
 import type { HaloEntityPicker } from "../src/entity-picker";
 import type { Curve, Hass, HaloScene, HomeAssistantScene, SceneInspection, Scene, Snapshot } from "../src/types";
 
@@ -100,21 +101,21 @@ function inputByLabel(panel: InstanceType<typeof HaloPanel>, text: string): HTML
 
 afterEach(() => { window.document.body.replaceChildren(); });
 
-test("room controls keep direct commands and automation without pause controls in both languages", async () => {
-  for (const locale of ["fr-BE", "en"]) {
+test("room controls keep direct commands and automation without pause controls in all supported languages", async () => {
+  for (const locale of ["fr-BE", "en", "es-MX"]) {
     const { panel, hass, calls } = await mount();
     panel.hass = { ...hass, locale: { language: locale } }; await settle(panel);
-    await openRoom(panel, locale === "en" ? "Control" : "Pilotage");
+    await openRoom(panel, translate("controlTab", locale));
     assert.doesNotMatch(panel.shadowRoot!.textContent!, /Pause manuelle|Manual pause|Reprendre|Resume|Pause jusqu’à|Pause until/);
-    assert.match(panel.shadowRoot!.textContent!, locale === "en" ? /Disable Automation to keep control/ : /Désactive Automatisation pour garder la main/);
-    button(panel, locale === "en" ? "Turn on" : "Allumer").click(); await settle(panel);
-    button(panel, locale === "en" ? "Turn off" : "Éteindre").click(); await settle(panel);
-    button(panel, locale === "en" ? "Run" : "Lancer").click(); await settle(panel);
-    inputByLabel(panel, locale === "en" ? "Automation" : "Automatisation").click(); await settle(panel);
+    assert.ok(panel.shadowRoot!.textContent!.includes(translate("directControlHelp", locale)));
+    button(panel, translate("turnOn", locale)).click(); await settle(panel);
+    button(panel, translate("turnOff", locale)).click(); await settle(panel);
+    button(panel, translate("run", locale)).click(); await settle(panel);
+    inputByLabel(panel, translate("automationShort", locale)).click(); await settle(panel);
     assert.deepEqual(calls.filter((call) => call.type === "halo/command").map((call) => call.command), ["turn_on", "turn_off", "scene", "automation"]);
-    await selectRoomTab(panel, locale === "en" ? "Automation" : "Automatisation");
+    await selectRoomTab(panel, translate("automationShort", locale));
     assert.doesNotMatch(panel.shadowRoot!.textContent!, /Pause manuelle|Manual pause|Autoriser l’extinction automatique pendant|Allow automatic turn-off during/);
-    assert.ok(inputByLabel(panel, locale === "en" ? "Absence delay" : "Délai d’absence"));
+    assert.ok(inputByLabel(panel, translate("absenceDelay", locale)));
     panel.remove();
   }
 });
@@ -195,6 +196,7 @@ test("the visual profile editor localizes chart descriptions, stages and value c
   for (const [locale, description, start, end, advanced] of [
     ["fr-BE", "Journée solaire schématique", "Matin · Début", "Soir · Fin", "Réglages avancés"],
     ["en", "Schematic solar day", "Morning · Start", "Evening · End", "Advanced settings"],
+    ["es-ES", "Día solar esquemático", "Mañana · Inicio", "Tarde · Fin", "Ajustes avanzados"],
   ]) {
     panel.hass = { ...hass, locale: { language: locale } }; await settle(panel);
     assert.ok(panel.shadowRoot!.querySelector(".solar-chart")!.getAttribute("aria-label")!.includes(description));
@@ -555,11 +557,46 @@ test("panel follows HA user locale and keeps custom names without changing entit
   assert.match(panel.shadowRoot!.textContent!, /Pièces/);
   assert.match(panel.shadowRoot!.textContent!, /Salon personnalisé/);
   assert.match(panel.shadowRoot!.textContent!, /Désactivé/);
+  panel.hass = { ...hass, locale: { language: "es-MX" } };
+  await settle(panel);
+  assert.match(panel.shadowRoot!.textContent!, /Habitaciones/);
+  assert.match(panel.shadowRoot!.textContent!, /Salon personnalisé/);
+  assert.match(panel.shadowRoot!.textContent!, /Desactivado/);
+  assert.equal(panel.shadowRoot!.querySelector("main")!.lang, "es");
   panel.hass = { ...hass, locale: { language: "de" } };
   await settle(panel);
   assert.match(panel.shadowRoot!.textContent!, /Rooms/);
   assert.match(panel.shadowRoot!.textContent!, /Salon personnalisé/);
   assert.match(panel.shadowRoot!.textContent!, /Disabled/);
+  panel.hass = { ...hass, locale: undefined, language: "es" };
+  await settle(panel);
+  assert.match(panel.shadowRoot!.textContent!, /Habitaciones/);
+});
+
+test("switching to Spanish preserves the room draft, custom names and entity picker selection", async () => {
+  const { panel, hass, calls } = await mount();
+  await openRoom(panel, "Automatisation");
+  await fill(panel, "Délai d’absence", "42");
+  const picker = panel.shadowRoot!.querySelector<HaloEntityPicker>("halo-entity-picker")!;
+  picker.dispatchEvent(new CustomEvent("entity-changed", { detail: { value: "media_player.tv" }, bubbles: true, composed: true }));
+  await settle(panel);
+  panel.hass = { ...hass, locale: { language: "es_ES" } }; await settle(panel);
+  assert.equal(inputByLabel(panel, "Retardo de ausencia").value, "42");
+  const translatedPicker = panel.shadowRoot!.querySelector<HaloEntityPicker>("halo-entity-picker")!;
+  await translatedPicker.updateComplete;
+  assert.equal(translatedPicker.value, "media_player.tv");
+  assert.match(translatedPicker.shadowRoot!.textContent!, /Entidad de presencia/);
+  assert.equal(translatedPicker.shadowRoot!.querySelector("input")!.getAttribute("placeholder"), "Buscar por nombre o ID de entidad");
+  await selectRoomTab(panel, "Control");
+  assert.match(panel.shadowRoot!.textContent!, /Cinéma perso/);
+  assert.match(panel.shadowRoot!.textContent!, /Salon personnalisé/);
+  button(panel, "Guardar cambios").click(); await settle(panel);
+  const saved = calls.find((call) => call.type === "halo/save")!.config as Snapshot["config"];
+  assert.equal(saved.rooms.lounge.absence_delay, 42);
+  assert.equal(saved.rooms.lounge.presence_entity_id, "media_player.tv");
+  assert.deepEqual(saved.rooms.lounge.lights, ["light.colour", "light.simple"]);
+  assert.equal(saved.rooms.lounge.scenes[0].name, "Cinéma perso");
+  assert.match(panel.shadowRoot!.textContent!, /Cambios guardados/);
 });
 
 test("native control color scheme follows the effective HA theme and inherits when it is absent", async () => {
@@ -2013,6 +2050,7 @@ test("single-light and single-room counts use singular labels in French and Engl
   for (const [locale, oneLight, oneRoom, tabs] of [
     ["fr-BE", "1 lumière", "1 pièce", ["Ambiances", "Profils de lumière naturelle", "Pièces"]],
     ["en", "1 light", "1 room", ["Ambiences", "Natural light profiles", "Rooms"]],
+    ["es-MX", "1 luz", "1 habitación", ["Ambientes", "Perfiles de luz natural", "Habitaciones"]],
   ] as const) {
     panel.hass = { ...hass, locale: { language: locale } }; await settle(panel);
     const link = panel.shadowRoot!.querySelector<HTMLButtonElement>('.room-link[aria-label="Salon personnalisé"]')!;

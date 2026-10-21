@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createId, curveInterpolation, dimmable, interpolate, moveItem, newProfile, newRoom, optionalNumber } from "../src/model";
-import { en, fr, language, translate } from "../src/translations";
+import { en, es, fr, language, translate } from "../src/translations";
 import type { Curve } from "../src/types";
 
 test("room defaults preserve opt-in automation without manual pause settings", () => {
@@ -104,11 +104,20 @@ test("scene reordering preserves all scenes and their stable identifiers", () =>
   assert.equal(scenes[0].id, "cinema");
 });
 
-test("French locales select a complete catalog, other locales fall back to English", () => {
-  assert.deepEqual(Object.keys(en).sort(), Object.keys(fr).sort());
+test("French and Spanish locales select complete catalogs, unsupported locales fall back to English", () => {
+  for (const catalog of [fr, es]) {
+    assert.deepEqual(Object.keys(catalog).sort(), Object.keys(en).sort());
+    for (const text of Object.values(catalog)) assert.ok(text.trim());
+  }
   for (const locale of ["fr", "fr-BE", "fr_CA", "FR-fr"]) assert.equal(language(locale), "fr");
-  for (const locale of [undefined, "en", "de", "fre"]) assert.equal(language(locale), "en");
+  for (const locale of ["es", "es-ES", "es-MX", "es_419", "ES-ar"]) assert.equal(language(locale), "es");
+  for (const locale of [undefined, "", "en", "de", "fre", "esp", "constructor", "__proto__"]) assert.equal(language(locale), "en");
   assert.equal(translate("rooms", "fr-BE"), "Pièces");
+  assert.equal(translate("rooms", "es-MX"), "Habitaciones");
   assert.equal(translate("rooms", "de"), "Rooms");
-  for (const text of Object.values(fr)) assert.ok(text.trim());
+  const original = es.rooms;
+  try {
+    Reflect.deleteProperty(es, "rooms");
+    assert.equal(translate("rooms", "es-ES"), "Rooms");
+  } finally { es.rooms = original; }
 });

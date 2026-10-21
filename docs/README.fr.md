@@ -39,7 +39,9 @@ Une seule intégration couvre ton logement. Le panneau est inclus, suit le thèm
 | **Commande directe** | Allume, éteins et lance des scènes sans suspendre les automatismes de la pièce. Désactive **Automatisation** pour garder la main. |
 | **Transitions** | Définir des durées globales pour l'éclairage quotidien, les ajustements naturels, les scènes et l'extinction, avec des réglages propres à chaque pièce selon les capacités des lampes. |
 
-Le panneau propose une recherche des pièces et des entités, un état actualisé et une édition des scènes avec les commandes natives des lampes Home Assistant. L'anglais et le français sont inclus : le panneau suit la langue de l'interface de chaque utilisateur, en français pour ses variantes régionales et en anglais autrement. Les noms personnalisés des pièces, profils et scènes restent inchangés.
+Le panneau propose une recherche des pièces et des entités, un état actualisé et une édition des scènes avec les commandes natives des lampes Home Assistant. Il suit la langue de l'interface Home Assistant de chaque utilisateur, variantes régionales comprises, avec l'anglais comme langue de repli. Les noms personnalisés des pièces, profils et scènes restent inchangés.
+
+L'anglais et le français sont inclus. **[La bêta 0.4.0b3 ajoute l'espagnol](https://github.com/Gnol86/Halo/releases/tag/v0.4.0b3)** au panneau (`es` et ses variantes régionales), à l'assistant d'ajout, aux noms d'entités, aux états fixes et aux messages d'activité.
 
 ## Prérequis
 
@@ -122,7 +124,7 @@ Choisis une source de présence, laisse un délai avant d'éteindre une pièce v
 
 ### Profils de lumière naturelle
 
-**[Bêta 0.4.0b2 — éditeur visuel de profils](https://github.com/Gnol86/Halo/releases/tag/v0.4.0b2) :** règle une journée entière sur un graphique, avec trajet solaire en pointillés, courbe de luminosité et remplissage opaque représentant la température du blanc. Les réglages séparés du matin et du soir se raccordent progressivement pendant le jour et la nuit, dans l’aperçu comme dans le moteur.
+**[Bêta 0.4.0b3 — éditeur visuel de profils](https://github.com/Gnol86/Halo/releases/tag/v0.4.0b3) :** règle une journée entière sur un graphique, avec trajet solaire en pointillés, courbe de luminosité et remplissage opaque représentant la température du blanc. Les réglages séparés du matin et du soir se raccordent progressivement pendant le jour et la nuit, dans l’aperçu comme dans le moteur.
 
 Les curseurs utilisent des pourcentages et des kelvins entiers, avec dégradés indicatifs et échelle logarithmique de température. Les poignées solaires se règlent au centième de degré. Les nouveaux profils utilisent des courbes progressives ; les valeurs existantes et les réglages avancés exacts sont conservés sans migration. L’aperçu schématique n’affiche pas d’horaires et ne commande aucune lampe.
 
@@ -148,7 +150,7 @@ Les tableaux de bord ou automatisations personnalisés utilisant les anciens bou
 
 **Activité : origine des commandes dans 0.2.2.** L'activité des lampes enregistre les commandes de **Halo** et leur motif : présence, nom personnalisé de la scène, veilleuse, lumière naturelle, commande manuelle ou extinction automatique. Les commandes sont présentées comme des demandes, distinctes de l'état rapporté par la lampe. Lorsque son intégration conserve le contexte, le détail d'activité natif identifie également Halo et le motif comme origine. Les ajustements et les commandes dont le retour perd le contexte conservent une entrée de demande. Les scènes Home Assistant liées enregistrent leur activation sur la scène et ses lampes connues ; Halo n'invente pas le contenu des scènes opaques.
 
-Activité et Recorder doivent être activés et leurs filtres restent applicables. Les messages suivent la langue configurée du serveur Home Assistant (français et ses variantes, anglais autrement), en conservant les noms personnalisés des scènes. Cela ne change pas la langue du panneau de chaque utilisateur et ne complète pas l'ancien historique. Le journal global peut montrer à la fois l'événement d'origine Halo et l'entrée de demande de la cible. L'attribution est testée avec le traitement natif de l'activité et Recorder sur des lampes simulées. L'inspection MCP en lecture seule du 12 octobre 2026 confirme 0.2.2 chargé et les entrées de commandes Halo dans l'activité domestique ; elle ne comprend ni vérification visuelle ni validation matérielle complète.
+Activité et Recorder doivent être activés et leurs filtres restent applicables. Les messages suivent la langue configurée du serveur Home Assistant, en conservant les noms personnalisés des scènes : anglais, français et espagnol à partir de 0.4.0b3. Les variantes régionales françaises et espagnoles utilisent leur catalogue respectif ; les langues non prises en charge utilisent l'anglais. Cela ne change pas la langue du panneau de chaque utilisateur et ne complète pas l'ancien historique. Le journal global peut montrer à la fois l'événement d'origine Halo et l'entrée de demande de la cible. L'attribution est testée avec le traitement natif de l'activité et Recorder sur des lampes simulées. L'inspection MCP en lecture seule du 12 octobre 2026 confirme 0.2.2 chargé et les entrées de commandes Halo dans l'activité domestique ; elle ne comprend ni vérification visuelle ni validation matérielle complète.
 
 **Veilleuses.** Après une absence confirmée, les veilleuses activées remplacent l'éclairage normal lorsque celui-ci est autorisé. Elles s'éteignent à la fermeture de l'autorisation d'éclairage, même si l'extinction automatique de l'éclairage normal est désactivée.
 

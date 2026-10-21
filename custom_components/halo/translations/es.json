@@ -1,0 +1,39 @@
+{
+  "config": {
+    "abort": {
+      "already_configured": "Halo ya está configurado para este hogar."
+    },
+    "step": {
+      "user": {
+        "title": "Configurar Halo",
+        "description": "Halo añade un panel para configurar y controlar la iluminación de todo tu hogar. Tras la configuración, abre Halo en la barra lateral para elegir las habitaciones y sus luces."
+      }
+    }
+  },
+  "entity": {
+    "light": {
+      "room": {
+        "name": "Iluminación"
+      }
+    },
+    "switch": {
+      "automation": {
+        "name": "Iluminación automática"
+      },
+      "natural": {
+        "name": "Luz natural"
+      }
+    },
+    "sensor": {
+      "room_status": {
+        "name": "Estado",
+        "state": {
+          "off": "Apagado",
+          "manual": "Control directo",
+          "natural": "Luz natural",
+          "nightlight": "Luz nocturna"
+        }
+      }
+    }
+  }
+}

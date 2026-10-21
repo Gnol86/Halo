@@ -17,7 +17,11 @@ async def test_nightlight_state_translations_and_reserved_scene_name(hass, platf
     platforms.notify()
     assert hass.states.get(status_id).state == "nightlight"
     assert hass.states.get(status_id).attributes["mode"] == "nightlight"
-    for language, label in (("en", "Nightlight"), ("fr", "Veilleuse")):
+    for language, label in (
+        ("en", "Nightlight"),
+        ("fr", "Veilleuse"),
+        ("es", "Luz nocturna"),
+    ):
         translations = await async_get_translations(hass, language, "entity", {"halo"})
         assert (
             translations["component.halo.entity.sensor.room_status.state.nightlight"]
