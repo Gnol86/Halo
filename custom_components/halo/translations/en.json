@@ -35,5 +35,35 @@
         }
       }
     }
+  },
+  "services": {
+    "manual_hold": {
+      "name": "Pause room automation",
+      "description": "Request a manual hold for a room with Identified commands enabled. Uses the configured duration. Does not turn on automation or change the lights.",
+      "fields": {
+        "room_id": {
+          "name": "Room",
+          "description": "Home Assistant area configured in Halo."
+        }
+      }
+    },
+    "manual_resume": {
+      "name": "Resume room automation",
+      "description": "Release the current manual hold and evaluate the normal room rules if automation is enabled. Does not enable automation.",
+      "fields": {
+        "room_id": {
+          "name": "Room",
+          "description": "Home Assistant area configured in Halo."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "manual_control_disabled": {
+      "message": "Enable Identified commands for this room before requesting a manual hold."
+    },
+    "automation_disabled": {
+      "message": "Enable room automation before requesting a manual hold."
+    }
   }
 }

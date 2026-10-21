@@ -8,7 +8,12 @@ from unittest.mock import patch
 import pytest
 from homeassistant.auth.const import GROUP_ID_USER
 from homeassistant.components.light import LightEntityFeature
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.core import Context, HomeAssistant, ServiceCall
+from homeassistant.exceptions import (
+    HomeAssistantError,
+    ServiceValidationError,
+    Unauthorized,
+)
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
@@ -94,6 +99,115 @@ async def configure(api):
     result = await request(api.client, "halo/save", config=api.config, revision=0)
     assert result["success"], result
     return result["result"]
+
+
+async def test_identified_hold_api_and_native_services_share_control_permissions(
+    hass, api, hass_ws_client, hass_read_only_access_token
+):
+    """A hold is a room control, with no configuration privilege escalation."""
+    api.config["rooms"][api.room_id].update(
+        automation_enabled=True, manual_control={"mode": "identified"}
+    )
+    await configure(api)
+    group = await hass.auth.async_get_group(GROUP_ID_USER)
+    user = MockUser(groups=[group]).add_to_hass(hass)
+    refresh = await hass.auth.async_create_refresh_token(user, "https://halo.test")
+    client = await hass_ws_client(
+        hass, access_token=hass.auth.async_create_access_token(refresh)
+    )
+    read_only = await hass_ws_client(hass, access_token=hass_read_only_access_token)
+    try:
+        for command in ("manual_hold", "manual_resume"):
+            result = await request(
+                client, "halo/command", room_id=api.room_id, command=command
+            )
+            assert result["success"], result
+            current = result["result"]["status"][api.room_id]["manual_hold"]
+            assert (current is not None) == (command == "manual_hold")
+            denied = await request(
+                read_only, "halo/command", room_id=api.room_id, command=command
+            )
+            assert not denied["success"]
+            assert denied["error"]["code"] == "unauthorized"
+        for service in ("manual_hold", "manual_resume"):
+            await hass.services.async_call(
+                DOMAIN,
+                service,
+                {"room_id": api.room_id},
+                blocking=True,
+                context=Context(user_id=user.id),
+            )
+        assert api.entry.runtime_data.engines[api.room_id].status["manual_hold"] is None
+    finally:
+        await client.close()
+        await read_only.close()
+
+
+async def test_manual_actions_preserve_editor_lock_and_reject_unknown_room(hass, api):
+    api.config["rooms"][api.room_id].update(
+        automation_enabled=True, manual_control={"mode": "identified"}
+    )
+    await configure(api)
+    editing = await request(api.client, "halo/edit/begin", room_id=api.room_id)
+    assert editing["success"]
+    for command in ("manual_hold", "manual_resume"):
+        response = await request(
+            api.client, "halo/command", room_id=api.room_id, command=command
+        )
+        assert not response["success"]
+        assert response["error"]["code"] == "edit_locked"
+        with pytest.raises(HomeAssistantError, match="scene editor"):
+            await hass.services.async_call(
+                DOMAIN, command, {"room_id": api.room_id}, blocking=True
+            )
+    await request(
+        api.client,
+        "halo/edit/end",
+        room_id=api.room_id,
+        token=editing["result"]["token"],
+        save=False,
+    )
+    response = await request(
+        api.client, "halo/command", room_id="missing", command="manual_hold"
+    )
+    assert not response["success"]
+    assert response["error"]["code"] == "not_found"
+
+
+async def test_native_manual_services_reject_unknown_or_readonly_users(hass, api):
+    from homeassistant.auth.const import GROUP_ID_READ_ONLY
+
+    await configure(api)
+    group = await hass.auth.async_get_group(GROUP_ID_READ_ONLY)
+    user = MockUser(groups=[group]).add_to_hass(hass)
+    for identity in ("missing-user", user.id):
+        for service in ("manual_hold", "manual_resume"):
+            with pytest.raises(Unauthorized):
+                await hass.services.async_call(
+                    DOMAIN,
+                    service,
+                    {"room_id": api.room_id},
+                    blocking=True,
+                    context=Context(user_id=identity),
+                )
+
+
+async def test_native_manual_service_does_not_enable_opt_in_or_automation(hass, api):
+    await configure(api)
+    manager = api.entry.runtime_data
+    before = deepcopy(manager.config)
+    calls = len(api.calls)
+    with pytest.raises(ServiceValidationError) as rejected:
+        await hass.services.async_call(
+            DOMAIN, "manual_hold", {"room_id": api.room_id}, blocking=True
+        )
+    assert rejected.value.translation_key == "manual_control_disabled"
+    await hass.services.async_call(
+        DOMAIN, "manual_resume", {"room_id": api.room_id}, blocking=True
+    )
+    assert manager.config == before
+    assert manager.engines[api.room_id].status["manual_hold"] is None
+    assert len(api.calls) == calls
 
 
 async def test_snapshot_discovers_areas_and_lights_excluding_own_entities(

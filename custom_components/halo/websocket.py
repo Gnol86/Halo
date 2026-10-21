@@ -87,6 +87,10 @@ async def _handle(
                 if "scene_id" not in msg:
                     raise HaloError("invalid_config", "Scene commands require scene_id")
                 await manager.async_activate_scene(room_id, msg["scene_id"], context)
+            elif command == "manual_hold":
+                await manager.async_manual_hold(room_id, context)
+            elif command == "manual_resume":
+                await manager.async_manual_resume(room_id, context)
         elif kind == "halo/edit/begin":
             token = await manager.async_begin_edit(msg["room_id"], owner)
             connection.send_result(msg["id"], {"token": token})
@@ -118,6 +122,8 @@ async def _handle(
             "room_being_edited": "edit_locked",
             "edit_session_expired": "invalid_edit",
             "scene_not_found": "not_found",
+            "manual_control_disabled": "manual_control_disabled",
+            "automation_disabled": "automation_disabled",
         }.get(str(err), "invalid_config")
         connection.send_error(msg["id"], code, str(err))
     except Unauthorized:
@@ -145,7 +151,15 @@ def async_register(hass: HomeAssistant) -> None:
             room
             | {
                 probatio.Required("command"): probatio.In(
-                    ["turn_on", "turn_off", "automation", "natural", "scene"]
+                    [
+                        "turn_on",
+                        "turn_off",
+                        "automation",
+                        "natural",
+                        "scene",
+                        "manual_hold",
+                        "manual_resume",
+                    ]
                 ),
                 probatio.Optional("enabled"): bool,
                 probatio.Optional("scene_id"): str,

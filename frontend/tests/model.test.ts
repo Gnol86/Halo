@@ -4,11 +4,14 @@ import { createId, curveInterpolation, dimmable, interpolate, moveItem, newProfi
 import { en, es, fr, language, translate } from "../src/translations";
 import type { Curve } from "../src/types";
 
-test("room defaults preserve opt-in automation without manual pause settings", () => {
+test("room defaults keep automation and identified manual detection opt-in without legacy settings", () => {
   const room = newRoom("living_room");
   assert.equal(room.automation_enabled, false);
   assert.equal("allow_off_during_pause" in room, false);
   assert.equal("manual_pause" in room, false);
+  assert.deepEqual(room.manual_control, { mode: "disabled", duration: 7200, inputs: [] });
+  room.manual_control.inputs.push("event.button");
+  assert.deepEqual(newRoom("other").manual_control.inputs, [], "Room input lists must be independent");
   assert.equal(room.absence_delay, 0);
   assert.equal(room.lux_off_delay, 30);
   assert.equal(room.lux_threshold, null);

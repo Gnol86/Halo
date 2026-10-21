@@ -19,10 +19,14 @@ async def test_setup_unload_reload(hass: HomeAssistant) -> None:
     await hass.async_block_till_done()
     assert entry.state is ConfigEntryState.LOADED
     assert DOMAIN in hass.data[frontend.DATA_PANELS]
+    assert hass.services.has_service(DOMAIN, "manual_hold")
+    assert hass.services.has_service(DOMAIN, "manual_resume")
 
     assert await hass.config_entries.async_unload(entry.entry_id)
     assert entry.state is ConfigEntryState.NOT_LOADED
     assert DOMAIN not in hass.data[frontend.DATA_PANELS]
+    assert not hass.services.has_service(DOMAIN, "manual_hold")
+    assert not hass.services.has_service(DOMAIN, "manual_resume")
 
     assert await hass.config_entries.async_setup(entry.entry_id)
     assert await hass.config_entries.async_reload(entry.entry_id)

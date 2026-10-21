@@ -1,12 +1,12 @@
 import { LitElement, html, nothing, svg, type PropertyValues, type TemplateResult } from "lit";
 import { live } from "lit/directives/live.js";
 import { keyed } from "lit/directives/keyed.js";
-import { categories, createId, colorMode, dimmable, curveInterpolation, moveItem, newCondition, newLightingFallback, newProfile, newRoom, optionalNumber } from "./model";
+import { categories, createId, colorMode, dimmable, curveInterpolation, moveItem, newCondition, newLightingFallback, newManualControl, newProfile, newRoom, optionalNumber } from "./model";
 import { en, language, translate, type TranslationKey } from "./translations";
 import { styles } from "./styles";
 import { HaloEntityPicker, matchesEntity } from "./entity-picker";
 import { elevationLimits, profileSamples, solarElevation, solarPosition, temperatureColor, temperaturePosition, temperatureValue, type SolarPeriod, type CurveKind, type CurveBound } from "./solar-profile";
-import type { Condition, Config, Curve, CurveInterpolation, Hass, HaloScene, HomeAssistantScene, LampState, Light, LightingFallback, Nightlight, Profile, Room, Scene, SceneInspection, Snapshot, Transition, Transitions } from "./types";
+import type { Condition, Config, Curve, CurveInterpolation, Hass, HaloScene, HomeAssistantScene, LampState, Light, LightingFallback, ManualControl, Nightlight, Profile, Room, Scene, SceneInspection, Snapshot, Transition, Transitions } from "./types";
 
 type Editor = { roomId: string; token: string; included: Set<string>; revision: number; ready: boolean } & (
   { target: "scene"; scene: HaloScene } | { target: "nightlight"; nightlight: Nightlight }
@@ -136,6 +136,7 @@ export class HaloPanel extends LitElement {
       for (const room of Object.values(this.draft.rooms)) {
         room.nightlight ??= { enabled: false, lights: {} };
         room.lighting_fallback ??= newLightingFallback();
+        room.manual_control ??= newManualControl();
       }
       this.revision = snapshot.revision;
     }
@@ -428,8 +429,33 @@ export class HaloPanel extends LitElement {
       <button ?disabled=${disabled} @click=${() => this.command(room.id, "turn_off")}><ha-icon icon="mdi:lightbulb-off-outline"></ha-icon>${this.t("turnOff")}</button></div>
       <div class="room-modes">${this.check("automationShort", actual.automation_enabled, (enabled) => { void this.command(room.id, "automation", { enabled }); }, disabled || this.dirty)}
         ${this.check("natural", actual.natural_enabled, (enabled) => { void this.command(room.id, "natural", { enabled }); }, disabled || this.dirty)}</div></div>
-      <p class="help compact-help">${this.t("directControlHelp")}</p>
+      <p class="help compact-help">${this.t(actual.manual_control?.mode === "identified" ? "identifiedControlHelp" : "directControlHelp")}</p>
+      ${this.renderManualHold(room.id)}
       ${this.dirty ? html`<p class="help compact-help">${this.t(this.snapshot?.config.rooms[room.id] ? "saveModesFirst" : "saveFirst")}</p>` : nothing}`;
+  }
+
+  private renderManualHold(roomId: string) {
+    const status = this.snapshot?.status[roomId];
+    const hold = status?.manual_hold;
+    if (!hold) return nothing;
+    const sourceLabels = { halo: "manualSourceHalo", user: "manualSourceUser", input: "manualSourceInput", automation: "manualSourceAutomation" } as const;
+    const entity = hold.entity_id ? this.snapshot?.entities.find((item) => item.entity_id === hold.entity_id) : undefined;
+    const commandLabels: Record<string, TranslationKey> = {
+      turn_on: "turnOn", "light.turn_on": "turnOn", "homeassistant.turn_on": "turnOn",
+      turn_off: "turnOff", "light.turn_off": "turnOff", "homeassistant.turn_off": "turnOff",
+      toggle: "manualToggle", "light.toggle": "manualToggle", "homeassistant.toggle": "manualToggle",
+      scene: "scene", "scene.turn_on": "scene", manual_hold: "manualExplicitHold",
+      press: "manualInputPress", input: "manualInputPress", "input_button.press": "manualInputPress",
+    };
+    const scene = hold.command.startsWith("scene:") ? this.snapshot?.config.rooms[roomId]?.scenes.find((item) => item.id === hold.command.slice(6)) : undefined;
+    const command = hold.command.startsWith("scene:") ? `${this.t("scene")}${scene ? ` · ${scene.name}` : ""}` : this.t(commandLabels[hold.command] ?? "manualExplicitCommand");
+    const until = new Date(hold.until);
+    const disabled = this.busy || this.editing || status?.editing === true || !this.snapshot?.config.rooms[roomId];
+    return html`<section class="notice manual-hold" role="status" aria-label=${this.t("manual_hold")}><div class="grow"><strong>${this.t("manual_hold")}</strong>
+      <p class="help status-line">${this.t(sourceLabels[hold.source] ?? "manualSourceAutomation")}${hold.entity_id ? ` · ${entity?.name ?? hold.entity_id}` : ""} · ${command}</p>
+      ${Number.isNaN(until.getTime()) ? nothing : html`<p class="help status-line">${this.t("manualUntil")} <time datetime=${hold.until}>${until.toLocaleString(language(this.locale), { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</time></p>`}
+      <p class="help status-line">${this.t("manualResumeHelp")}</p></div>
+      <button ?disabled=${disabled} @click=${() => this.command(roomId, "manual_resume")}>${this.t("manualResume")}</button></section>`;
   }
 
   private renderRooms() {
@@ -552,7 +578,38 @@ export class HaloPanel extends LitElement {
         ${this.check("luxOff", room.lux_off, (value) => this.modifyRoom((current) => { current.lux_off = value; }))}
         ${room.lux_off || room.nightlight?.enabled || Object.keys(room.nightlight?.lights ?? {}).length ? this.numberField("luxDelay", room.lux_off_delay, (value) => this.modifyRoom((current) => { current.lux_off_delay = value ?? 30; }), { min: 0, required: true }) : nothing}
         ${this.help("luxHelp")}` : this.renderLightingFallback(room)}</div>
-      </section>`;
+      ${this.renderManualControl(room)}</section>`;
+  }
+
+  private renderManualControl(room: Room) {
+    const control = room.manual_control ?? newManualControl();
+    const update = (change: Partial<ManualControl>) => this.modifyRoom((current) => {
+      current.manual_control = { ...(current.manual_control ?? newManualControl()), ...change };
+    });
+    const inputs = (this.snapshot?.entities ?? []).filter((entity) => /^(event|input_button)\./.test(entity.entity_id) && !control.inputs.includes(entity.entity_id))
+      // An event or input button can be available before its first activation.
+      .map((entity) => entity.state === "unknown" ? { ...entity, state: undefined } : entity);
+    return html`<div class="settings-group manual-control"><h3>${this.t("manualDetection")}</h3>
+      <label>${this.t("manualDetectionMode")}<select data-selected=${control.mode} .value=${live(control.mode)} @change=${(event: Event) => {
+        const select = event.target as HTMLSelectElement;
+        if (!this.validateFields()) { select.value = control.mode; return; }
+        update({ mode: select.value as ManualControl["mode"] });
+      }}><option value="disabled">${this.t("manualDetectionDisabled")}</option><option value="identified">${this.t("manualDetectionIdentified")}</option></select></label>
+      <p class="help">${this.t(control.mode === "identified" ? "manualDetectionHelp" : "manualDetectionDisabledHelp")}</p>
+      ${control.mode === "identified" ? html`${this.numberField("manualDuration", control.duration / 60, (value) => { if (value !== null) update({ duration: value * 60 }); }, { min: 1 / 60, max: 10080, required: true })}
+        <p class="help">${this.t("manualHoldPolicyHelp")}</p>
+        <halo-entity-picker .label=${this.t("manualAddInput")} .locale=${this.locale} .entities=${inputs} .value=${live(null)}
+          @entity-changed=${(event: CustomEvent<{ value: string | null }>) => {
+            const id = event.detail.value;
+            if (id && inputs.some((entity) => entity.entity_id === id)) update({ inputs: [...control.inputs, id] });
+          }}></halo-entity-picker>
+        ${control.inputs.length ? html`<ul class="manual-inputs">${control.inputs.map((id) => {
+          const entity = this.snapshot?.entities.find((item) => item.entity_id === id);
+          return html`<li class="row"><span class="grow"><strong>${entity?.name ?? id}</strong><small>${id}${!entity || entity.state === "unavailable" ? ` · ${this.t("unavailable")}` : ""}</small></span>
+            <button aria-label=${`${this.t("remove")} · ${entity?.name ?? id}`} @click=${() => update({ inputs: control.inputs.filter((item) => item !== id) })}>${this.t("remove")}</button></li>`;
+        })}</ul>` : nothing}
+        <p class="help">${this.t("manualInputsHelp")}</p>` : nothing}
+    </div>`;
   }
 
   private renderLightingFallback(room: Room) {

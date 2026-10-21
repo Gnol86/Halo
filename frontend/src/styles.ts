@@ -133,6 +133,14 @@ export const styles = css`
   .notice { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; margin: 12px 20px; background: var(--halo-selected); border: 1px solid var(--halo-line); border-radius: var(--halo-control-radius); line-height: 1.5; }
   .notice.error { color: var(--error-color,var(--halo-text)); background: var(--halo-surface); }
   .room-detail .notice,.profile-detail .notice { margin: 12px 0; }
+  .manual-hold { align-items: flex-start; flex-wrap: wrap; }
+  .manual-hold .grow { min-width: min(100%, 220px); overflow-wrap: anywhere; }
+  .manual-hold button { min-height: 44px; }
+  .manual-inputs { list-style: none; padding: 0; }
+  .manual-inputs li { margin: 8px 0; }
+  .manual-inputs .grow { min-width: min(100%, 160px); overflow-wrap: anywhere; }
+  .manual-inputs small { display: block; color: var(--halo-secondary); }
+  .manual-inputs button { min-height: 44px; }
   .savebar { flex-shrink: 0; z-index: 4; display: flex; align-items: center; gap: 12px; padding: 12px 20px calc(12px + env(safe-area-inset-bottom,0px)); border-top: 1px solid var(--halo-line); background: var(--halo-surface); }
   .savebar .grow { font-size: var(--ha-font-size-m,14px); }
   details { min-width: 0; }

@@ -35,5 +35,35 @@
         }
       }
     }
+  },
+  "services": {
+    "manual_hold": {
+      "name": "Mettre en pause l’automatisation de la pièce",
+      "description": "Demande une pause manuelle pour une pièce avec Commandes identifiées activé, pendant la durée configurée. N’active pas l’automatisation et ne commande pas les lampes.",
+      "fields": {
+        "room_id": {
+          "name": "Pièce",
+          "description": "Pièce Home Assistant configurée dans Halo."
+        }
+      }
+    },
+    "manual_resume": {
+      "name": "Reprendre l’automatisation de la pièce",
+      "description": "Lève la pause manuelle et réévalue les règles normales si l’automatisation est activée. N’active pas l’automatisation.",
+      "fields": {
+        "room_id": {
+          "name": "Pièce",
+          "description": "Pièce Home Assistant configurée dans Halo."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "manual_control_disabled": {
+      "message": "Active Commandes identifiées pour cette pièce avant de demander une pause manuelle."
+    },
+    "automation_disabled": {
+      "message": "Active l’automatisation de la pièce avant de demander une pause manuelle."
+    }
   }
 }

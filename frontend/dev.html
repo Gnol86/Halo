@@ -363,6 +363,14 @@ const demoNames={
     "scene.hue_ambience": {
       "fr": "Ambiance Hue",
       "en": "Hue ambience"
+    },
+    "event.lounge_button": {
+      "fr": "Bouton mural du salon",
+      "en": "Living room wall button"
+    },
+    "input_button.lounge_pause": {
+      "fr": "Bouton de pause du salon",
+      "en": "Living room pause button"
     }
   }
 };
@@ -376,7 +384,7 @@ const curves=(low,high,warm,cool,interpolation="ease_in_out")=>({
 const morning=curves(20,100,2200,6000);
 const room=(id,lights,overrides={})=>({
   id,lights,presence_entity_id:null,presence_states:["on"],lux_entity_id:null,lux_threshold:null,lux_hysteresis:0,lux_off:false,lighting_fallback:{mode:"always",start:"18:00",end:"08:00",linked:true,morning_below:0,evening_below:0,turn_off:false},
-  absence_delay:0,lux_off_delay:30,automation_enabled:true,natural_enabled:true,
+  absence_delay:0,lux_off_delay:30,automation_enabled:true,natural_enabled:true,manual_control:{mode:"disabled",duration:7200,inputs:[]},
   transitions:inherited(),base:{},nightlight:{enabled:false,lights:{}},associations:[],scenes:[],...overrides,
 });
 const scenes=[
@@ -422,6 +430,8 @@ const entities=[
   {entity_id:"media_player.tv",name:"Télévision",state:"off",attributes:{}},
   {entity_id:"scene.reading",name:"Lecture du soir",state:"unknown",platform:"homeassistant",attributes:{id:"reading",entity_id:["light.sofa","light.ceiling","light.kitchen","media_player.tv"]}},
   {entity_id:"scene.hue_ambience",name:"Ambiance Hue",state:"unknown",platform:"hue",attributes:{}},
+  {entity_id:"event.lounge_button",name:"Bouton mural du salon",state:"unknown",attributes:{event_types:["press"]}},
+  {entity_id:"input_button.lounge_pause",name:"Bouton de pause du salon",state:"unknown",attributes:{}},
 ];
 let snapshot={revision:1,is_admin:true,config:{sun_entity_id:"sun.sun",presence_return_window:30,transitions,profiles:{
   warm:{id:"warm",name:"Blanc chaleureux",linked:true,morning,evening:structuredClone(morning)},
@@ -442,6 +452,22 @@ let initialStatus;
 window.haloCalls=[];
 const panel=document.querySelector("halo-panel");
 const send=()=>callback?.(structuredClone(snapshot));
+// This fixture records a pause without running the real detector or any HA service.
+function simulateManualHold(room,status,source="halo",entity_id=null,command="turn_on"){
+  if(room.manual_control?.mode!=="identified"||!room.automation_enabled||status.editing)return;
+  const now=Date.now();
+  status.manual_hold={version:1,started_at:new Date(now).toISOString(),until:new Date(now+room.manual_control.duration*1000).toISOString(),source,entity_id,command};
+  status.reason="manual_hold";
+}
+const manualPreview=new URLSearchParams(location.search).get("manual");
+if(["identified","hold"].includes(manualPreview)){
+  snapshot.config.rooms.lounge.manual_control={mode:"identified",duration:1800,inputs:["event.lounge_button"]};
+  if(manualPreview==="hold")simulateManualHold(snapshot.config.rooms.lounge,snapshot.status.lounge,"user","light.sofa","light.turn_on");
+}
+window.haloSimulateManualInput=entityId=>{
+  for(const room of Object.values(snapshot.config.rooms))if(room.manual_control?.inputs.includes(entityId))simulateManualHold(room,snapshot.status[room.id],"input",entityId,"input");
+  send();
+};
 const hass={locale:{language:previewLocale==="en"?"en":"fr-BE"},themes:{darkMode:false},states:Object.fromEntries([...entities,...lights].map(({entity_id,state,attributes})=>[entity_id,{state,attributes:structuredClone(attributes)}])),connection:{async subscribeMessage(cb){callback=cb;return()=>callback=undefined;}},async callApi(method,path){
   window.haloCalls.push({type:"api",method,path});
   if(method==="GET"&&path==="config/scene/config/reading")return structuredClone(sourceScene);
@@ -464,7 +490,10 @@ const hass={locale:{language:previewLocale==="en"?"en":"fr-BE"},themes:{darkMode
   if(message.type==="halo/save"){
     if(message.revision!==snapshot.revision)throw{code:"conflict"};
     snapshot.config=structuredClone(message.config);snapshot.revision++;
-    for(const room of Object.values(snapshot.config.rooms))snapshot.status[room.id]??={reason:"disabled",is_on:false,available:true};
+    for(const room of Object.values(snapshot.config.rooms)){
+      const status=snapshot.status[room.id]??={reason:"disabled",is_on:false,available:true};
+      if(room.manual_control?.mode!=="identified"&&status.manual_hold){status.manual_hold=null;status.reason=room.automation_enabled?"idle":"disabled";}
+    }
     send();
   }
   if(message.type==="halo/edit/begin"){
@@ -484,7 +513,10 @@ const hass={locale:{language:previewLocale==="en"?"en":"fr-BE"},themes:{darkMode
   }
   if(message.type==="halo/command"){
     const room=snapshot.config.rooms[message.room_id];const status=snapshot.status[room.id];
+    if(status.editing)throw{code:"edit_locked"};
     if(["automation","natural"].includes(message.command)){room[message.command+"_enabled"]=message.enabled;snapshot.revision++;status.reason=!room.automation_enabled?"disabled":room.natural_enabled?"natural":"base";}
+    if(message.command==="automation"&&!message.enabled)status.manual_hold=null;
+    if(message.command==="manual_resume"){status.manual_hold=null;status.reason=!room.automation_enabled?"disabled":room.natural_enabled?"natural":"base";}
     if(message.command==="turn_on"||message.command==="turn_off"){
       const on=message.command==="turn_on";applyTargets(Object.fromEntries(room.lights.map(id=>[id,{state:on?"on":"off"}])));status.is_on=on;
       status.reason=room.automation_enabled?"idle":"disabled";status.scene_id=null;
@@ -495,6 +527,7 @@ const hass={locale:{language:previewLocale==="en"?"en":"fr-BE"},themes:{darkMode
         applyTargets(Object.fromEntries(Object.entries(targets).map(([id,target])=>[id,typeof target==="string"?{state:target}:target])));
         status.scene_id=scene.id;status.reason="scene";status.is_on=room.lights.some(id=>hass.states[id]?.state==="on");}
     }
+    if(["turn_on","turn_off","scene","manual_hold"].includes(message.command))simulateManualHold(room,status,"halo",null,message.command==="scene"?`scene:${message.scene_id}`:message.command);
     send();
   }
   return structuredClone(snapshot);

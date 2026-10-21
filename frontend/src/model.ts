@@ -1,4 +1,4 @@
-import type { Condition, Curve, CurveInterpolation, Light, LightingFallback, Profile, Room, Transition } from "./types";
+import type { Condition, Curve, CurveInterpolation, Light, LightingFallback, ManualControl, Profile, Room, Transition } from "./types";
 
 export const categories: Transition[] = ["turn_on", "lux_on", "natural", "scene", "turn_off"];
 
@@ -14,10 +14,13 @@ export function createId(): string {
 export function newLightingFallback(): LightingFallback {
   return { mode: "always", start: "18:00", end: "08:00", linked: true, morning_below: 0, evening_below: 0, turn_off: false };
 }
+export function newManualControl(): ManualControl {
+  return { mode: "disabled", duration: 7200, inputs: [] };
+}
 export function newRoom(id: string): Room {
   return { id, lights: [], presence_entity_id: null, presence_states: ["on"], lux_entity_id: null,
     lux_threshold: null, lux_hysteresis: 0, lux_off: false, lighting_fallback: newLightingFallback(), absence_delay: 0,
-    lux_off_delay: 30, automation_enabled: false, natural_enabled: true,
+    lux_off_delay: 30, automation_enabled: false, natural_enabled: true, manual_control: newManualControl(),
     transitions: { turn_on: "inherit", lux_on: "inherit", natural: "inherit", scene: "inherit", turn_off: "inherit" },
     base: {}, nightlight: { enabled: false, lights: {} }, associations: [], scenes: [] };
 }

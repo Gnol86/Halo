@@ -23,6 +23,7 @@ LIGHTING_FALLBACK_DEFAULTS = {
     "evening_below": 0,
     "turn_off": False,
 }
+MANUAL_CONTROL_DEFAULTS = {"mode": "disabled", "duration": 7200, "inputs": []}
 ROOM_DEFAULTS = {
     "lights": [],
     "presence_entity_id": None,
@@ -36,6 +37,7 @@ ROOM_DEFAULTS = {
     "lux_off_delay": 30,
     "automation_enabled": False,
     "natural_enabled": True,
+    "manual_control": MANUAL_CONTROL_DEFAULTS,
     "transitions": dict.fromkeys(TRANSITIONS, "inherit"),
     "base": {},
     "nightlight": {"enabled": False, "lights": {}},
@@ -156,6 +158,72 @@ def _lights(value: Any) -> list[str]:
     if len(set(result)) != len(result):
         raise ValueError("Duplicate lights")
     return result
+
+
+def validate_manual_control(value: Any) -> dict[str, Any]:
+    """Opt in to identified commands, never infer a hold from device feedback."""
+    supplied = _mapping(value, "manual_control")
+    if supplied.keys() - MANUAL_CONTROL_DEFAULTS.keys():
+        raise ValueError("Unknown manual_control setting")
+    settings = deepcopy(MANUAL_CONTROL_DEFAULTS) | deepcopy(supplied)
+    if settings["mode"] not in ("disabled", "identified"):
+        raise ValueError("Invalid manual_control mode")
+    _number(settings["duration"], "manual_control duration", 1, 604800)
+    if not isinstance(settings["inputs"], list):
+        raise ValueError("manual_control inputs must be a list")
+    inputs = [_entity(item) for item in settings["inputs"]]
+    if any(item.split(".", 1)[0] not in ("event", "input_button") for item in inputs):
+        raise ValueError("manual_control inputs require event or input_button entities")
+    if len(set(inputs)) != len(inputs):
+        raise ValueError("Duplicate manual_control inputs")
+    return settings
+
+
+def validate_identified_hold(value: Any, room: dict, *, now: float) -> dict | None:
+    """Restore only a valid current-schema hold with its original deadline."""
+    if room.get("manual_control", {}).get("mode") != "identified" or not room.get(
+        "automation_enabled", False
+    ):
+        return None
+    try:
+        hold = deepcopy(_mapping(value, "identified_hold"))
+        if type(hold.get("version")) is not int or hold["version"] != 1:
+            return None
+        if hold.keys() - {
+            "version",
+            "started_at",
+            "until",
+            "source",
+            "entity_id",
+            "command",
+            "context_id",
+        }:
+            return None
+        started = _number(hold.get("started_at"), "hold started_at", 0, 1e12)
+        until = _number(hold.get("until"), "hold until", 0, 1e12)
+        if started > now or until <= now or not 1 <= until - started <= 604800:
+            return None
+        source = hold.get("source")
+        if source not in ("halo", "user", "input", "automation"):
+            return None
+        entity_id = hold.get("entity_id")
+        if entity_id is not None:
+            _entity(entity_id)
+            members = (
+                room["manual_control"]["inputs"]
+                if source == "input"
+                else room["lights"]
+            )
+            if entity_id not in members:
+                return None
+        elif source == "input":
+            return None
+        _text(hold.get("command"), "hold command")
+        if hold.get("context_id") is not None:
+            _text(hold["context_id"], "hold context_id")
+        return hold
+    except TypeError, ValueError:
+        return None
 
 
 def validate_lamp_states(value: Any, members: list[str]) -> dict:
@@ -430,6 +498,7 @@ def validate_config(value: Any) -> dict[str, Any]:
         room["lighting_fallback"] = validate_lighting_fallback(
             room["lighting_fallback"]
         )
+        room["manual_control"] = validate_manual_control(room["manual_control"])
         for key in ("absence_delay", "lux_off_delay"):
             _number(room[key], key, 0, 604800)
         for key in (

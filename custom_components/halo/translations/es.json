@@ -35,5 +35,35 @@
         }
       }
     }
+  },
+  "services": {
+    "manual_hold": {
+      "name": "Pausar la automatización de la habitación",
+      "description": "Solicita una pausa manual para una habitación con Comandos identificados activado durante el tiempo configurado. No activa la automatización ni cambia las luces.",
+      "fields": {
+        "room_id": {
+          "name": "Habitación",
+          "description": "Área de Home Assistant configurada en Halo."
+        }
+      }
+    },
+    "manual_resume": {
+      "name": "Reanudar la automatización de la habitación",
+      "description": "Finaliza la pausa manual y vuelve a evaluar las reglas normales si la automatización está activada. No activa la automatización.",
+      "fields": {
+        "room_id": {
+          "name": "Habitación",
+          "description": "Área de Home Assistant configurada en Halo."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "manual_control_disabled": {
+      "message": "Activa Comandos identificados para esta habitación antes de solicitar una pausa manual."
+    },
+    "automation_disabled": {
+      "message": "Activa la automatización de la habitación antes de solicitar una pausa manual."
+    }
   }
 }

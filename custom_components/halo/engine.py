@@ -25,7 +25,13 @@ from .activity import async_record_command
 from .conditions import UNAVAILABLE, condition_entities, evaluate_condition, number
 from .external_scenes import composition
 from .lighting import fallback_permission, solar_elevation
-from .models import DEFAULT_PRESENCE_RETURN_WINDOW, ROOM_DEFAULTS
+from .manual import CommandOrigins, IdentifiedCommandListener
+from .models import (
+    DEFAULT_PRESENCE_RETURN_WINDOW,
+    MANUAL_CONTROL_DEFAULTS,
+    ROOM_DEFAULTS,
+    validate_identified_hold,
+)
 from .natural import (
     capture_lamp_state,
     lamp_parameters,
@@ -86,6 +92,12 @@ class HaloRoomEngine:
         # Keep the absence ambience separate from normal lighting, including
         # while waiting for sufficient darkness after presence returns.
         self._nightlight_mode = False
+        if not hasattr(manager, "manual_origins"):
+            manager.manual_origins = CommandOrigins()
+        self._manual_origins = manager.manual_origins
+        self._manual_listener = IdentifiedCommandListener(
+            hass, lambda: self.room, self._manual_origins, self._async_manual_command
+        )
 
     @property
     def room(self) -> dict[str, Any]:
@@ -123,6 +135,8 @@ class HaloRoomEngine:
         manual = {"mode": "manual", "scene_id": None}
         if self._edit:
             return manual
+        if self._manual_hold:
+            return manual
         if self._nightlight_mode and self.room.get("automation_enabled"):
             return {"mode": "nightlight", "scene_id": None}
         scene_id = self._applied_scene if self._reason == "scene" else None
@@ -143,6 +157,7 @@ class HaloRoomEngine:
     @property
     def status(self) -> dict[str, Any]:
         """Return serializable facts, including actual lamp availability/state."""
+        hold = self._manual_hold
         return {
             "reason": self._reason,
             "scene_id": self._scene_id,
@@ -161,13 +176,128 @@ class HaloRoomEngine:
             or next(iter(self._lamp_errors.values()), None)
             or next(iter(self._scene_errors.values()), None),
             "scene_errors": dict(self._scene_errors),
+            "manual_hold": {
+                **{key: value for key, value in hold.items() if key != "context_id"},
+                "started_at": self._iso(hold["started_at"]),
+                "until": self._iso(hold["until"]),
+            }
+            if hold
+            else None,
+            "manual_diagnostics": self._manual_listener.diagnostics,
         }
+
+    @property
+    def _manual_hold(self) -> dict[str, Any] | None:
+        return validate_identified_hold(
+            self._runtime.get("identified_hold"),
+            self.room,
+            now=dt_util.utcnow().timestamp(),
+        )
+
+    def _record_manual_hold(
+        self, record: dict[str, Any], *, interrupt: bool = True
+    ) -> bool:
+        """Accept intent synchronously, before a slow automatic call can continue."""
+        if (
+            self._stopped
+            or self._edit
+            or self._automation_suspensions
+            or not self.room.get("automation_enabled")
+            or self.room.get("manual_control", {}).get("mode") != "identified"
+        ):
+            return False
+        now = dt_util.utcnow().timestamp()
+        started_at = min(now, record.get("at", now))
+        until = started_at + self.room["manual_control"].get(
+            "duration", MANUAL_CONTROL_DEFAULTS["duration"]
+        )
+        current = self._manual_hold
+        if until <= now or current and started_at < current["started_at"]:
+            return False
+        if interrupt:
+            self._generation += 1
+            self._explicit_command_generation = self._generation
+        self._cancel_presence_return()
+        self._pending_lighting_open = None
+        self._runtime["identified_hold"] = {
+            "version": 1,
+            "started_at": started_at,
+            "until": until,
+            "source": record["source"],
+            "entity_id": record.get("entity_id"),
+            "command": record["command"],
+            "context_id": record.get("context_id"),
+        }
+        self._applied_scene = None
+        self._nightlight_mode = False
+        self._reason = "manual_hold"
+        self._schedule(now)
+        self.manager.async_notify()
+        return True
+
+    @callback
+    def _async_manual_command(self, record: dict[str, Any]) -> None:
+        if self._record_manual_hold(record):
+            # Persist and publish without evaluating away the requested command.
+            self.hass.async_create_task(self._async_save_manual_hold())
+
+    async def _async_save_manual_hold(self) -> None:
+        async with self._lock:
+            if not self._stopped:
+                if self._manual_hold and not self._edit:
+                    self._reason = "manual_hold"
+                self._schedule(dt_util.utcnow().timestamp())
+                await self.manager.async_persist_runtime()
+                self.manager.async_notify()
+
+    def _hold_direct_command(self, context: Context | None, command: str) -> None:
+        # A script may inherit a user ID. Only a direct authenticated call is
+        # eligible; automations can deliberately request manual_hold instead.
+        if context and context.user_id and not context.parent_id:
+            self._record_manual_hold(
+                {"source": "halo", "command": command, "context_id": context.id},
+                interrupt=False,
+            )
+
+    async def async_manual_hold(self, context: Context | None = None) -> None:
+        """Explicitly request a room hold, including from an automation."""
+        self._require_no_editor()
+        if self.room.get("manual_control", {}).get("mode") != "identified":
+            raise ValueError("manual_control_disabled")
+        if not self.room.get("automation_enabled"):
+            raise ValueError("automation_disabled")
+        self._manual_listener.invalidate_pending()
+        self._record_manual_hold(
+            {
+                "source": "halo"
+                if context and context.user_id and not context.parent_id
+                else "automation",
+                "command": "manual_hold",
+                "context_id": context.id if context else None,
+            }
+        )
+        await self._async_save_manual_hold()
+
+    async def async_manual_resume(self, context: Context | None = None) -> None:
+        """Release the hold and reevaluate the current policy exactly once."""
+        self._require_no_editor()
+        self._manual_listener.invalidate_pending()
+        self._generation += 1
+        self._explicit_command_generation = self._generation
+        async with self._lock:
+            self._require_no_editor()
+            if self._runtime.pop("identified_hold", None) is not None:
+                self._last_commands.clear()
+                self._cancel_presence_return()
+                await self._evaluate("refresh")
 
     def _available_state(self, entity_id: str | None) -> State | None:
         state = self.hass.states.get(entity_id) if entity_id else None
         return state if state and state.state not in UNAVAILABLE else None
 
     def _subscribe(self) -> None:
+        self._manual_listener.start()
+        self._unsubscribers.append(self._manual_listener.stop)
         entities = set(self.room["lights"])
         for field in ("presence_entity_id", "lux_entity_id"):
             if self.room.get(field):
@@ -590,6 +720,15 @@ class HaloRoomEngine:
         now = dt_util.utcnow().timestamp()
         previous_allowed = self._lighting_allowed
         self._inputs(now)
+        hold = self._manual_hold
+        absence_release = self._manual_absence_release_at(hold)
+        if "identified_hold" in self._runtime and (
+            hold is None or absence_release is not None and now >= absence_release
+        ):
+            self._runtime.pop("identified_hold", None)
+            self._last_commands.clear()
+            self._cancel_presence_return()
+            trigger = "refresh"
         if (
             self._lighting_source != "lux"
             and self._lighting_allowed is True
@@ -661,6 +800,15 @@ class HaloRoomEngine:
             self._absence_deadline is not None and now >= self._absence_deadline
         )
         lux_due = self._lighting_off_due(now)
+        if self._manual_hold:
+            # Presence/permission closures may still switch lights off. No
+            # scene, natural adjustment or nightlight can switch them on here.
+            if absence_due or (lux_due and self._normal_off_enabled()):
+                await self._all_off(
+                    reason="absence" if absence_due else self._lighting_block_reason()
+                )
+            self._reason = "manual_hold"
+            return
         if not self.available and not (scene and scene.get("type") == "home_assistant"):
             self._reason = "unavailable"
             return
@@ -806,6 +954,8 @@ class HaloRoomEngine:
                 await self._apply(
                     self._natural_targets(only_on=True), "natural", reason="natural"
                 )
+                if generation != self._generation or self._stopped:
+                    return
             self._nightlight_mode = False
             if self.room.get("natural_enabled", True) and self.room.get("associations"):
                 self._reason = "natural" if self._solar() is not None else "unavailable"
@@ -989,6 +1139,7 @@ class HaloRoomEngine:
             parent_id=context.id if context else None,
             user_id=context.user_id if context else None,
         )
+        self._manual_origins.add(own_context)
         for entity_id in self.room["lights"]:
             self._command_contexts[entity_id] = own_context.id
         affected_lights = composition(self.hass, [scene["scene_entity_id"]]).lights
@@ -1062,6 +1213,7 @@ class HaloRoomEngine:
                 parent_id=context.id if context else None,
                 user_id=context.user_id if context else None,
             )
+            self._manual_origins.add(own_context)
             self._command_contexts[entity_id] = own_context.id
             if (
                 absence
@@ -1114,11 +1266,14 @@ class HaloRoomEngine:
             self._timer = None
         if self._stopped:
             return
+        hold = self._manual_hold
         deadlines = [
             self._absence_deadline,
             self._lux_off_deadline,
             self._lighting_off_deadline,
             self._edit["until"] if self._edit else None,
+            hold["until"] if hold else None,
+            self._manual_absence_release_at(hold),
         ]
         future = [value for value in deadlines if value is not None and value > now]
         if future:
@@ -1128,7 +1283,25 @@ class HaloRoomEngine:
                 self._async_tick,
             )
 
+    def _manual_absence_release_at(self, hold: dict | None) -> float | None:
+        """Only a new continuous absence can release an existing intervention."""
+        since = self._runtime.get("absent_since")
+        if (
+            not hold
+            or self._presence is not False
+            or since is None
+            or since <= hold["started_at"]
+        ):
+            return None
+        return since + max(
+            self.room.get("absence_delay", 0),
+            self.manager.config.get(
+                "presence_return_window", DEFAULT_PRESENCE_RETURN_WINDOW
+            ),
+        )
+
     async def async_turn_on(self, context: Context | None = None) -> None:
+        self._manual_listener.invalidate_pending()
         self._generation += 1
         self._explicit_command_generation = self._generation
         self._cancel_presence_return()
@@ -1137,6 +1310,7 @@ class HaloRoomEngine:
             scene = self._selected_scene()
             if scene and scene.get("type") == "home_assistant":
                 await self.manager.async_authorize_scene(self.room_id, scene, context)
+            self._hold_direct_command(context, "turn_on")
             self._applied_scene = None
             self._nightlight_mode = False
             try:
@@ -1158,11 +1332,13 @@ class HaloRoomEngine:
                 await self._finish_explicit()
 
     async def async_turn_off(self, context: Context | None = None) -> None:
+        self._manual_listener.invalidate_pending()
         self._generation += 1
         self._explicit_command_generation = self._generation
         self._cancel_presence_return()
         async with self._lock:
             self._require_no_editor()
+            self._hold_direct_command(context, "turn_off")
             self._applied_scene = None
             self._nightlight_mode = False
             await self._all_off(context, reason="manual")
@@ -1177,6 +1353,7 @@ class HaloRoomEngine:
         )
         if scene is None:
             raise ValueError("scene_not_found")
+        self._manual_listener.invalidate_pending()
         self._generation += 1
         self._explicit_command_generation = self._generation
         self._cancel_presence_return()
@@ -1184,6 +1361,7 @@ class HaloRoomEngine:
             self._require_no_editor()
             if scene.get("type") == "home_assistant":
                 await self.manager.async_authorize_scene(self.room_id, scene, context)
+            self._hold_direct_command(context, f"scene:{scene_id}")
             self._applied_scene = None
             self._nightlight_mode = False
             try:
@@ -1199,7 +1377,9 @@ class HaloRoomEngine:
         """Publish a one-shot command without evaluating away its result."""
         self._scene_id = self._applied_scene
         self._reason = (
-            "scene"
+            "manual_hold"
+            if self._manual_hold
+            else "scene"
             if self._applied_scene
             else "idle"
             if self.room.get("automation_enabled")
@@ -1242,6 +1422,7 @@ class HaloRoomEngine:
     ) -> None:
         if mode not in ("automation", "natural"):
             raise ValueError("invalid_mode")
+        self._manual_listener.invalidate_pending()
         self._generation += 1
         generation = self._generation
         self._cancel_presence_return()
@@ -1257,6 +1438,7 @@ class HaloRoomEngine:
             raise ValueError("room_being_edited")
 
     async def async_begin_edit(self, owner: str) -> str:
+        self._manual_listener.invalidate_pending()
         self._generation += 1
         self._cancel_presence_return()
         async with self._lock:
@@ -1366,7 +1548,9 @@ class HaloRoomEngine:
                 # Preserve the restored snapshot at cancel; subsequent input events
                 # resume the normal policy without immediately erasing the restore.
                 self._reason = (
-                    "scene"
+                    "manual_hold"
+                    if self._manual_hold
+                    else "scene"
                     if self._applied_scene
                     else "idle"
                     if self.room.get("automation_enabled")

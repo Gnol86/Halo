@@ -11,6 +11,7 @@ from homeassistant.exceptions import Unauthorized
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
+from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry, MockUser
 
 from custom_components.halo.const import DOMAIN
@@ -486,4 +487,75 @@ async def test_upgrade_removes_only_legacy_halo_resume_buttons(hass):
     assert all(registry.async_get(entity_id) is None for entity_id in removed)
     assert all(registry.async_get(entity_id) is not None for entity_id in kept)
     assert registry.async_get_entity_id("light", DOMAIN, f"{area.id}_light")
+    await hass.config_entries.async_unload(entry.entry_id)
+
+
+@pytest.mark.parametrize("valid", [True, False])
+async def test_only_new_applicable_hold_survives_storage_loading(hass, valid):
+    """Migration is durable before startup, without renewing a valid deadline."""
+    from custom_components.halo.engine import HaloRoomEngine
+
+    entry, area, manager = await configured(hass)
+    await hass.config_entries.async_unload(entry.entry_id)
+    saved = deepcopy(manager._last_stored)
+    saved["config"]["rooms"][area.id].update(
+        automation_enabled=True,
+        manual_control={"mode": "identified", "duration": 1800, "inputs": []},
+    )
+    now = dt_util.utcnow().timestamp()
+    deadline = now + 500 if valid else now - 1
+    candidate = {
+        "version": 1,
+        "started_at": now - 1000,
+        "until": deadline,
+        "source": "user",
+        "entity_id": "light.bulb",
+        "command": "light.turn_on",
+    }
+    saved["runtime"][area.id] = {
+        "identified_hold": candidate,
+        "pause_until": now + 7200,
+        "custom_runtime": "preserved",
+    }
+    await manager._store.async_save(saved)
+    starts = []
+
+    async def check_before_start(engine):
+        runtime = engine.manager.runtime_state[area.id]
+        stored = await engine.manager._store.async_load()
+        assert stored["runtime"][area.id] == runtime
+        assert "pause_until" not in runtime
+        assert runtime["custom_runtime"] == "preserved"
+        if valid:
+            assert runtime["identified_hold"] == candidate
+            assert runtime["identified_hold"]["until"] == deadline
+        else:
+            assert "identified_hold" not in runtime
+        starts.append(area.id)
+
+    with patch.object(HaloRoomEngine, "async_start", check_before_start):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+    assert starts == [area.id]
+    await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_manual_inputs_require_existing_entities_but_preserve_saved_ones(
+    hass,
+):
+    entry, area, manager = await configured(hass)
+    settings = deepcopy(manager.config)
+    settings["rooms"][area.id]["manual_control"] = {
+        "mode": "identified",
+        "inputs": ["event.remote"],
+        "duration": 1800,
+    }
+    with pytest.raises(HaloError, match="existing manual control input"):
+        await manager.async_save_config(settings, manager.revision)
+    hass.states.async_set("event.remote", "2026-10-21T12:00:00+00:00")
+    await manager.async_save_config(settings, manager.revision)
+    hass.states.async_remove("event.remote")
+    await manager.async_save_config(deepcopy(manager.config), manager.revision)
+    assert manager.config["rooms"][area.id]["manual_control"]["inputs"] == [
+        "event.remote"
+    ]
     await hass.config_entries.async_unload(entry.entry_id)

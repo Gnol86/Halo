@@ -120,6 +120,230 @@ test("room controls keep direct commands and automation without pause controls i
   }
 });
 
+function manualMode(panel: InstanceType<typeof HaloPanel>) {
+  const select = panel.shadowRoot!.querySelector<HTMLSelectElement>(".manual-control select");
+  assert.ok(select);
+  return select;
+}
+
+async function setManualMode(panel: InstanceType<typeof HaloPanel>, value: "disabled" | "identified") {
+  const select = manualMode(panel);
+  select.value = value; select.dispatchEvent(new Event("change", { bubbles: true })); await settle(panel);
+}
+
+function heldFixture(admin = true): Snapshot {
+  const snapshot = fixture(admin);
+  snapshot.config.rooms.lounge.automation_enabled = true;
+  snapshot.config.rooms.lounge.manual_control.mode = "identified";
+  snapshot.status.lounge = { reason: "manual_hold", is_on: true, available: true, manual_hold: {
+    version: 1, source: "user", entity_id: "light.colour", command: "light.turn_on", started_at: "2026-10-21T20:00:00Z", until: "2026-10-21T20:30:00Z",
+  } };
+  return snapshot;
+}
+
+test("manual detection stays disabled for existing snapshots and only exposes the identified mode", async () => {
+  const snapshot = fixture();
+  delete (snapshot.config.rooms.lounge as Partial<typeof snapshot.config.rooms.lounge>).manual_control;
+  const { panel, calls } = await mount(true, snapshot);
+  await openRoom(panel, "Automatisation");
+  assert.equal(manualMode(panel).value, "disabled");
+  assert.deepEqual([...manualMode(panel).options].map((option) => option.value), ["disabled", "identified"]);
+  assert.equal(panel.shadowRoot!.querySelectorAll(".manual-control input").length, 0);
+  assert.equal(panel.shadowRoot!.querySelectorAll(".manual-control halo-entity-picker").length, 0);
+  assert.equal(calls.some((call) => call.type === "halo/save" || call.type === "halo/command"), false);
+  await setManualMode(panel, "identified");
+  assert.equal(inputByLabel(panel, "Durée de pause (minutes)").value, "120");
+  assert.match(panel.shadowRoot!.querySelector(".manual-control")!.textContent!, /API authentifiée/);
+});
+
+test("existing thirty-minute manual settings remain unchanged when saving an unrelated room setting", async () => {
+  const snapshot = fixture();
+  snapshot.config.rooms.lounge.manual_control = { mode: "identified", duration: 1800, inputs: [] };
+  const { panel, calls } = await mount(true, snapshot);
+  await openRoom(panel, "Automatisation");
+  assert.equal(inputByLabel(panel, "Durée de pause (minutes)").value, "30");
+  const field = inputByLabel(panel, "Délai d’absence");
+  field.value = "12"; field.dispatchEvent(new Event("input", { bubbles: true })); await settle(panel);
+  button(panel, "Enregistrer les modifications").click(); await settle(panel);
+  const saved = calls.find((call) => call.type === "halo/save")!.config as Snapshot["config"];
+  assert.equal(saved.rooms.lounge.manual_control.duration, 1800);
+});
+
+test("identified configuration is a multilingual draft that preserves seconds and saves only explicitly", async () => {
+  const snapshot = fixture();
+  snapshot.config.rooms.lounge.manual_control = { mode: "identified", duration: 1, inputs: [] };
+  const { panel, hass, calls, emit } = await mount(true, snapshot);
+  await openRoom(panel, "Automatisation");
+  const field = inputByLabel(panel, "Durée de pause (minutes)");
+  assert.equal(Number(field.value) * 60, 1);
+  assert.equal(field.validity.valid, true);
+  field.value = "12.5"; field.dispatchEvent(new Event("input", { bubbles: true })); await settle(panel);
+  await selectRoomTab(panel, "Pilotage");
+  const remote = structuredClone(snapshot); remote.status.lounge = { reason: "base" };
+  emit(remote); await settle(panel);
+  panel.hass = { ...hass, locale: { language: "es-MX" } }; await settle(panel);
+  await selectRoomTab(panel, "Automatización");
+  assert.equal(inputByLabel(panel, "Duración de la pausa (minutos)").value, "12.5");
+  assert.equal(manualMode(panel).selectedOptions[0].textContent, "Órdenes identificadas");
+  assert.equal(calls.some((call) => call.type === "halo/save" || call.type === "halo/command"), false);
+  button(panel, "Guardar cambios").click(); await settle(panel);
+  const saved = calls.find((call) => call.type === "halo/save")!.config as Snapshot["config"];
+  assert.deepEqual(saved.rooms.lounge.manual_control, { mode: "identified", duration: 750, inputs: [] });
+  assert.equal(snapshot.config.rooms.lounge.manual_control.duration, 1);
+});
+
+test("associated button picker limits domains, prevents duplicates and preserves missing inputs", async () => {
+  const snapshot = heldFixture();
+  snapshot.config.rooms.lounge.manual_control.inputs = ["event.removed"];
+  snapshot.entities.push(
+    { entity_id: "event.wall", name: "Bouton mural perso", state: "2026-10-21T20:00:00Z", attributes: {} },
+    { entity_id: "input_button.remote", name: "Bouton virtuel perso", state: "unknown", attributes: {} },
+    { entity_id: "button.restart", name: "Redémarrer", state: "unknown", attributes: {} },
+    { entity_id: "binary_sensor.button", name: "Capteur", state: "off", attributes: {} },
+  );
+  const { panel, calls } = await mount(true, snapshot);
+  await openRoom(panel, "Automatisation");
+  const control = picker(panel, "Associer un bouton");
+  assert.deepEqual(control.entities.map((entity) => entity.entity_id), ["event.wall", "input_button.remote"]);
+  assert.equal(control.entities[1].state, undefined, "An input button with no previous activation is not unavailable");
+  assert.match(panel.shadowRoot!.querySelector(".manual-inputs")!.textContent!, /event.removed.*Indisponible/);
+  await searchEntity(control, "mural");
+  control.shadowRoot!.querySelector<HTMLButtonElement>('[role="option"]')!.click(); await settle(panel);
+  assert.deepEqual(picker(panel, "Associer un bouton").entities.map((entity) => entity.entity_id), ["input_button.remote"]);
+  assert.equal(picker(panel, "Associer un bouton").value, null, "Adding a button resets the picker for the next association");
+  assert.match(panel.shadowRoot!.querySelector(".manual-inputs")!.textContent!, /Bouton mural perso/);
+  panel.shadowRoot!.querySelector<HTMLButtonElement>(`.manual-inputs button[aria-label="${translate("remove", "fr")} · event.removed"]`)!.click(); await settle(panel);
+  button(panel, "Enregistrer les modifications").click(); await settle(panel);
+  const saved = calls.find((call) => call.type === "halo/save")!.config as Snapshot["config"];
+  assert.deepEqual(saved.rooms.lounge.manual_control.inputs, ["event.wall"]);
+});
+
+test("active pause shows honest sources, custom names, deadline and translated resume controls", async () => {
+  const snapshot = heldFixture();
+  const { panel, hass, emit } = await mount(true, snapshot);
+  await openRoom(panel);
+  for (const locale of ["en", "fr-BE", "es-MX"]) {
+    panel.hass = { ...hass, locale: { language: locale } }; await settle(panel);
+    for (const [source, key] of [["user", "manualSourceUser"], ["input", "manualSourceInput"], ["halo", "manualSourceHalo"], ["automation", "manualSourceAutomation"]] as const) {
+      const next = structuredClone(snapshot); next.status.lounge.manual_hold!.source = source;
+      emit(next); await settle(panel);
+      const hold = panel.shadowRoot!.querySelector(".manual-hold")!;
+      assert.ok(hold.textContent!.includes(translate("manual_hold", locale)));
+      assert.ok(hold.textContent!.includes(translate(key, locale)));
+      assert.match(hold.textContent!, /Lampe couleur/);
+      assert.equal(hold.querySelector("time")!.getAttribute("datetime"), "2026-10-21T20:30:00Z");
+      assert.equal(button(panel, translate("manualResume", locale)).disabled, false);
+    }
+  }
+});
+
+test("pause labels translate native service records, retain real scene names and hide unknown technical commands", async () => {
+  const snapshot = heldFixture();
+  const { panel, hass, emit } = await mount(true, snapshot);
+  await openRoom(panel);
+  const commands = [
+    ["turn_on", "turnOn"], ["light.turn_on", "turnOn"], ["homeassistant.turn_on", "turnOn"],
+    ["turn_off", "turnOff"], ["light.turn_off", "turnOff"], ["homeassistant.turn_off", "turnOff"],
+    ["light.toggle", "manualToggle"], ["homeassistant.toggle", "manualToggle"],
+    ["scene.turn_on", "scene"], ["input", "manualInputPress"], ["input_button.press", "manualInputPress"],
+    ["manual_hold", "manualExplicitHold"], ["provider.unknown_action", "manualExplicitCommand"],
+  ] as const;
+  for (const locale of ["en", "fr-BE", "es-MX"]) {
+    panel.hass = { ...hass, locale: { language: locale } }; await settle(panel);
+    for (const [command, key] of commands) {
+      const next = structuredClone(snapshot); next.status.lounge.manual_hold!.command = command;
+      emit(next); await settle(panel);
+      const label = panel.shadowRoot!.querySelector(".manual-hold .status-line")!.textContent!;
+      assert.ok(label.endsWith(` · ${translate(key, locale)}`), `${command} should use ${key} in ${locale}`);
+      assert.doesNotMatch(label, /light\.turn_|homeassistant\.|scene\.turn_on|input_button\.|provider\./);
+    }
+    for (const sceneId of ["cinema", "removed-private-id"]) {
+      const next = structuredClone(snapshot); next.status.lounge.manual_hold!.command = `scene:${sceneId}`;
+      next.status.lounge.manual_hold!.entity_id = null;
+      emit(next); await settle(panel);
+      const label = panel.shadowRoot!.querySelector(".manual-hold .status-line")!.textContent!;
+      assert.ok(label.endsWith(` · ${translate("scene", locale)}${sceneId === "cinema" ? " · Cinéma perso" : ""}`));
+      assert.doesNotMatch(label, /scene:|removed-private-id/);
+    }
+  }
+});
+
+test("manual-control errors remain localized and keep the active hold visible", async () => {
+  for (const locale of ["en", "fr-BE", "es-MX"]) {
+    for (const code of ["manual_control_disabled", "automation_disabled"] as const) {
+      const { panel, hass } = await mount(true, heldFixture(), { command: async () => { throw { code }; } });
+      panel.hass = { ...hass, locale: { language: locale } }; await settle(panel);
+      await openRoom(panel, translate("controlTab", locale));
+      button(panel, translate("manualResume", locale)).click(); await settle(panel);
+      assert.ok(panel.shadowRoot!.querySelector('[role="alert"]')!.textContent!.includes(translate(code, locale)));
+      assert.ok(panel.shadowRoot!.querySelector(".manual-hold"));
+      panel.remove();
+    }
+  }
+});
+
+test("resume is available to non-admin controls but disabled while another session edits the room", async () => {
+  const snapshot = heldFixture(false);
+  const { panel, calls, emit } = await mount(false, snapshot);
+  await openRoom(panel);
+  assert.equal(panel.shadowRoot!.querySelectorAll('[role="tab"]').length, 1);
+  assert.equal(panel.shadowRoot!.querySelector(".manual-control"), null);
+  button(panel, "Reprendre").click(); await settle(panel);
+  assert.deepEqual(calls.filter((call) => call.type === "halo/command"), [{ type: "halo/command", room_id: "lounge", command: "manual_resume" }]);
+  assert.equal(calls.some((call) => call.type === "halo/save"), false);
+  const editing = structuredClone(snapshot); editing.status.lounge.editing = true; editing.status.lounge.reason = "editing";
+  emit(editing); await settle(panel);
+  assert.equal(button(panel, "Reprendre").disabled, true);
+  button(panel, "Reprendre").click(); await settle(panel);
+  assert.equal(calls.filter((call) => call.type === "halo/command").length, 1);
+});
+
+test("resume neither saves nor discards a configuration draft and uses current runtime state", async () => {
+  const snapshot = heldFixture();
+  const resumed = structuredClone(snapshot); resumed.status.lounge.manual_hold = null; resumed.status.lounge.reason = "natural";
+  const { panel, calls } = await mount(true, snapshot, { command: async () => resumed });
+  await openRoom(panel, "Automatisation");
+  const duration = inputByLabel(panel, "Durée de pause (minutes)");
+  duration.value = "45"; duration.dispatchEvent(new Event("input", { bubbles: true })); await settle(panel);
+  await selectRoomTab(panel, "Pilotage");
+  button(panel, "Reprendre").click(); await settle(panel);
+  assert.equal(calls.some((call) => call.type === "halo/save"), false);
+  assert.equal(panel.shadowRoot!.querySelector(".manual-hold"), null);
+  assert.ok(button(panel, "Enregistrer les modifications"));
+  await selectRoomTab(panel, "Automatisation");
+  assert.equal(inputByLabel(panel, "Durée de pause (minutes)").value, "45");
+  button(panel, "Enregistrer les modifications").click(); await settle(panel);
+  assert.equal((calls.find((call) => call.type === "halo/save")!.config as Snapshot["config"]).rooms.lounge.manual_control.duration, 2700);
+});
+
+test("invalid manual duration prevents hiding the field and disabling detection is only a draft", async () => {
+  const snapshot = heldFixture();
+  const { panel, calls } = await mount(true, snapshot);
+  await openRoom(panel, "Automatisation");
+  const field = inputByLabel(panel, "Durée de pause (minutes)");
+  field.value = "0"; field.dispatchEvent(new Event("input", { bubbles: true })); await settle(panel);
+  await setManualMode(panel, "disabled");
+  assert.equal(manualMode(panel).value, "identified");
+  assert.equal(field.value, "0");
+  field.value = "30"; field.dispatchEvent(new Event("input", { bubbles: true })); await settle(panel);
+  await setManualMode(panel, "disabled");
+  assert.equal(panel.shadowRoot!.querySelector(".manual-control input"), null);
+  assert.ok(panel.shadowRoot!.querySelector(".manual-hold"), "Unsaved configuration must not hide the active runtime pause");
+  assert.equal(calls.some((call) => call.type === "halo/save" || call.type === "halo/command"), false);
+  button(panel, "Abandonner les modifications").click(); await settle(panel);
+  assert.equal(manualMode(panel).value, "identified");
+});
+
+test("failed resume keeps the pause visible and does not claim a successful return to automation", async () => {
+  const { panel, calls } = await mount(true, heldFixture(), { command: async () => { throw { code: "edit_locked" }; } });
+  await openRoom(panel);
+  button(panel, "Reprendre").click(); await settle(panel);
+  assert.ok(panel.shadowRoot!.querySelector(".manual-hold"));
+  assert.match(panel.shadowRoot!.querySelector('[role="alert"]')!.textContent!, /session/);
+  assert.equal(button(panel, "Reprendre").disabled, false);
+  assert.equal(calls.some((call) => call.type === "halo/save"), false);
+});
+
 function solarHandle(panel: InstanceType<typeof HaloPanel>, period: "morning" | "evening", kind: "brightness" | "temperature", bound: "low" | "high") {
   const handle = panel.shadowRoot!.querySelector<HTMLButtonElement>(`.solar-handle[data-period="${period}"][data-kind="${kind}"][data-bound="${bound}"]`);
   assert.ok(handle, `${period} ${kind} ${bound} handle should exist`);

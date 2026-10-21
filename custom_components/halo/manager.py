@@ -17,14 +17,17 @@ from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.storage import Store
+from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
 from .engine import HaloRoomEngine
 from .external_scenes import composition, inspect_scene, scene_problem
+from .manual import CommandOrigins
 from .models import (
     default_config,
     initial_config,
     validate_config,
+    validate_identified_hold,
     validate_lamp_states,
     validate_nightlight,
     validate_scene,
@@ -82,6 +85,7 @@ class HaloManager:
         self._edits: dict[str, tuple[str, str]] = {}
         self._stopped = False
         self._external_contexts: set[str] = set()
+        self.manual_origins = CommandOrigins()
 
     async def async_load(self) -> None:
         """Load versioned settings and start one engine per saved room."""
@@ -94,7 +98,7 @@ class HaloManager:
                 for room in stored["config"].get("rooms", {}).values()
             )
             self.runtime_state = deepcopy(stored.get("runtime", {}))
-            for runtime in self.runtime_state.values():
+            for room_id, runtime in self.runtime_state.items():
                 for key in (
                     "pause_until",
                     "manual_scene_id",
@@ -104,6 +108,22 @@ class HaloManager:
                     if key in runtime:
                         runtime.pop(key)
                         migrated = True
+                if "identified_hold" in runtime:
+                    room = self.config["rooms"].get(room_id)
+                    hold = (
+                        validate_identified_hold(
+                            runtime["identified_hold"],
+                            room,
+                            now=dt_util.utcnow().timestamp(),
+                        )
+                        if room
+                        else None
+                    )
+                    if hold is None:
+                        runtime.pop("identified_hold")
+                        migrated = True
+                    else:
+                        runtime["identified_hold"] = hold
             self.revision = stored.get("revision", 0)
             self._last_stored = deepcopy(stored)
         else:
@@ -205,6 +225,19 @@ class HaloManager:
                     old = self.config["rooms"].get(room_id, {}).get("lights", [])
                     if entity_id not in old:
                         raise ValueError("Select an existing light entity")
+            old_inputs = (
+                self.config["rooms"]
+                .get(room_id, {})
+                .get("manual_control", {})
+                .get("inputs", [])
+            )
+            for entity_id in room["manual_control"]["inputs"]:
+                if (
+                    not registry.async_get(entity_id)
+                    and not self.hass.states.get(entity_id)
+                    and entity_id not in old_inputs
+                ):
+                    raise ValueError("Select an existing manual control input")
             for association in room["associations"]:
                 for entity_id in association["lights"]:
                     state = self.hass.states.get(entity_id)
@@ -455,6 +488,24 @@ class HaloManager:
         await self._authorize_context(room_id, context)
         self._check_idle(room_id)
         await self._engine(room_id).async_activate_scene(scene_id, context=context)
+
+    async def async_manual_hold(
+        self, room_id: str, context: Context | None = None
+    ) -> None:
+        """Explicitly request the opted-in room hold, including from automations."""
+        self._reject_external_scene_reentry(context)
+        await self._authorize_context(room_id, context)
+        self._check_idle(room_id)
+        await self._engine(room_id).async_manual_hold(context=context)
+
+    async def async_manual_resume(
+        self, room_id: str, context: Context | None = None
+    ) -> None:
+        """Release only the current hold without enabling room automation."""
+        self._reject_external_scene_reentry(context)
+        await self._authorize_context(room_id, context)
+        self._check_idle(room_id)
+        await self._engine(room_id).async_manual_resume(context=context)
 
     async def async_begin_edit(self, room_id: str, owner: str) -> str:
         async with self._config_lock:
@@ -742,6 +793,7 @@ class HaloManager:
         self._unsubscribers.clear()
         for engine in self.engines.values():
             await engine.async_stop()
+        self.manual_origins.clear()
         if self._loaded:
             await self.async_persist_runtime()
         self._listeners.clear()

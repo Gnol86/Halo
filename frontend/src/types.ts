@@ -63,6 +63,19 @@ export interface LightingFallback {
   evening_below: number;
   turn_off: boolean;
 }
+export interface ManualControl {
+  mode: "disabled" | "identified";
+  duration: number;
+  inputs: string[];
+}
+export interface ManualHold {
+  version: 1;
+  started_at: string;
+  until: string;
+  source: "halo" | "user" | "input" | "automation";
+  entity_id: string | null;
+  command: string;
+}
 export interface Room {
   id: string;
   lights: string[];
@@ -77,6 +90,7 @@ export interface Room {
   lux_off_delay: number;
   automation_enabled: boolean;
   natural_enabled: boolean;
+  manual_control: ManualControl;
   transitions: Transitions;
   base: Record<string, LampState>;
   nightlight: Nightlight;
@@ -111,6 +125,8 @@ export interface RoomStatus {
   lighting_allowed?: boolean | null;
   lighting_source?: "lux" | "always" | "time" | "sun";
   lighting_off_deadline?: string | null;
+  editing?: boolean;
+  manual_hold?: ManualHold | null;
 }
 export interface Snapshot {
   config: Config;

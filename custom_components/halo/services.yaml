@@ -1,0 +1,12 @@
+manual_hold:
+  fields:
+    room_id:
+      required: true
+      selector:
+        area:
+manual_resume:
+  fields:
+    room_id:
+      required: true
+      selector:
+        area:
