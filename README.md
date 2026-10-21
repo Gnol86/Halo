@@ -6,7 +6,7 @@
 
 [![Latest release](https://img.shields.io/github/v/release/Gnol86/Halo?label=release&style=flat-square)](https://github.com/Gnol86/Halo/releases/latest)
 [![HACS default catalog](https://img.shields.io/badge/HACS-Default-41BDF5?logo=homeassistant&logoColor=white&style=flat-square)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Gnol86&repository=Halo&category=integration)
-[![Community topic posts](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fcommunity.home-assistant.io%2Ft%2F1028198.json&query=%24.posts_count&label=community%20posts&logo=discourse&color=41BDF5&style=flat-square)](https://community.home-assistant.io/t/halo-home-assistant-light-orchestrator-presence-natural-light-and-scenes/1028198)
+[![Community discussion](https://img.shields.io/badge/community-discussion-41BDF5?logo=discourse&style=flat-square)](https://community.home-assistant.io/t/halo-home-assistant-light-orchestrator-presence-natural-light-and-scenes/1028198)
 [![Total GitHub release asset downloads](https://img.shields.io/github/downloads/Gnol86/Halo/total?label=downloads&style=flat-square)](https://github.com/Gnol86/Halo/releases)
 [![GitHub stars](https://img.shields.io/github/stars/Gnol86/Halo?style=flat-square&logo=github)](https://github.com/Gnol86/Halo)
 
@@ -168,7 +168,7 @@ Activity and Recorder must be enabled and their filters still apply. Messages us
 
 ## Contributing
 
-Join the [Home Assistant community discussion](https://community.home-assistant.io/t/halo-home-assistant-light-orchestrator-presence-natural-light-and-scenes/1028198) to ask questions, share your setup and give feedback. The community badge counts all posts in that topic, including the opening post.
+Join the [Home Assistant community discussion](https://community.home-assistant.io/t/halo-home-assistant-light-orchestrator-presence-natural-light-and-scenes/1028198) to ask questions, share your setup and give feedback.
 
 Bug reports and contributions are welcome. When [opening an issue](https://github.com/Gnol86/Halo/issues), include your Halo and Home Assistant versions, the relevant light integration, steps to reproduce, and expected versus observed behavior.
 
