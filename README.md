@@ -16,7 +16,7 @@
 
 Halo is a custom Home Assistant integration that brings presence, ambient light, natural lighting profiles and scenes together in one place. Configure your rooms from a dedicated sidebar panel, let Halo handle everyday lighting, and take control whenever you need to.
 
-**English** · [Français](docs/README.fr.md) · [Releases](https://github.com/Gnol86/Halo/releases) · [Community discussion](https://community.home-assistant.io/t/halo-home-assistant-light-orchestrator-presence-natural-light-and-scenes/1028198) · [Report an issue](https://github.com/Gnol86/Halo/issues)
+[Releases](https://github.com/Gnol86/Halo/releases) · [Community discussion](https://community.home-assistant.io/t/halo-home-assistant-light-orchestrator-presence-natural-light-and-scenes/1028198) · [Report an issue](https://github.com/Gnol86/Halo/issues)
 
 One integration covers your home. The panel is included, follows your Home Assistant theme and works on desktop and mobile. No YAML or separate dashboard card is required to configure Halo. Its lighting engine runs inside Home Assistant and keeps working when the panel is closed.
 
