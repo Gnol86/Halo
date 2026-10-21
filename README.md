@@ -20,7 +20,7 @@ One integration covers your home. The panel is included, follows your Home Assis
 
 Screenshots show the local Halo panel preview with fictional rooms and simulated devices. No household instance is connected. Select a screenshot to view it at full size.
 
-> **Project status:** Halo is in early development, with published GitHub releases for installation through a HACS custom repository. Automated tests and targeted checks in an isolated Home Assistant instance use simulated lights; validation across real household hardware remains to be completed. The [default HACS catalog submission](https://github.com/hacs/default/pull/11771) is open and awaiting review; Halo is not yet listed.
+> **Project status:** Halo is in early development and was [accepted into the default HACS catalog](https://github.com/hacs/default/pull/11771) on October 21, 2026. Search for **Halo** directly in HACS to install a published release. Automated tests and targeted checks in an isolated Home Assistant instance use simulated lights; validation across real household hardware remains to be completed.
 
 ## What Halo can do
 
@@ -51,15 +51,33 @@ Halo uses the capabilities exposed by your existing light integrations: on/off, 
 
 ### With HACS
 
-1. Open **HACS** in Home Assistant.
-2. Open the three-dot menu and select **Custom repositories**.
-3. Add `https://github.com/Gnol86/Halo` with the type **Integration**.
-4. Find **Halo** in HACS and download it.
-5. Restart Home Assistant.
-6. Go to **Settings → Devices & services → Add integration**, search for **Halo**, and confirm setup.
-7. Open **Halo** in the sidebar.
+Open Halo directly in HACS:
 
-Add Halo once: the same integration manages every configured room. See the [official HACS custom repository guide](https://www.hacs.xyz/docs/faq/custom_repositories/) for help with adding the repository.
+[![Open Halo in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Gnol86&repository=Halo&category=integration)
+
+1. Open **HACS** in Home Assistant.
+2. Search for **Halo**, open its entry, and download it.
+3. Restart Home Assistant.
+4. Go to **Settings → Devices & services → Add integration**, search for **Halo**, and confirm setup.
+5. Open **Halo** in the sidebar.
+
+After downloading Halo and restarting Home Assistant, you can also open its setup wizard directly:
+
+[![Add the Halo integration to Home Assistant](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=halo)
+
+On first use, My Home Assistant may ask for the URL of your Home Assistant instance.
+
+Add Halo once: the same integration manages every configured room.
+
+#### If Halo does not appear in HACS
+
+The catalog inclusion was merged on October 21, 2026. HACS [advises allowing up to 8 hours](https://github.com/hacs/default/pull/11771#issuecomment-6316138368) for newly accepted repositories to appear. If Halo is not listed in your instance, you can use a custom repository as a fallback:
+
+1. In HACS, open the three-dot menu and select **Custom repositories**.
+2. Add `https://github.com/Gnol86/Halo` with the type **Integration**.
+3. Search for **Halo** and continue with the download and setup steps above.
+
+See the [official HACS custom repository guide](https://www.hacs.xyz/docs/faq/custom_repositories/) for help with this fallback.
 
 ### Manual installation
 
@@ -145,6 +163,10 @@ Automated tests and simulated previews do not validate hardware behavior, provid
 
 ## Support and license
 
-If Halo is useful to you, you can [support its development on Buy Me a Coffee](https://www.buymeacoffee.com/gnol86).
+If Halo is useful to you, you can [support its development on Buy Me a Coffee](https://buymeacoffee.com/gnol86).
+
+<a href="https://buymeacoffee.com/gnol86">
+  <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Support Halo on Buy Me a Coffee" height="50">
+</a>
 
 Halo is released under the [MIT License](LICENSE).

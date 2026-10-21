@@ -20,7 +20,7 @@ Une seule intégration couvre ton logement. Le panneau est inclus, suit le thèm
 
 Les captures montrent l’aperçu local du panneau Halo, avec des pièces fictives et des appareils simulés. Aucune instance du logement n’est connectée. Clique sur une capture pour l’afficher en pleine taille.
 
-> **État du projet :** Halo est en début de développement, avec des releases GitHub publiées pour une installation comme dépôt personnalisé HACS. Les tests automatisés et les essais ciblés dans une instance Home Assistant isolée utilisent des lampes simulées ; la validation sur les équipements réels du logement reste à compléter. La [demande d'inclusion au catalogue HACS par défaut](https://github.com/hacs/default/pull/11771) est ouverte et attend son examen ; Halo n'est pas encore référencé.
+> **État du projet :** Halo est en début de développement et a été [accepté dans le catalogue HACS par défaut](https://github.com/hacs/default/pull/11771) le 21 octobre 2026. Recherche directement **Halo** dans HACS pour installer une version publiée. Les tests automatisés et les essais ciblés dans une instance Home Assistant isolée utilisent des lampes simulées ; la validation sur les équipements réels du logement reste à compléter.
 
 ## Ce que Halo peut faire
 
@@ -51,15 +51,33 @@ Halo utilise les capacités exposées par les intégrations de tes lampes : marc
 
 ### Avec HACS
 
-1. Ouvre **HACS** dans Home Assistant.
-2. Ouvre le menu à trois points et sélectionne **Dépôts personnalisés**.
-3. Ajoute `https://github.com/Gnol86/Halo` avec le type **Intégration**.
-4. Recherche **Halo** dans HACS et télécharge l'intégration.
-5. Redémarre Home Assistant.
-6. Dans **Paramètres → Appareils et services → Ajouter une intégration**, recherche **Halo** et confirme l'installation.
-7. Ouvre **Halo** dans la barre latérale.
+Ouvre directement Halo dans HACS :
 
-Ajoute Halo une seule fois : la même intégration gère toutes les pièces configurées. Le [guide officiel des dépôts personnalisés HACS](https://www.hacs.xyz/docs/faq/custom_repositories/) détaille l'ajout du dépôt.
+[![Ouvrir Halo dans HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Gnol86&repository=Halo&category=integration)
+
+1. Ouvre **HACS** dans Home Assistant.
+2. Recherche **Halo**, ouvre sa fiche et télécharge l'intégration.
+3. Redémarre Home Assistant.
+4. Dans **Paramètres → Appareils et services → Ajouter une intégration**, recherche **Halo** et confirme l'installation.
+5. Ouvre **Halo** dans la barre latérale.
+
+Après avoir téléchargé Halo et redémarré Home Assistant, tu peux aussi ouvrir directement son assistant de configuration :
+
+[![Ajouter l’intégration Halo à Home Assistant](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=halo)
+
+Lors de la première utilisation, My Home Assistant peut te demander l’URL de ton instance Home Assistant.
+
+Ajoute Halo une seule fois : la même intégration gère toutes les pièces configurées.
+
+#### Si Halo n'apparaît pas dans HACS
+
+L'ajout au catalogue a été fusionné le 21 octobre 2026. HACS [annonce un délai pouvant atteindre 8 heures](https://github.com/hacs/default/pull/11771#issuecomment-6316138368) avant l'apparition des nouveaux dépôts acceptés. Si Halo n'est pas référencé dans ton instance, tu peux utiliser un dépôt personnalisé comme solution de secours :
+
+1. Dans HACS, ouvre le menu à trois points et sélectionne **Dépôts personnalisés**.
+2. Ajoute `https://github.com/Gnol86/Halo` avec le type **Intégration**.
+3. Recherche **Halo** et poursuis avec les étapes de téléchargement et de configuration ci-dessus.
+
+Le [guide officiel des dépôts personnalisés HACS](https://www.hacs.xyz/docs/faq/custom_repositories/) détaille cette solution de secours.
 
 ### Installation manuelle
 
@@ -145,6 +163,10 @@ Les tests automatisés et les aperçus simulés ne valident ni le comportement m
 
 ## Soutien et licence
 
-Si Halo t'est utile, tu peux [soutenir son développement sur Buy Me a Coffee](https://www.buymeacoffee.com/gnol86).
+Si Halo t'est utile, tu peux [soutenir son développement sur Buy Me a Coffee](https://buymeacoffee.com/gnol86).
+
+<a href="https://buymeacoffee.com/gnol86">
+  <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Soutenir Halo sur Buy Me a Coffee" height="50">
+</a>
 
 Halo est distribué sous [licence MIT](../LICENSE).
