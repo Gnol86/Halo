@@ -20,7 +20,5 @@ node_modules/
 /PRODUCT.md
 /PROJET.md
 
-# Local Impeccable review evidence and decision server logs
-.impeccable/questions/
-.impeccable/review/
-.impeccable/hook.cache.json
+# Local Impeccable configuration, design documents and review evidence
+/.impeccable/
