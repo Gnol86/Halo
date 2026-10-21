@@ -125,6 +125,8 @@ export const styles = css`
   button:disabled { color: var(--disabled-text-color,var(--halo-secondary)); cursor: default; }
   button.primary:disabled { background: var(--halo-muted-bg); border-color: var(--halo-line); filter: none; }
   .icon-button { width: 36px; min-width: 36px; height: 36px; padding: 7px; border-color: transparent; background: transparent; }
+  .app-header .sidebar-toggle { width: 48px; min-width: 48px; height: 48px; padding: 12px; flex-shrink: 0; border: 0; border-radius: 50%; color: inherit; }
+  .app-header .sidebar-toggle:hover { background: color-mix(in srgb, currentColor 8%, transparent); }
   .danger { color: var(--error-color,var(--halo-text)); }
   .badge { display: inline-flex; align-items: center; gap: 5px; font-size: var(--ha-font-size-s,12px); color: var(--halo-secondary); padding: 2px 0; font-variant-numeric: tabular-nums; }
   .badge + .badge::before { content: "·"; margin-inline: 8px; }

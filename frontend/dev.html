@@ -71,6 +71,7 @@ import "../custom_components/halo/frontend/halo-panel.js";
 // https://github.com/Templarian/MaterialDesign/blob/master/LICENSE
 // SVG source: https://github.com/Templarian/MaterialDesign/tree/master/svg
 const previewIconPaths = {
+  "menu": ["M3,6H21V8H3V6M3,11H21V13H3V11M3,16H21V18H3V16Z"],
   "alert-circle-outline": [
     "M11,15H13V17H11V15M11,7H13V13H11V7M12,2C6.47,2 2,6.5 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20Z"
   ],
@@ -451,6 +452,11 @@ let initialStates;
 let initialStatus;
 window.haloCalls=[];
 const panel=document.querySelector("halo-panel");
+// Mirror HA's host layout property; Halo itself must not guess the viewport threshold.
+const narrowViewport=matchMedia("(max-width: 870px)");
+panel.narrow=narrowViewport.matches;
+narrowViewport.addEventListener("change",event=>{panel.narrow=event.matches;});
+panel.addEventListener("hass-toggle-menu",event=>{window.haloCalls.push({type:"hass-toggle-menu",...event.detail});});
 const send=()=>callback?.(structuredClone(snapshot));
 // This fixture records a pause without running the real detector or any HA service.
 function simulateManualHold(room,status,source="halo",entity_id=null,command="turn_on"){

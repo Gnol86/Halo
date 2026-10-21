@@ -101,6 +101,52 @@ function inputByLabel(panel: InstanceType<typeof HaloPanel>, text: string): HTML
 
 afterEach(() => { window.document.body.replaceChildren(); });
 
+test("Home Assistant menu follows host layout and sidebar preferences in every language", async () => {
+  const { panel, hass } = await mount(false);
+  const menu = () => panel.shadowRoot!.querySelector<HTMLButtonElement>(".sidebar-toggle");
+  assert.equal(menu(), null);
+  panel.narrow = true;
+  for (const locale of ["fr-BE", "en", "es-MX"]) {
+    panel.hass = { ...hass, locale: { language: locale } }; await settle(panel);
+    assert.equal(menu()!.getAttribute("aria-label"), translate("openSidebar", locale));
+    assert.equal(menu()!.disabled, false);
+  }
+  panel.narrow = false;
+  for (const dockedSidebar of ["always_hidden", "docked", "auto"] as const) {
+    panel.hass = { ...hass, dockedSidebar }; await settle(panel);
+    assert.equal(Boolean(menu()), dockedSidebar === "always_hidden");
+  }
+  panel.narrow = true;
+  panel.hass = { ...hass, kioskMode: true }; await settle(panel);
+  assert.equal(menu(), null);
+  panel.hass = { ...hass, auth: { external: { config: { hasSidebar: true } } } }; await settle(panel);
+  assert.equal(menu(), null);
+});
+
+test("opening the host menu crosses shadow roots and preserves the unsaved draft", async () => {
+  const { panel, hass, calls } = await mount();
+  const host = document.createElement("div");
+  document.body.appendChild(host);
+  host.attachShadow({ mode: "open" }).appendChild(panel);
+  await settle(panel);
+  panel.narrow = true;
+  await openRoom(panel, "Automatisation");
+  const delay = inputByLabel(panel, "Délai d’absence");
+  delay.value = "123"; delay.dispatchEvent(new Event("input", { bubbles: true })); await settle(panel);
+  const callsBefore = structuredClone(calls);
+  let received: CustomEvent | undefined;
+  host.addEventListener("hass-toggle-menu", event => { received = event as CustomEvent; });
+  panel.shadowRoot!.querySelector<HTMLButtonElement>(".sidebar-toggle")!.click(); await settle(panel);
+  assert.deepEqual(received?.detail, { open: true });
+  assert.equal(received?.composed, true);
+  assert.equal(received?.bubbles, true);
+  assert.equal(inputByLabel(panel, "Délai d’absence").value, "123");
+  assert.ok(panel.shadowRoot!.querySelector(".savebar"));
+  assert.deepEqual(calls, callsBefore);
+  panel.hass = { ...hass }; await settle(panel);
+  assert.equal(inputByLabel(panel, "Délai d’absence").value, "123");
+});
+
 test("room controls keep direct commands and automation without pause controls in all supported languages", async () => {
   for (const locale of ["fr-BE", "en", "es-MX"]) {
     const { panel, hass, calls } = await mount();

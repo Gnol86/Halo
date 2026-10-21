@@ -377,7 +377,12 @@ export class HaloPanel extends LitElement {
 
   protected render() {
     const roomPage = this.page !== "global" && this.page !== "profiles";
-    return html`<header class="app-header"><div class="brand"><ha-icon icon="mdi:spa"></ha-icon><h1>Halo</h1></div>
+    const showSidebarButton = (this.narrow || this.hass?.dockedSidebar === "always_hidden")
+      && !this.hass?.kioskMode && this.hass?.auth?.external?.config?.hasSidebar !== true;
+    return html`<header class="app-header"><div class="brand">
+      ${showSidebarButton ? html`<button class="icon-button sidebar-toggle" type="button" aria-label=${this.t("openSidebar")} title=${this.t("openSidebar")}
+        @click=${() => this.dispatchEvent(new CustomEvent("hass-toggle-menu", { detail: { open: true }, bubbles: true, composed: true }))}><ha-icon icon="mdi:menu" aria-hidden="true"></ha-icon></button>` : nothing}
+      <ha-icon icon="mdi:spa"></ha-icon><h1>Halo</h1></div>
       <nav class="top-nav" aria-label="Halo"><button aria-current=${roomPage ? "page" : nothing} ?disabled=${this.editing || this.busy} @click=${() => this.navigate("rooms")}>${this.t("rooms")}</button>
         ${this.admin ? html`<button aria-current=${this.page === "profiles" ? "page" : nothing} ?disabled=${this.editing || this.busy} @click=${() => this.navigate("profiles")}>${this.t("profiles")}</button>
           <button aria-current=${this.page === "global" ? "page" : nothing} ?disabled=${this.editing || this.busy} @click=${() => this.navigate("global")}>${this.t("global")}</button>` : nothing}</nav>
