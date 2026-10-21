@@ -1,10 +1,11 @@
 import { LitElement, html, nothing, svg, type PropertyValues, type TemplateResult } from "lit";
 import { live } from "lit/directives/live.js";
 import { keyed } from "lit/directives/keyed.js";
-import { categories, createId, colorMode, dimmable, curveInterpolation, interpolate, moveItem, newCondition, newLightingFallback, newProfile, newRoom, optionalNumber } from "./model";
+import { categories, createId, colorMode, dimmable, curveInterpolation, moveItem, newCondition, newLightingFallback, newProfile, newRoom, optionalNumber } from "./model";
 import { en, language, translate, type TranslationKey } from "./translations";
 import { styles } from "./styles";
 import { HaloEntityPicker, matchesEntity } from "./entity-picker";
+import { elevationLimits, profileSamples, solarElevation, solarPosition, temperatureColor, temperaturePosition, temperatureValue, type SolarPeriod, type CurveKind, type CurveBound } from "./solar-profile";
 import type { Condition, Config, Curve, CurveInterpolation, Hass, HaloScene, HomeAssistantScene, LampState, Light, LightingFallback, Nightlight, Profile, Room, Scene, SceneInspection, Snapshot, Transition, Transitions } from "./types";
 
 type Editor = { roomId: string; token: string; included: Set<string>; revision: number; ready: boolean } & (
@@ -18,7 +19,7 @@ type FieldOptions = { min?: number; max?: number; step?: number | "any"; require
 export class HaloPanel extends LitElement {
   static properties = { hass: { attribute: false }, narrow: { type: Boolean }, snapshot: { state: true },
     draft: { state: true }, page: { state: true }, dirty: { state: true }, busy: { state: true },
-    error: { state: true }, notice: { state: true }, editor: { state: true }, importer: { state: true }, linker: { state: true }, search: { state: true }, showOtherLights: { state: true }, roomSearch: { state: true }, roomSection: { state: true }, selectedProfile: { state: true } };
+    error: { state: true }, notice: { state: true }, editor: { state: true }, importer: { state: true }, linker: { state: true }, search: { state: true }, showOtherLights: { state: true }, roomSearch: { state: true }, roomSection: { state: true }, selectedProfile: { state: true }, solarSelection: { state: true } };
   static styles = styles;
   declare hass: Hass;
   narrow = false;
@@ -38,6 +39,8 @@ export class HaloPanel extends LitElement {
   private roomSearch = "";
   private roomSection: RoomSection = "control";
   private selectedProfile = "";
+  private solarSelection: { period: SolarPeriod; bound: CurveBound; kind: CurveKind } = { period: "morning", bound: "low", kind: "brightness" };
+  private solarDrag?: { profileId: string; pointerId: number; target: HTMLElement; period: SolarPeriod; bound: CurveBound; kind: CurveKind };
   private lightSearches = new Map<string, string>();
   private editor?: Editor;
   private importer?: SceneImport;
@@ -77,6 +80,7 @@ export class HaloPanel extends LitElement {
   }
 
   disconnectedCallback() {
+    this.endSolarDrag();
     super.disconnectedCallback();
     this.connectionGeneration++;
     this.unsubscribe?.();
@@ -115,6 +119,7 @@ export class HaloPanel extends LitElement {
   private receive(snapshot: Snapshot) {
     this.snapshot = snapshot;
     if (!snapshot.is_admin && (this.dirty || this.editor || this.importer || this.linker)) {
+      this.endSolarDrag();
       // Privileged forms and their old session must not survive a role change.
       this.linker = undefined;
       this.importer = undefined;
@@ -237,6 +242,7 @@ export class HaloPanel extends LitElement {
   }
 
   private discard() {
+    this.endSolarDrag();
     if (!this.snapshot) return;
     this.dirty = false;
     this.error = "";
@@ -261,6 +267,7 @@ export class HaloPanel extends LitElement {
 
   private navigate(page: string) {
     if (this.editing || this.busy || (!this.importer && this.dirty && !this.validateFields())) return false;
+    this.endSolarDrag();
     this.importer = undefined;
     if (page !== this.page) this.showOtherLights = false;
     this.page = page;
@@ -1075,6 +1082,7 @@ export class HaloPanel extends LitElement {
 
   private selectProfile(id: string) {
     if (this.busy || this.dirty && !this.validateFields()) return;
+    this.endSolarDrag();
     this.selectedProfile = id;
   }
 
@@ -1100,8 +1108,11 @@ export class HaloPanel extends LitElement {
 
   private renderProfile(profile: Profile) {
     const inUse = Object.values(this.draft!.rooms).some((room) => room.associations.some((association) => association.profile_id === profile.id));
-    return html`<div class="profile">${this.textField("name", profile.name, (value) => this.modify((config) => { config.profiles[profile.id].name = value; }), { required: true })}
-      ${this.check("linked", profile.linked, (value) => this.modify((config) => { const current = config.profiles[profile.id]; if (!value && current.linked) current.evening = structuredClone(current.morning); current.linked = value; }))}
+    return html`<div class="profile"><div class="profile-settings">${this.textField("name", profile.name, (value) => this.modify((config) => { config.profiles[profile.id].name = value; }), { required: true })}
+      ${this.check("linked", profile.linked, (value) => this.modify((config) => { const current = config.profiles[profile.id]; if (!value && current.linked) current.evening = structuredClone(current.morning); current.linked = value; }))}</div>
+      <p class="help compact-help solar-link-help">${this.t("solarLinkHelp")}</p>
+      ${this.renderSolarEditor(profile)}
+      <details class="profile-advanced"><summary>${this.t("solarAdvanced")}</summary>
       ${(profile.linked ? ["morning"] as const : ["morning", "evening"] as const).map((period) => html`<h3>${this.t(period)}</h3><div class="grid">
         ${(["brightness", "temperature"] as const).map((kind) => {
           const curve = profile[period][kind];
@@ -1117,26 +1128,146 @@ export class HaloPanel extends LitElement {
             ${this.numberField("highElevation", curve.high_elevation, (value) => update("high_elevation", value), { min: -90, max: 90, required: true })}
             ${this.numberField("lowValue", curve.low, (value) => update("low", value), { min: kind === "brightness" ? 0 : 1000, max: kind === "brightness" ? 100 : 40000, required: true, unit: kind === "brightness" ? "%" : "K" })}
             ${this.numberField("highValue", curve.high, (value) => update("high", value), { min: kind === "brightness" ? 0 : 1000, max: kind === "brightness" ? 100 : 40000, required: true, unit: kind === "brightness" ? "%" : "K" })}
-          </div>${curve.low_elevation >= curve.high_elevation ? html`<p class="danger" role="alert">${this.t("badCurve")}</p>` : this.curveGraph(curve, kind === "brightness" ? "%" : "K")}
+          </div>${curve.low_elevation >= curve.high_elevation ? html`<p class="danger" role="alert">${this.t("badCurve")}</p>` : nothing}
           <details class="help-details"><summary>${this.t("curveHelp")}</summary><p class="help" id=${helpId}>${this.t(interpolation === "ease_in_out" ? "easeInOutCurveHelp" : "linearCurveHelp")}</p></details></div>`;
         })}</div>`)}
-      <button class="danger" ?disabled=${inUse} @click=${() => this.modify((config) => { delete config.profiles[profile.id]; })}>${this.t("remove")}</button>
+      </details><button class="danger" ?disabled=${inUse} @click=${() => this.modify((config) => { delete config.profiles[profile.id]; })}>${this.t("remove")}</button>
       ${inUse ? html`<p class="help">${this.t("profileInUse")}</p>` : nothing}</div>`;
   }
 
-  private curveGraph(curve: Curve, unit: string) {
-    const margin = Math.min(10, (curve.high_elevation - curve.low_elevation) / 4);
-    const xMin = Math.max(-90, curve.low_elevation - margin), xMax = Math.min(90, curve.high_elevation + margin);
-    const min = Math.min(curve.low, curve.high), max = Math.max(curve.low, curve.high), span = max - min || 1;
-    const xPosition = (elevation: number) => 42 + (elevation - xMin) / (xMax - xMin) * 256;
-    const elevations = curveInterpolation(curve) === "ease_in_out"
-      ? [xMin, ...Array.from({ length: 33 }, (_, index) => index === 32 ? curve.high_elevation : curve.low_elevation + (curve.high_elevation - curve.low_elevation) * index / 32), xMax]
-      : [xMin, curve.low_elevation, curve.high_elevation, xMax];
-    const points = elevations.map((elevation) => `${xPosition(elevation)},${155 - (interpolate(curve, elevation) - min) / span * 115}`).join(" ");
-    return svg`<svg viewBox="0 0 330 190" role="img" aria-label="${this.t("curve")}: ${this.t(curveInterpolation(curve) === "ease_in_out" ? "easeInOutCurve" : "linearCurve")}, ${curve.low}–${curve.high} ${unit}, ${curve.low_elevation}–${curve.high_elevation}°">
-      <path d="M42 20 V155 H305" fill="none" stroke="currentColor" opacity=".4"></path><polyline points=${points} fill="none" stroke="currentColor" stroke-width="3"></polyline>
-      ${max !== min ? svg`<text x="2" y="42">${max}${unit}</text>` : nothing}<text x="2" y="155">${min}${unit}</text>
-      ${[curve.low_elevation, curve.high_elevation].map((elevation) => svg`<line x1=${xPosition(elevation)} x2=${xPosition(elevation)} y1="155" y2="160" stroke="currentColor"></line><text x=${xPosition(elevation)} y="178" text-anchor="middle">${elevation}°</text>`)}</svg>`;
+  private solarNumber(value: number, digits = 2) {
+    return value.toLocaleString(this.locale?.replace("_", "-") ?? "en", { maximumFractionDigits: digits });
+  }
+
+  private solarStageLabel(period: SolarPeriod, bound: CurveBound) {
+    return this.t(period === "morning" ? bound === "low" ? "solarMorningStart" : "solarMorningEnd" : bound === "high" ? "solarEveningStart" : "solarEveningEnd");
+  }
+
+  private selectSolarStage(period: SolarPeriod, bound: CurveBound, kind = this.solarSelection.kind) {
+    this.solarSelection = { period, bound, kind };
+  }
+
+  private updateSolarCurve(profileId: string, period: SolarPeriod, kind: CurveKind, bound: CurveBound, value: number, elevation: boolean) {
+    if (!Number.isFinite(value) || !this.validateFields()) return;
+    const profile = this.draft?.profiles[profileId];
+    if (!profile) return;
+    const branch = profile.linked ? "morning" : period;
+    const curve = profile[branch][kind];
+    if (elevation) {
+      const limits = elevationLimits(curve, bound);
+      value = Math.max(limits.min, Math.min(limits.max, value));
+    }
+    const key = elevation ? `${bound}_elevation` as const : bound;
+    if (elevation ? value < -90 || value > 90 || (bound === "low" ? value >= curve.high_elevation : value <= curve.low_elevation)
+      : value < (kind === "brightness" ? 0 : 1000) || value > (kind === "brightness" ? 100 : 40000)) return;
+    if (curve[key] === value) return;
+    this.modify((config) => { config.profiles[profileId][branch][kind][key] = value; });
+  }
+
+  private beginSolarDrag(event: PointerEvent, profile: Profile, period: SolarPeriod, kind: CurveKind, bound: CurveBound) {
+    if (event.button !== 0 || !this.admin || !this.validateFields()) return;
+    this.endSolarDrag();
+    const target = event.currentTarget as HTMLElement;
+    this.selectSolarStage(period, bound, kind);
+    this.solarDrag = { profileId: profile.id, pointerId: event.pointerId, target, period, kind, bound };
+    target.setPointerCapture(event.pointerId);
+    target.focus({ preventScroll: true });
+    event.preventDefault();
+  }
+
+  private moveSolarDrag(event: PointerEvent) {
+    const drag = this.solarDrag;
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    const rect = drag.target.parentElement!.getBoundingClientRect();
+    if (!rect.width) return;
+    // Keep each handle on its rising/setting branch, including at the solar apex.
+    const position = Math.max(drag.period === "morning" ? 0 : .5, Math.min(drag.period === "morning" ? .5 : 1, (event.clientX - rect.left) / rect.width));
+    this.updateSolarCurve(drag.profileId, drag.period, drag.kind, drag.bound, solarElevation(position), true);
+  }
+
+  private endSolarDrag(event?: PointerEvent) {
+    const drag = this.solarDrag;
+    if (!drag || event && event.pointerId !== drag.pointerId) return;
+    this.solarDrag = undefined;
+    if (drag.target.hasPointerCapture(drag.pointerId)) drag.target.releasePointerCapture(drag.pointerId);
+  }
+
+  private solarHandleKey(event: KeyboardEvent, profile: Profile, period: SolarPeriod, kind: CurveKind, bound: CurveBound) {
+    const curve = profile[profile.linked ? "morning" : period][kind];
+    const current = curve[`${bound}_elevation`];
+    const limits = elevationLimits(curve, bound);
+    const step = event.shiftKey ? .1 : 1;
+    const direction = period === "morning" ? 1 : -1;
+    let value: number;
+    if (event.key === "ArrowRight" || event.key === "ArrowLeft") value = current + step * direction * (event.key === "ArrowRight" ? 1 : -1);
+    else if (event.key === "ArrowUp" || event.key === "ArrowDown") value = current + step * (event.key === "ArrowUp" ? 1 : -1);
+    else if (event.key === "Home") value = limits.min;
+    else if (event.key === "End") value = limits.max;
+    else return;
+    event.preventDefault();
+    this.selectSolarStage(period, bound, kind);
+    this.updateSolarCurve(profile.id, period, kind, bound, Math.max(-90, Math.min(90, value)), true);
+  }
+
+  private renderSolarEditor(profile: Profile) {
+    let samples: ReturnType<typeof profileSamples>;
+    try { samples = profileSamples(profile); }
+    catch { return html`<p class="danger" role="status">${this.t("solarInvalid")}</p>`; }
+    const selection = this.solarSelection;
+    const curves = profile[profile.linked ? "morning" : selection.period];
+    const elevation = curves[selection.kind][`${selection.bound}_elevation`];
+    const guide = solarPosition(elevation, selection.period) * 800;
+    const lightPath = samples.map((point, index) => `${index ? "L" : "M"}${point.position * 800},${240 * (1 - point.brightness / 100)}`).join(" ");
+    const sunPath = Array.from({ length: 129 }, (_, index) => `${index ? "L" : "M"}${index / 128 * 800},${240 * (1 - (solarElevation(index / 128) + 90) / 180)}`).join(" ");
+    const gradientId = `solar-temperature-${profile.id}`;
+    const stages: [SolarPeriod, CurveBound][] = [["morning", "low"], ["morning", "high"], ["evening", "high"], ["evening", "low"]];
+    return html`<section class="solar-editor" aria-label=${this.t("solarDay")}>
+      <div class="solar-heading"><h3>${this.t("solarDay")}</h3><div class="solar-legend"><span class="legend-brightness">${this.t("brightness")}</span><span class="legend-sun">${this.t("solarPath")}</span><span class="legend-white">${this.t("solarWhite")}</span></div></div>
+      <p class="help compact-help">${this.t("solarSchematic")}</p>
+      <div class="solar-graph">
+        <div class="solar-plot">
+          <span class="solar-guide-label" aria-hidden="true" style=${`left:clamp(24px,${guide / 8}%,calc(100% - 24px))`}>${this.solarNumber(elevation)}°</span>
+          <span class="solar-axis solar-axis-left axis-top">100 %</span><span class="solar-axis solar-axis-left axis-middle">50 %</span><span class="solar-axis solar-axis-left axis-bottom">0 %</span>
+          <span class="solar-axis solar-axis-right axis-top">+90°</span><span class="solar-axis solar-axis-right axis-middle">0°</span><span class="solar-axis solar-axis-right axis-bottom">−90°</span>
+          ${svg`<svg class="solar-chart" viewBox="0 0 800 240" preserveAspectRatio="none" role="img" aria-label=${this.t("solarChartLabel")}>
+            <defs><linearGradient class="solar-temperature-gradient" id=${gradientId} x1="0" x2="800" y1="0" y2="0" gradientUnits="userSpaceOnUse">${samples.map((point) => svg`<stop offset=${point.position} stop-color=${temperatureColor(point.temperature)}></stop>`)}</linearGradient></defs>
+            <path class="solar-fill" d=${`${lightPath} L800,240 L0,240 Z`} fill=${`url(#${gradientId})`}></path>
+            <path class="solar-horizon" d="M0,120 H800"></path>
+            <path class="solar-sun-path" d=${sunPath}></path>
+            <path class="solar-brightness-path" d=${lightPath}></path>
+            <line class="solar-guide" x1=${guide} x2=${guide} y1="0" y2="240"></line>
+            <circle class="solar-guide-sun" cx=${guide} cy=${240 * (1 - (elevation + 90) / 180)} r="4"></circle>
+          </svg>`}
+        </div>
+        <div class="solar-phases" aria-hidden="true">${(["solarNight", "solarRise", "solarPeak", "solarSet", "solarNight"] as const).map((key, index) => html`<span style=${`left:${index * 25}%`}>${this.t(key)}</span>`)}</div>
+        ${(["brightness", "temperature"] as const).map((kind) => html`<div class="solar-track-group"><div class="solar-track-label">${this.t(kind === "brightness" ? "brightness" : "solarTemperature")}</div><div class="solar-track" data-kind=${kind}>
+          ${stages.map(([period, bound]) => {
+            const curve = profile[profile.linked ? "morning" : period][kind];
+            const degrees = curve[`${bound}_elevation`];
+            const limits = elevationLimits(curve, bound);
+            const label = `${this.solarStageLabel(period, bound)} · ${this.t(kind === "brightness" ? "brightness" : "solarTemperature")}`;
+            const active = selection.period === period && selection.bound === bound;
+            return html`<button class="solar-handle" type="button" role="slider" aria-label=${label} aria-orientation="horizontal" aria-valuemin=${limits.min} aria-valuemax=${limits.max} aria-valuenow=${degrees} aria-valuetext=${`${this.solarNumber(degrees, 6)}°`} aria-describedby="solar-drag-help"
+              data-period=${period} data-kind=${kind} data-bound=${bound} data-active=${active} style=${`left:${solarPosition(degrees, period) * 100}%;z-index:${active ? 3 : 1}`}
+              @focus=${() => this.selectSolarStage(period, bound, kind)} @click=${() => this.selectSolarStage(period, bound, kind)}
+              @keydown=${(event: KeyboardEvent) => this.solarHandleKey(event, profile, period, kind, bound)}
+              @pointerdown=${(event: PointerEvent) => this.beginSolarDrag(event, profile, period, kind, bound)} @pointermove=${this.moveSolarDrag} @pointerup=${this.endSolarDrag} @pointercancel=${this.endSolarDrag} @lostpointercapture=${this.endSolarDrag}><span aria-hidden="true">${bound === (period === "morning" ? "low" : "high") ? "1" : "2"}</span></button>`;
+          })}</div></div>`)}
+      </div>
+      <p class="help compact-help solar-drag-help" id="solar-drag-help">${this.t("solarDragHelp")}</p>
+      <div class="solar-stages" role="group" aria-label=${this.t("solarSelectStage")}>${stages.map(([period, bound]) => html`<button class="solar-stage" data-period=${period} data-bound=${bound} aria-pressed=${selection.period === period && selection.bound === bound} @click=${() => this.selectSolarStage(period, bound)}>${this.solarStageLabel(period, bound)}</button>`)}</div>
+      <div class="solar-values">${(["brightness", "temperature"] as const).map((kind) => {
+        const curve = curves[kind], value = curve[selection.bound], degrees = curve[`${selection.bound}_elevation`];
+        const label = this.t(kind === "brightness" ? "brightness" : "solarTemperature");
+        const sliderId = `solar-value-${profile.id}-${kind}`;
+        return html`<label class="solar-value" for=${sliderId}><span class="solar-value-heading"><strong>${label}</strong><output>${this.solarNumber(value)} ${kind === "brightness" ? "%" : "K"}</output></span>
+          <span class="solar-value-elevation">${this.t("solarAtElevation")} <strong>${this.solarNumber(degrees, 6)}°</strong></span>
+          <input class="solar-value-slider" id=${sliderId} data-kind=${kind} type="range" min="0" max=${kind === "brightness" ? 100 : 1} step="any" .value=${live(String(kind === "brightness" ? value : temperaturePosition(value)))} aria-label=${`${this.solarStageLabel(selection.period, selection.bound)} · ${label}`} aria-valuetext=${`${this.solarNumber(value)} ${kind === "brightness" ? "%" : "K"}`}
+            @input=${(event: Event) => { this.selectSolarStage(selection.period, selection.bound, kind); this.updateSolarCurve(profile.id, selection.period, kind, selection.bound, kind === "brightness" ? Number((event.target as HTMLInputElement).value) : temperatureValue(Number((event.target as HTMLInputElement).value)), false); }}>
+          <span class="solar-range-labels"><span>${kind === "brightness" ? "0 %" : this.t("solarWarm")}</span><span>${kind === "brightness" ? "100 %" : this.t("solarCool")}</span></span>
+        </label>`;
+      })}</div>
+    </section>`;
   }
 }
 

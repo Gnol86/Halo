@@ -118,11 +118,17 @@ Choisis une source de présence, laisse un délai avant d'éteindre une pièce v
 
 ### Profils de lumière naturelle
 
-Définis la luminosité et la température du blanc selon la hauteur du soleil, puis réutilise le profil dans plusieurs pièces. Les courbes du soleil montant ci-dessous suivent une progression douce ; le matin et le soir peuvent être configurés séparément.
+**[Bêta 0.4.0b1 — éditeur visuel de profils](https://github.com/Gnol86/Halo/releases/tag/v0.4.0b1) :** l’éditeur réunit désormais une journée schématique, le parcours du soleil, une courbe de luminosité et un remplissage représentant la température du blanc. L’aperçu utilise la hauteur solaire, sans horaires ni calcul géographique, et ne commande aucune lampe. Les profils existants et leur fonctionnement selon le soleil restent compatibles.
+
+**0.3.1 reste la dernière version stable.** L’essai de la bêta est facultatif : pour inclure les préversions dans les recherches de mises à jour HACS de Halo, active son entité interrupteur HACS de préversions si elle est désactivée, puis allume cet interrupteur. La [documentation des interrupteurs HACS](https://www.hacs.dev/docs/use/entities/switch/) explique ce réglage.
+
+Déplace indépendamment les repères de luminosité et de température, sélectionne le début ou la fin du matin ou du soir, puis règle les deux curseurs de valeur. Matin et soir restent visibles ensemble : délie-les pour les régler séparément, ou relie-les pour appliquer les réglages du matin aux deux périodes. Les valeurs exactes et les progressions linéaires ou douces restent accessibles dans **Réglages avancés**. Les modifications utilisent le brouillon commun et les actions habituelles d’enregistrement et d’abandon.
 
 <a href="https://raw.githubusercontent.com/Gnol86/Halo/main/docs/images/natural-profiles-fr.png">
-  <img src="https://raw.githubusercontent.com/Gnol86/Halo/main/docs/images/natural-profiles-fr.png" alt="Aperçu simulé de l’éditeur de profils naturels avec trois profils, courbes en S liées matin et soir, luminosité de 20 à 100 pour cent et température de 2200 à 6000 kelvins entre -6,5 et 45,5 degrés de hauteur du soleil" width="1000">
+  <img src="https://raw.githubusercontent.com/Gnol86/Halo/main/docs/images/natural-profiles-fr.png" alt="Aperçu simulé de l’éditeur de profils naturels avec une journée schématique unique, un soleil en pointillés, une courbe de luminosité remplie selon la température du blanc, des poignées de hauteur indépendantes et des curseurs de valeur, matin et soir liés" width="1000">
 </a>
+
+*Aperçu simulé de l’éditeur bêta. Le remplissage aide à comparer le blanc chaud et froid ; il ne reproduit pas l’apparence d’une lampe particulière.*
 
 ## Comprendre les règles d'éclairage
 

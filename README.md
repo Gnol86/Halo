@@ -118,11 +118,17 @@ Choose a presence source, allow time before switching off an empty room, and set
 
 ### Natural light profiles
 
-Shape brightness and white temperature around the sun's elevation, then reuse the profile across rooms. The rising-sun curves below use a smooth progression; morning and evening can be configured separately.
+**[Beta 0.4.0b1 — visual profile editor](https://github.com/Gnol86/Halo/releases/tag/v0.4.0b1):** the profile editor now combines a schematic day, the sun's path, a brightness curve and a fill showing white temperature. The preview uses sun elevation rather than clock times or geographic calculations and does not control any lights. Existing profiles and their sun-based behavior remain compatible.
+
+**0.3.1 remains the latest stable release.** Beta testing is optional: to include prereleases in HACS update checks for Halo, enable its HACS prerelease switch entity if disabled, then turn it on. The [HACS switch documentation](https://www.hacs.dev/docs/use/entities/switch/) explains this setting.
+
+Drag the brightness and temperature markers independently, select the start or end of morning or evening, then adjust the two value sliders. Morning and evening remain visible together: unlink them for separate settings, or link them again to use the morning settings for both. Exact values and linear or gradual progression remain available in **Advanced settings**. Changes use the usual shared draft, save and discard actions.
 
 <a href="https://raw.githubusercontent.com/Gnol86/Halo/main/docs/images/natural-profiles-en.png">
-  <img src="https://raw.githubusercontent.com/Gnol86/Halo/main/docs/images/natural-profiles-en.png" alt="Simulated natural profile editor with three profiles, linked morning and evening S-curves, 20 to 100 percent brightness and 2200 to 6000 kelvins between -6.5 and 45.5 degrees of sun elevation" width="1000">
+  <img src="https://raw.githubusercontent.com/Gnol86/Halo/main/docs/images/natural-profiles-en.png" alt="Simulated natural profile editor showing one schematic day, a dashed sun path, a brightness curve filled with white-temperature colors, separate elevation handles and value sliders, with morning and evening linked" width="1000">
 </a>
+
+*A simulated preview of the beta editor. The fill helps compare warm and cool white; it does not reproduce the appearance of a particular lamp.*
 
 ## How the lighting rules work
 

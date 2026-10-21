@@ -6,7 +6,7 @@ import type { HaloEntityPicker } from "../src/entity-picker";
 import type { Curve, Hass, HaloScene, HomeAssistantScene, SceneInspection, Scene, Snapshot } from "../src/types";
 
 const window = new Window({ url: "http://192.168.1.4:8123" });
-for (const key of ["window", "document", "customElements", "HTMLElement", "Element", "Node", "Document", "ShadowRoot", "CSSStyleSheet", "Event", "CustomEvent", "KeyboardEvent", "FocusEvent"] as const) {
+for (const key of ["window", "document", "customElements", "HTMLElement", "Element", "Node", "Document", "ShadowRoot", "CSSStyleSheet", "Event", "CustomEvent", "KeyboardEvent", "FocusEvent", "PointerEvent"] as const) {
   Object.defineProperty(globalThis, key, { configurable: true, value: key === "window" ? window : window[key] });
 }
 const { HaloPanel } = await import("../src/halo-panel");
@@ -119,7 +119,30 @@ test("room controls keep direct commands and automation without pause controls i
   }
 });
 
-test("natural graphs place entered elevations at the exact curve thresholds, including close and boundary values", async () => {
+function solarHandle(panel: InstanceType<typeof HaloPanel>, period: "morning" | "evening", kind: "brightness" | "temperature", bound: "low" | "high") {
+  const handle = panel.shadowRoot!.querySelector<HTMLButtonElement>(`.solar-handle[data-period="${period}"][data-kind="${kind}"][data-bound="${bound}"]`);
+  assert.ok(handle, `${period} ${kind} ${bound} handle should exist`);
+  return handle;
+}
+
+async function solarStage(panel: InstanceType<typeof HaloPanel>, period: "morning" | "evening", bound: "low" | "high") {
+  const stage = panel.shadowRoot!.querySelector<HTMLButtonElement>(`.solar-stage[data-period="${period}"][data-bound="${bound}"]`);
+  assert.ok(stage, `${period} ${bound} stage should exist`);
+  stage.click(); await settle(panel);
+}
+
+function solarValue(panel: InstanceType<typeof HaloPanel>, kind: "brightness" | "temperature") {
+  const slider = panel.shadowRoot!.querySelector<HTMLInputElement>(`.solar-value-slider[data-kind="${kind}"]`);
+  assert.ok(slider, `${kind} value slider should exist`);
+  return slider;
+}
+
+async function changeSolarValue(panel: InstanceType<typeof HaloPanel>, kind: "brightness" | "temperature", value: number) {
+  const slider = solarValue(panel, kind);
+  slider.value = String(value); slider.dispatchEvent(new Event("input", { bubbles: true })); await settle(panel);
+}
+
+test("one daily chart exposes every exact threshold and keeps numerical settings collapsed without changing profiles", async () => {
   const curves: Curve[] = [
     { low_elevation: -6, high_elevation: 45, low: 20, high: 100 },
     { low_elevation: -6.125, high_elevation: -6.12, low: 6500, high: 2200 },
@@ -131,53 +154,264 @@ test("natural graphs place entered elevations at the exact curve thresholds, inc
   profile.linked = false;
   [profile.morning.brightness, profile.morning.temperature, profile.evening.brightness, profile.evening.temperature] = curves;
   snapshot.config.profiles.solar = profile;
-  const { panel } = await mount(true, snapshot);
-  button(panel, "Profils de lumière naturelle").click();
-  await settle(panel);
-  const graphs = [...panel.shadowRoot!.querySelectorAll<SVGSVGElement>('svg[role="img"]')];
-  assert.equal(graphs.length, curves.length);
-  graphs.forEach((graph, index) => {
-    const curve = curves[index];
-    const labels = [...graph.querySelectorAll<SVGTextElement>('text[y="178"]')];
-    assert.deepEqual(labels.map((label) => label.textContent), [`${curve.low_elevation}°`, `${curve.high_elevation}°`]);
-    const points = graph.querySelector("polyline")!.getAttribute("points")!.split(" ").map((point) => point.split(",").map(Number));
-    assert.equal(points.length, 4);
-    assert.deepEqual(labels.map((label) => Number(label.getAttribute("x"))), [points[1][0], points[2][0]]);
-    assert.ok(points[2][0] - points[1][0] > 100, "Close thresholds remain readable without changing their values");
-    assert.equal(points[0][1], points[1][1], "The lower plateau reaches the first threshold exactly");
-    assert.equal(points[2][1], points[3][1], "The upper plateau starts at the second threshold exactly");
-    assert.ok(points.flat().every(Number.isFinite));
-    assert.equal(Math.sign(points[1][1] - points[2][1]), Math.sign(curve.high - curve.low));
-    if (curve.low === curve.high) assert.equal(graph.querySelectorAll('text[x="2"]').length, 1);
-  });
+  const { panel, calls } = await mount(true, snapshot);
+  button(panel, "Profils de lumière naturelle").click(); await settle(panel);
+  const charts = panel.shadowRoot!.querySelectorAll<SVGSVGElement>('svg[role="img"]');
+  assert.equal(charts.length, 1);
+  assert.ok(charts[0].classList.contains("solar-chart"));
+  assert.ok(charts[0].getAttribute("aria-label"));
+  assert.ok(charts[0].querySelector(".solar-sun-path"));
+  const path = charts[0].querySelector(".solar-brightness-path")!.getAttribute("d")!;
+  assert.ok(path.length > 0);
+  assert.doesNotMatch(path, /NaN|Infinity/);
+  assert.ok(charts[0].querySelectorAll(".solar-temperature-gradient stop").length > 2);
+  assert.equal(panel.shadowRoot!.querySelectorAll('.solar-handle[role="slider"]').length, 8);
+  assert.equal(panel.shadowRoot!.querySelectorAll(".solar-stage").length, 4);
+  for (const [index, curve] of curves.entries()) {
+    const period = index < 2 ? "morning" : "evening";
+    const kind = index % 2 === 0 ? "brightness" : "temperature";
+    for (const bound of ["low", "high"] as const) {
+      const handle = solarHandle(panel, period, kind, bound);
+      assert.equal(Number(handle.getAttribute("aria-valuenow")), curve[`${bound}_elevation`]);
+      assert.ok(handle.getAttribute("aria-label"));
+    }
+  }
+  assert.equal(panel.shadowRoot!.querySelector<HTMLDetailsElement>("details.profile-advanced")!.open, false);
+  assert.equal(panel.shadowRoot!.querySelectorAll(".curve-editor").length, 4);
+  assert.equal(panel.shadowRoot!.querySelector(".savebar"), null, "Rendering an existing decimal profile must not create a draft");
+  const name = inputByLabel(panel, "Nom");
+  name.value = "Natural renamed"; name.dispatchEvent(new Event("input", { bubbles: true })); await settle(panel);
+  button(panel, "Enregistrer les modifications").click(); await settle(panel);
+  const saved = (calls.find((call) => call.type === "halo/save")!.config as Snapshot["config"]).profiles.solar;
+  assert.deepEqual(saved.morning, profile.morning);
+  assert.deepEqual(saved.evening, profile.evening);
 });
 
-test("S-curve previews its actual values and keeps plateau thresholds and accessible labels", async () => {
+test("the visual profile editor localizes chart descriptions, stages and value controls without renaming the profile", async () => {
+  const snapshot = fixture();
+  snapshot.config.profiles.solar = newProfile("solar", "Mon profil personnel");
+  const { panel, hass } = await mount(true, snapshot);
+  button(panel, "Profils de lumière naturelle").click(); await settle(panel);
+  for (const [locale, description, start, end, advanced] of [
+    ["fr-BE", "Journée solaire schématique", "Matin · Début", "Soir · Fin", "Réglages avancés"],
+    ["en", "Schematic solar day", "Morning · Start", "Evening · End", "Advanced settings"],
+  ]) {
+    panel.hass = { ...hass, locale: { language: locale } }; await settle(panel);
+    assert.ok(panel.shadowRoot!.querySelector(".solar-chart")!.getAttribute("aria-label")!.includes(description));
+    assert.equal(panel.shadowRoot!.querySelector('.solar-stage[data-period="morning"][data-bound="low"]')!.textContent?.trim(), start);
+    assert.equal(panel.shadowRoot!.querySelector('.solar-stage[data-period="evening"][data-bound="low"]')!.textContent?.trim(), end);
+    assert.ok(solarHandle(panel, "morning", "brightness", "low").getAttribute("aria-label")!.includes(start));
+    assert.ok(solarValue(panel, "temperature").getAttribute("aria-label")!.includes(start));
+    assert.equal(panel.shadowRoot!.querySelector(".profile-advanced > summary")!.textContent?.trim(), advanced);
+    assert.equal(panel.shadowRoot!.querySelector<HTMLInputElement>('.profile input[type="text"]')!.value, "Mon profil personnel");
+  }
+});
+
+test("value sliders preview brightness and white temperature independently and only save configuration", async () => {
   const snapshot = fixture();
   const profile = newProfile("solar", "Natural");
-  profile.morning.brightness = { low_elevation: -6.125, high_elevation: -6.12, low: 20, high: 100, interpolation: "ease_in_out" };
-  profile.morning.temperature = { low_elevation: -90, high_elevation: 90, low: 6500, high: 2200, interpolation: "ease_in_out" };
   profile.morning.brightness.interpolation = "ease_in";
+  profile.morning.temperature.interpolation = "ease_in_out";
+  snapshot.config.profiles.solar = profile;
+  const { panel, calls } = await mount(true, snapshot);
+  button(panel, "Profils de lumière naturelle").click(); await settle(panel);
+  assert.deepEqual([...panel.shadowRoot!.querySelectorAll<HTMLSelectElement>('.profile select[aria-describedby]')].map((select) => select.value), ["ease_in_out", "ease_in_out"]);
+  await solarStage(panel, "morning", "low");
+  const brightness = solarValue(panel, "brightness");
+  assert.deepEqual([brightness.min, brightness.max, brightness.step], ["0", "100", "any"]);
+  const temperature = solarValue(panel, "temperature");
+  assert.deepEqual([temperature.min, temperature.max], ["0", "1"]);
+  assert.match(brightness.closest("label")!.querySelector(".solar-value-elevation")!.textContent!, /-20/);
+  assert.match(temperature.closest("label")!.querySelector(".solar-value-elevation")!.textContent!, /0/);
+  const brightnessPath = () => panel.shadowRoot!.querySelector(".solar-brightness-path")!.getAttribute("d");
+  const temperatureFill = () => panel.shadowRoot!.querySelector(".solar-temperature-gradient")!.innerHTML;
+  const before = brightnessPath();
+  const initialFill = temperatureFill();
+  await changeSolarValue(panel, "brightness", 24.5);
+  assert.notEqual(brightnessPath(), before);
+  assert.equal(temperatureFill(), initialFill, "Brightness leaves the white temperature unchanged");
+  const updatedPath = brightnessPath();
+  await changeSolarValue(panel, "temperature", Math.log(3000 / 1000) / Math.log(40000 / 1000));
+  assert.equal(brightnessPath(), updatedPath, "White temperature leaves brightness unchanged");
+  assert.notEqual(temperatureFill(), initialFill);
+  assert.equal(calls.some((call) => ["halo/save", "halo/command", "halo/edit/begin", "halo/edit/preview"].includes(String(call.type))), false);
+  button(panel, "Enregistrer les modifications").click(); await settle(panel);
+  const saved = (calls.find((call) => call.type === "halo/save")!.config as Snapshot["config"]).profiles.solar;
+  assert.equal(saved.morning.brightness.low, 24.5);
+  assert.ok(Math.abs(saved.morning.temperature.low - 3000) < 1);
+  assert.equal(saved.morning.brightness.low_elevation, -20);
+  assert.equal(saved.morning.temperature.low_elevation, 0);
+  assert.equal(calls.some((call) => ["halo/command", "halo/edit/begin", "halo/edit/preview"].includes(String(call.type))), false);
+});
+
+test("stage selection raises both handles above an overlapping opposite-period handle after temperature was selected", async () => {
+  const snapshot = fixture();
+  const profile = newProfile("solar", "Natural");
+  profile.linked = false;
+  profile.morning.brightness.high_elevation = 90;
+  profile.evening.brightness.high_elevation = 90;
   snapshot.config.profiles.solar = profile;
   const { panel } = await mount(true, snapshot);
-  button(panel, "Profils de lumière naturelle").click();
+  button(panel, "Profils de lumière naturelle").click(); await settle(panel);
+  solarHandle(panel, "evening", "temperature", "low").click(); await settle(panel);
+  await solarStage(panel, "morning", "high");
+  const morningBrightness = solarHandle(panel, "morning", "brightness", "high");
+  const eveningBrightness = solarHandle(panel, "evening", "brightness", "high");
+  assert.equal(morningBrightness.style.left, eveningBrightness.style.left, "Both solar maxima overlap at the apex");
+  for (const kind of ["brightness", "temperature"] as const) {
+    const selected = solarHandle(panel, "morning", kind, "high");
+    const opposite = solarHandle(panel, "evening", kind, "high");
+    assert.equal(selected.dataset.active, "true");
+    assert.ok(Number(selected.style.zIndex) > Number(opposite.style.zIndex), "Selecting a stage must make both of its handles reachable");
+  }
+});
+
+test("each visual value label names its range control rather than the preceding output", async () => {
+  const snapshot = fixture();
+  snapshot.config.profiles.solar = newProfile("solar", "Natural");
+  const { panel } = await mount(true, snapshot);
+  button(panel, "Profils de lumière naturelle").click(); await settle(panel);
+  const ids = new Set<string>();
+  for (const kind of ["brightness", "temperature"] as const) {
+    const slider = solarValue(panel, kind);
+    const label = slider.closest("label")!;
+    assert.ok(label.querySelector("output"), "The current value remains visible beside the label");
+    assert.ok(slider.id, "The range has an explicit label target");
+    assert.equal(label.htmlFor, slider.id);
+    assert.equal(label.control, slider);
+    ids.add(slider.id);
+  }
+  assert.equal(ids.size, 2, "Each range has its own label target");
+});
+
+test("linked evening edits update the morning reference, unlink copies it and relink keeps morning values", async () => {
+  const snapshot = fixture();
+  snapshot.config.profiles.solar = newProfile("solar", "Natural");
+  const { panel, calls } = await mount(true, snapshot);
+  button(panel, "Profils de lumière naturelle").click(); await settle(panel);
+  await solarStage(panel, "evening", "high");
+  assert.equal(solarValue(panel, "brightness").value, "100", "Evening starts at the high solar bound");
+  await changeSolarValue(panel, "brightness", 75);
+  await solarStage(panel, "morning", "high");
+  assert.equal(solarValue(panel, "brightness").value, "75");
+  solarHandle(panel, "evening", "brightness", "high").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
   await settle(panel);
-  assert.deepEqual([...panel.shadowRoot!.querySelectorAll<HTMLSelectElement>('.profile select[aria-describedby]')].map((select) => select.value), ["ease_in_out", "ease_in_out"]);
-  [...panel.shadowRoot!.querySelectorAll<SVGSVGElement>('svg[role="img"]')].forEach((graph, index) => {
-    const points = graph.querySelector("polyline")!.getAttribute("points")!.split(" ").map((point) => point.split(",").map(Number));
-    assert.ok(points.flat().every(Number.isFinite));
-    const labels = [...graph.querySelectorAll<SVGTextElement>('text[y="178"]')];
-    assert.deepEqual(labels.map((label) => Number(label.getAttribute("x"))), [points[1][0], points.at(-2)![0]]);
-    assert.equal(points[0][1], points[1][1]);
-    assert.equal(points.at(-2)![1], points.at(-1)![1]);
-    const midpoint = points[Math.floor(points.length / 2)];
-    assert.ok(Math.abs(midpoint[1] - 97.5) < 1e-8, "The midpoint is halfway through the value change");
-    const firstQuarter = points[9][1], lastQuarter = points[25][1];
-    const [startY, endY] = [points[1][1], points.at(-2)![1]];
-    assert.ok(Math.abs(firstQuarter - (startY + (endY - startY) * .15625)) < 1e-8);
-    assert.ok(Math.abs(lastQuarter - (startY + (endY - startY) * .84375)) < 1e-8);
-    assert.match(graph.getAttribute("aria-label")!, /Accélération et décélération/);
-  });
+  assert.equal(Number(solarHandle(panel, "morning", "brightness", "high").getAttribute("aria-valuenow")), 19);
+  assert.equal(Number(solarHandle(panel, "evening", "brightness", "high").getAttribute("aria-valuenow")), 19);
+  const linked = () => panel.shadowRoot!.querySelector<HTMLInputElement>('.profile input[type="checkbox"]')!;
+  linked().checked = false; linked().dispatchEvent(new Event("change", { bubbles: true })); await settle(panel);
+  await solarStage(panel, "evening", "high");
+  assert.equal(solarValue(panel, "brightness").value, "75", "Unlinking starts with the shared profile");
+  await changeSolarValue(panel, "brightness", 55);
+  await solarStage(panel, "morning", "high");
+  assert.equal(solarValue(panel, "brightness").value, "75", "Independent evening changes leave morning untouched");
+  button(panel, "Enregistrer les modifications").click(); await settle(panel);
+  const separate = (calls.filter((call) => call.type === "halo/save").at(-1)!.config as Snapshot["config"]).profiles.solar;
+  assert.equal(separate.linked, false);
+  assert.equal(separate.morning.brightness.high, 75);
+  assert.equal(separate.evening.brightness.high, 55);
+  linked().checked = true; linked().dispatchEvent(new Event("change", { bubbles: true })); await settle(panel);
+  await solarStage(panel, "evening", "high");
+  assert.equal(solarValue(panel, "brightness").value, "75");
+  button(panel, "Enregistrer les modifications").click(); await settle(panel);
+  const relinked = (calls.filter((call) => call.type === "halo/save").at(-1)!.config as Snapshot["config"]).profiles.solar;
+  assert.equal(relinked.linked, true);
+  assert.equal(relinked.morning.brightness.high, 75);
+});
+
+test("keyboard threshold movement follows each solar direction and never crosses close decimal bounds", async () => {
+  const snapshot = fixture();
+  const profile = newProfile("solar", "Natural");
+  profile.linked = false;
+  profile.morning.temperature.low_elevation = -6.125;
+  profile.morning.temperature.high_elevation = -6.12;
+  snapshot.config.profiles.solar = profile;
+  const { panel } = await mount(true, snapshot);
+  button(panel, "Profils de lumière naturelle").click(); await settle(panel);
+  const key = async (period: "morning" | "evening", kind: "brightness" | "temperature", bound: "low" | "high", name: string, shiftKey = false) => {
+    solarHandle(panel, period, kind, bound).dispatchEvent(new KeyboardEvent("keydown", { key: name, shiftKey, bubbles: true, cancelable: true }));
+    await settle(panel);
+    return Number(solarHandle(panel, period, kind, bound).getAttribute("aria-valuenow"));
+  };
+  assert.equal(await key("morning", "brightness", "low", "ArrowRight"), -19);
+  assert.equal(await key("evening", "brightness", "high", "ArrowRight"), 19);
+  assert.ok(Math.abs(await key("evening", "brightness", "high", "ArrowLeft", true) - 19.1) < 1e-8);
+  assert.equal(Number(solarHandle(panel, "morning", "temperature", "low").getAttribute("aria-valuenow")), -6.125, "Existing decimals remain exact before manipulation");
+  const closeLow = await key("morning", "temperature", "low", "ArrowRight");
+  assert.ok(closeLow > -6.125 && closeLow < -6.12, "A large move stops immediately before the neighbouring bound");
+  assert.equal(closeLow, Number(solarHandle(panel, "morning", "temperature", "low").getAttribute("aria-valuemax")));
+  assert.equal(Number(solarHandle(panel, "morning", "temperature", "high").getAttribute("aria-valuenow")), -6.12);
+  assert.equal(await key("morning", "brightness", "low", "Home"), -90);
+  const end = await key("morning", "brightness", "low", "End");
+  assert.equal(end, Number(solarHandle(panel, "morning", "brightness", "low").getAttribute("aria-valuemax")), "End reaches the maximum announced to assistive technology");
+  assert.ok(end < Number(solarHandle(panel, "morning", "brightness", "high").getAttribute("aria-valuenow")));
+  assert.ok(end > -90);
+  const highStart = await key("morning", "brightness", "high", "Home");
+  assert.equal(highStart, Number(solarHandle(panel, "morning", "brightness", "high").getAttribute("aria-valuemin")), "Home reaches the minimum announced to assistive technology");
+  assert.ok(highStart > end);
+  assert.equal(await key("morning", "brightness", "high", "End"), 90);
+  assert.equal(Number(solarHandle(panel, "evening", "brightness", "low").getAttribute("aria-valuenow")), -20);
+});
+
+test("mouse and touch dragging update only the selected threshold and stop after release or cancellation", async () => {
+  for (const pointerType of ["mouse", "touch"]) {
+    const snapshot = fixture();
+    const profile = newProfile("solar", "Natural");
+    profile.linked = false;
+    snapshot.config.profiles.solar = profile;
+    const { panel, calls } = await mount(true, snapshot);
+    button(panel, "Profils de lumière naturelle").click(); await settle(panel);
+    const handle = solarHandle(panel, "morning", "brightness", "low");
+    let captured: number | undefined;
+    handle.setPointerCapture = (pointerId) => { captured = pointerId; };
+    handle.hasPointerCapture = (pointerId) => captured === pointerId;
+    handle.releasePointerCapture = (pointerId) => { assert.equal(captured, pointerId); captured = undefined; };
+    handle.parentElement!.getBoundingClientRect = () => ({ left: 100, right: 900, top: 0, bottom: 44, x: 100, y: 0, width: 800, height: 44, toJSON() {} });
+    const pointer = async (type: string, clientX: number, pointerId = 7) => {
+      handle.dispatchEvent(new PointerEvent(type, { pointerId, pointerType, button: 0, clientX, bubbles: true, cancelable: true }));
+      await settle(panel);
+    };
+    const before = panel.shadowRoot!.querySelector(".solar-brightness-path")!.getAttribute("d");
+    await pointer("pointerdown", 240);
+    assert.equal(captured, 7);
+    assert.equal(panel.shadowRoot!.querySelector(".savebar"), null, "Selecting a handle does not change its value");
+    await pointer("pointermove", 300, 8);
+    assert.equal(Number(handle.getAttribute("aria-valuenow")), -20, "Another pointer cannot move the active handle");
+    await pointer("pointermove", 300);
+    assert.ok(Math.abs(Number(handle.getAttribute("aria-valuenow"))) < 1e-8, "The dawn position maps back to zero elevation");
+    assert.notEqual(panel.shadowRoot!.querySelector(".solar-brightness-path")!.getAttribute("d"), before);
+    assert.equal(Number(solarHandle(panel, "morning", "temperature", "low").getAttribute("aria-valuenow")), 0);
+    assert.equal(Number(solarHandle(panel, "evening", "brightness", "low").getAttribute("aria-valuenow")), -20);
+    await pointer("pointermove", 500);
+    const bounded = Number(handle.getAttribute("aria-valuenow"));
+    assert.ok(bounded > 0 && bounded < 20, "Dragging beyond the next threshold reaches its strict lower limit without crossing");
+    assert.equal(bounded, Number(handle.getAttribute("aria-valuemax")));
+    await pointer(pointerType === "mouse" ? "pointerup" : "pointercancel", 500);
+    assert.equal(captured, undefined);
+    await pointer("pointermove", 200);
+    assert.equal(Number(handle.getAttribute("aria-valuenow")), bounded, "Released handles ignore subsequent pointer motion");
+    assert.equal(calls.some((call) => ["halo/save", "halo/command", "halo/edit/preview"].includes(String(call.type))), false);
+    panel.remove();
+  }
+});
+
+test("visual profile drafts survive a remote conflict and discard restores the latest server curve", async () => {
+  const snapshot = fixture();
+  snapshot.config.profiles.solar = newProfile("solar", "Natural");
+  const { panel, emit, calls } = await mount(true, snapshot);
+  button(panel, "Profils de lumière naturelle").click(); await settle(panel);
+  await solarStage(panel, "morning", "low");
+  await changeSolarValue(panel, "brightness", 25);
+  const remote = structuredClone(snapshot);
+  remote.revision++;
+  remote.config.profiles.solar.morning.brightness.low = 65;
+  emit(remote); await settle(panel);
+  assert.equal(solarValue(panel, "brightness").value, "25");
+  assert.equal(button(panel, "Enregistrer les modifications").disabled, true);
+  assert.equal(calls.some((call) => call.type === "halo/save"), false);
+  button(panel, "Abandonner les modifications").click(); await settle(panel);
+  assert.equal(solarValue(panel, "brightness").value, "65");
+  assert.equal(panel.shadowRoot!.querySelector(".savebar"), null);
 });
 
 test("each natural curve type can be selected and saved independently while old profiles stay linear", async () => {
@@ -427,12 +661,15 @@ test("profile details preserve separate drafts and block leaving an invalid sola
   assert.equal(profileLinks()[1].getAttribute("aria-current"), "page");
   profileLinks()[0].click(); await settle(panel);
   assert.equal(inputByLabel(panel, "Nom").value, "Chaud personnalisé");
+  const advanced = panel.shadowRoot!.querySelector<HTMLDetailsElement>("details.profile-advanced")!;
+  assert.equal(advanced.open, false);
   const high = inputByLabel(panel, "Hauteur solaire haute");
   high.value = "-30"; high.dispatchEvent(new Event("input", { bubbles: true })); await settle(panel);
   for (const target of [profileLinks()[1], button(panel, "Nouveau profil"), button(panel, "Pièces"), button(panel, "Enregistrer les modifications")]) {
     target.click(); await settle(panel);
     assert.equal(inputByLabel(panel, "Nom").value, "Chaud personnalisé");
     assert.equal(panel.shadowRoot!.activeElement, high);
+    assert.equal(advanced.open, true, "Invalid numerical settings are revealed before focusing their field");
     assert.equal(profileLinks().length, 2);
   }
   assert.equal(calls.some((call) => call.type === "halo/save"), false);
