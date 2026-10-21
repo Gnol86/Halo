@@ -1147,6 +1147,17 @@ export class HaloPanel extends LitElement {
     this.solarSelection = { period, bound, kind };
   }
 
+  private solarHandleLimits(curve: Curve, bound: CurveBound) {
+    const limits = elevationLimits(curve, bound);
+    let minimum = Math.ceil(limits.min * 100) / 100;
+    let maximum = Math.floor(limits.max * 100) / 100;
+    // Multiplication can round an adjacent float back onto the forbidden bound.
+    if (minimum < limits.min) minimum = (Math.round(minimum * 100) + 1) / 100;
+    if (maximum > limits.max) maximum = (Math.round(maximum * 100) - 1) / 100;
+    const current = curve[`${bound}_elevation`];
+    return { min: Math.min(current, minimum), max: Math.max(current, maximum), minimum, maximum };
+  }
+
   private updateSolarCurve(profileId: string, period: SolarPeriod, kind: CurveKind, bound: CurveBound, value: number, elevation: boolean) {
     if (!Number.isFinite(value) || !this.validateFields()) return;
     const profile = this.draft?.profiles[profileId];
@@ -1154,9 +1165,14 @@ export class HaloPanel extends LitElement {
     const branch = profile.linked ? "morning" : period;
     const curve = profile[branch][kind];
     if (elevation) {
-      const limits = elevationLimits(curve, bound);
-      value = Math.max(limits.min, Math.min(limits.max, value));
-    }
+      const limits = this.solarHandleLimits(curve, bound);
+      const current = curve[`${bound}_elevation`];
+      const rounded = Math.max(limits.minimum, Math.min(limits.maximum, Math.round(value * 100) / 100));
+      // Preserve precise legacy values when the next legal hundredth would move
+      // against the gesture, or no hundredth fits between the strict bounds.
+      if (limits.minimum > limits.maximum || (value - current) * (rounded - current) < 0 || value === current) return;
+      value = rounded;
+    } else value = Math.round(value);
     const key = elevation ? `${bound}_elevation` as const : bound;
     if (elevation ? value < -90 || value > 90 || (bound === "low" ? value >= curve.high_elevation : value <= curve.low_elevation)
       : value < (kind === "brightness" ? 0 : 1000) || value > (kind === "brightness" ? 100 : 40000)) return;
@@ -1195,8 +1211,8 @@ export class HaloPanel extends LitElement {
   private solarHandleKey(event: KeyboardEvent, profile: Profile, period: SolarPeriod, kind: CurveKind, bound: CurveBound) {
     const curve = profile[profile.linked ? "morning" : period][kind];
     const current = curve[`${bound}_elevation`];
-    const limits = elevationLimits(curve, bound);
-    const step = event.shiftKey ? .1 : 1;
+    const limits = this.solarHandleLimits(curve, bound);
+    const step = event.shiftKey ? .01 : 1;
     const direction = period === "morning" ? 1 : -1;
     let value: number;
     if (event.key === "ArrowRight" || event.key === "ArrowLeft") value = current + step * direction * (event.key === "ArrowRight" ? 1 : -1);
@@ -1236,18 +1252,18 @@ export class HaloPanel extends LitElement {
             <path class="solar-sun-path" d=${sunPath}></path>
             <path class="solar-brightness-path" d=${lightPath}></path>
             <line class="solar-guide" x1=${guide} x2=${guide} y1="0" y2="240"></line>
-            <circle class="solar-guide-sun" cx=${guide} cy=${240 * (1 - (elevation + 90) / 180)} r="4"></circle>
           </svg>`}
+          <span class="solar-guide-sun" aria-hidden="true" style=${`left:${guide / 8}%;top:${(90 - elevation) / 180 * 100}%`}></span>
         </div>
         <div class="solar-phases" aria-hidden="true">${(["solarNight", "solarRise", "solarPeak", "solarSet", "solarNight"] as const).map((key, index) => html`<span style=${`left:${index * 25}%`}>${this.t(key)}</span>`)}</div>
         ${(["brightness", "temperature"] as const).map((kind) => html`<div class="solar-track-group"><div class="solar-track-label">${this.t(kind === "brightness" ? "brightness" : "solarTemperature")}</div><div class="solar-track" data-kind=${kind}>
           ${stages.map(([period, bound]) => {
             const curve = profile[profile.linked ? "morning" : period][kind];
             const degrees = curve[`${bound}_elevation`];
-            const limits = elevationLimits(curve, bound);
+            const limits = this.solarHandleLimits(curve, bound);
             const label = `${this.solarStageLabel(period, bound)} · ${this.t(kind === "brightness" ? "brightness" : "solarTemperature")}`;
             const active = selection.period === period && selection.bound === bound;
-            return html`<button class="solar-handle" type="button" role="slider" aria-label=${label} aria-orientation="horizontal" aria-valuemin=${limits.min} aria-valuemax=${limits.max} aria-valuenow=${degrees} aria-valuetext=${`${this.solarNumber(degrees, 6)}°`} aria-describedby="solar-drag-help"
+            return html`<button class="solar-handle" type="button" role="slider" aria-label=${label} aria-orientation="horizontal" aria-valuemin=${limits.min} aria-valuemax=${limits.max} aria-valuenow=${degrees} aria-valuetext=${`${this.solarNumber(degrees)}°`} aria-describedby="solar-drag-help"
               data-period=${period} data-kind=${kind} data-bound=${bound} data-active=${active} style=${`left:${solarPosition(degrees, period) * 100}%;z-index:${active ? 3 : 1}`}
               @focus=${() => this.selectSolarStage(period, bound, kind)} @click=${() => this.selectSolarStage(period, bound, kind)}
               @keydown=${(event: KeyboardEvent) => this.solarHandleKey(event, profile, period, kind, bound)}
@@ -1261,8 +1277,11 @@ export class HaloPanel extends LitElement {
         const label = this.t(kind === "brightness" ? "brightness" : "solarTemperature");
         const sliderId = `solar-value-${profile.id}-${kind}`;
         return html`<label class="solar-value" for=${sliderId}><span class="solar-value-heading"><strong>${label}</strong><output>${this.solarNumber(value)} ${kind === "brightness" ? "%" : "K"}</output></span>
-          <span class="solar-value-elevation">${this.t("solarAtElevation")} <strong>${this.solarNumber(degrees, 6)}°</strong></span>
-          <input class="solar-value-slider" id=${sliderId} data-kind=${kind} type="range" min="0" max=${kind === "brightness" ? 100 : 1} step="any" .value=${live(String(kind === "brightness" ? value : temperaturePosition(value)))} aria-label=${`${this.solarStageLabel(selection.period, selection.bound)} · ${label}`} aria-valuetext=${`${this.solarNumber(value)} ${kind === "brightness" ? "%" : "K"}`}
+          <span class="solar-value-elevation">${this.t("solarAtElevation")} <strong>${this.solarNumber(degrees)}°</strong></span>
+          <span class="solar-value-gradient" data-kind=${kind} aria-hidden="true" style=${`background:linear-gradient(to right,${kind === "brightness"
+            ? `rgb(0, 0, 0),${temperatureColor(curves.temperature[selection.bound])}`
+            : Array.from({ length: 25 }, (_, index) => `${temperatureColor(temperatureValue(index / 24))} ${index / 24 * 100}%`).join(",")})`}></span>
+          <input class="solar-value-slider" id=${sliderId} data-kind=${kind} type="range" min="0" max=${kind === "brightness" ? 100 : 1} step=${kind === "brightness" ? 1 : "any"} .value=${live(String(kind === "brightness" ? Math.round(value) : temperaturePosition(value)))} aria-label=${`${this.solarStageLabel(selection.period, selection.bound)} · ${label}`} aria-valuetext=${`${this.solarNumber(value)} ${kind === "brightness" ? "%" : "K"}`}
             @input=${(event: Event) => { this.selectSolarStage(selection.period, selection.bound, kind); this.updateSolarCurve(profile.id, selection.period, kind, selection.bound, kind === "brightness" ? Number((event.target as HTMLInputElement).value) : temperatureValue(Number((event.target as HTMLInputElement).value)), false); }}>
           <span class="solar-range-labels"><span>${kind === "brightness" ? "0 %" : this.t("solarWarm")}</span><span>${kind === "brightness" ? "100 %" : this.t("solarCool")}</span></span>
         </label>`;

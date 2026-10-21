@@ -55,12 +55,12 @@
   halo-panel { height:auto; min-height:0; flex:1; }
 </style>
 <div class="harness" aria-label="Outils de l’aperçu simulé">
-  <strong>Données simulées · aucun logement connecté</strong>
+  <strong id="simulation-label">Données simulées · aucun logement connecté</strong>
   <button id="language">Langue : FR</button>
   <button id="theme">Thème : clair</button>
   <button id="admin">Rôle : administrateur</button>
   <button id="text-size" aria-pressed="false">Texte : 100 %</button>
-  <details><summary>À propos de cet aperçu</summary><p>Six pièces configurées et deux pièces à configurer. États et commandes simulés, sans moteur d’automatisation. Les icônes utilisent un substitut SVG réservé à cet aperçu ; aucun composant privé Home Assistant n’est importé.</p><p id="native-action" role="status">Les vrais contrôles des lampes nécessitent le frontend Home Assistant.</p></details>
+  <details><summary id="preview-about">À propos de cet aperçu</summary><p id="preview-description">Six pièces configurées et deux pièces à configurer. États et commandes simulés, sans moteur d’automatisation. Les icônes utilisent un substitut SVG réservé à cet aperçu ; aucun composant privé Home Assistant n’est importé.</p><p id="native-action" role="status">Les vrais contrôles des lampes nécessitent le frontend Home Assistant.</p></details>
 </div>
 <halo-panel></halo-panel>
 <script type="module">
@@ -156,6 +156,217 @@ class PreviewIcon extends HTMLElement {
 }
 if(!customElements.get("ha-icon")) customElements.define("ha-icon",PreviewIcon);
 
+// These catalogs belong only to the simulated harness, never to real user data.
+let previewLocale=new URLSearchParams(location.search).get("lang")==="en"?"en":"fr";
+const previewCopy={
+  "fr": {
+    "title": "Halo — aperçu isolé avec données simulées",
+    "tools": "Outils de l’aperçu simulé",
+    "simulation": "Données simulées · aucun logement connecté",
+    "language": "Langue : FR",
+    "theme": "Thème",
+    "themes": {
+      "light": "clair",
+      "dark": "sombre",
+      "contrast": "personnalisé contrasté"
+    },
+    "role": "Rôle",
+    "administrator": "administrateur",
+    "user": "utilisateur",
+    "text": "Texte",
+    "about": "À propos de cet aperçu",
+    "description": "Six pièces configurées et deux pièces à configurer. États et commandes simulés, sans moteur d’automatisation. Les icônes utilisent un substitut SVG réservé à cet aperçu ; aucun composant privé Home Assistant n’est importé.",
+    "nativeDefault": "Les vrais contrôles des lampes nécessitent le frontend Home Assistant.",
+    "nativeRequested": "Contrôles natifs demandés pour {entity}. Ouvre Halo dans Home Assistant pour les utiliser."
+  },
+  "en": {
+    "title": "Halo — isolated preview with simulated data",
+    "tools": "Simulated preview tools",
+    "simulation": "Simulated data · no home connected",
+    "language": "Language: EN",
+    "theme": "Theme",
+    "themes": {
+      "light": "light",
+      "dark": "dark",
+      "contrast": "custom high contrast"
+    },
+    "role": "Role",
+    "administrator": "administrator",
+    "user": "user",
+    "text": "Text",
+    "about": "About this preview",
+    "description": "Six configured rooms and two rooms ready to configure. States and commands are simulated, with no automation engine. Icons use a preview-only SVG substitute; no private Home Assistant components are imported.",
+    "nativeDefault": "Real light controls require the Home Assistant frontend.",
+    "nativeRequested": "Native controls requested for {entity}. Open Halo in Home Assistant to use them."
+  }
+};
+const demoNames={
+  "profiles": {
+    "warm": {
+      "fr": "Blanc chaleureux",
+      "en": "Warm white"
+    },
+    "daylight": {
+      "fr": "Lumière du jour",
+      "en": "Daylight"
+    },
+    "rhythm": {
+      "fr": "Réveil et soirée",
+      "en": "Wake-up and evening"
+    }
+  },
+  "areas": {
+    "lounge": {
+      "fr": "Salon",
+      "en": "Living room"
+    },
+    "kitchen": {
+      "fr": "Cuisine",
+      "en": "Kitchen"
+    },
+    "bedroom": {
+      "fr": "Chambre",
+      "en": "Bedroom"
+    },
+    "office": {
+      "fr": "Bureau",
+      "en": "Office"
+    },
+    "hall": {
+      "fr": "Hall d’entrée",
+      "en": "Entrance hall"
+    },
+    "bathroom": {
+      "fr": "Salle de bain",
+      "en": "Bathroom"
+    },
+    "garage": {
+      "fr": "Garage",
+      "en": "Garage"
+    },
+    "garden": {
+      "fr": "Jardin",
+      "en": "Garden"
+    }
+  },
+  "scenes": {
+    "cinema": {
+      "fr": "Cinéma",
+      "en": "Movie night"
+    },
+    "reading": {
+      "fr": "Lecture du soir",
+      "en": "Evening reading"
+    },
+    "welcome": {
+      "fr": "Accueil",
+      "en": "Welcome"
+    }
+  },
+  "entities": {
+    "light.sofa": {
+      "fr": "Lampadaire",
+      "en": "Floor lamp"
+    },
+    "light.ceiling": {
+      "fr": "Plafonnier",
+      "en": "Ceiling light"
+    },
+    "light.table": {
+      "fr": "Lampe de table",
+      "en": "Table lamp"
+    },
+    "light.kitchen": {
+      "fr": "Suspension",
+      "en": "Pendant light"
+    },
+    "light.worktop": {
+      "fr": "Plan de travail",
+      "en": "Worktop lights"
+    },
+    "light.bed_left": {
+      "fr": "Chevet gauche",
+      "en": "Left bedside lamp"
+    },
+    "light.bed_right": {
+      "fr": "Chevet droit",
+      "en": "Right bedside lamp"
+    },
+    "light.desk": {
+      "fr": "Lampe du bureau",
+      "en": "Desk lamp"
+    },
+    "light.office_ceiling": {
+      "fr": "Plafond du bureau",
+      "en": "Office ceiling"
+    },
+    "light.hall": {
+      "fr": "Éclairage du hall",
+      "en": "Hall light"
+    },
+    "light.mirror": {
+      "fr": "Miroir",
+      "en": "Mirror light"
+    },
+    "light.bathroom_ceiling": {
+      "fr": "Plafond de la salle de bain",
+      "en": "Bathroom ceiling"
+    },
+    "light.garage": {
+      "fr": "Garage",
+      "en": "Garage"
+    },
+    "light.garden": {
+      "fr": "Terrasse",
+      "en": "Patio"
+    },
+    "light.lounge_group": {
+      "fr": "Groupe du salon",
+      "en": "Living room group"
+    },
+    "sun.sun": {
+      "fr": "Soleil",
+      "en": "Sun"
+    },
+    "binary_sensor.presence": {
+      "fr": "Présence du salon",
+      "en": "Living room presence"
+    },
+    "binary_sensor.hall_presence": {
+      "fr": "Présence du hall",
+      "en": "Hall presence"
+    },
+    "sensor.illuminance": {
+      "fr": "Luminosité du salon",
+      "en": "Living room illuminance"
+    },
+    "sensor.daylight_percent": {
+      "fr": "Luminosité relative",
+      "en": "Relative brightness"
+    },
+    "input_boolean.presence": {
+      "fr": "Présence personnalisée",
+      "en": "Custom presence"
+    },
+    "input_boolean.guests": {
+      "fr": "Invités à la maison",
+      "en": "Guests at home"
+    },
+    "media_player.tv": {
+      "fr": "Télévision",
+      "en": "Television"
+    },
+    "scene.reading": {
+      "fr": "Lecture du soir",
+      "en": "Evening reading"
+    },
+    "scene.hue_ambience": {
+      "fr": "Ambiance Hue",
+      "en": "Hue ambience"
+    }
+  }
+};
+
 const transitions={turn_on:0,lux_on:10,natural:60,scene:10,turn_off:2};
 const inherited=()=>Object.fromEntries(Object.keys(transitions).map(key=>[key,"inherit"]));
 const curves=(low,high,warm,cool,interpolation="ease_in_out")=>({
@@ -231,7 +442,7 @@ let initialStatus;
 window.haloCalls=[];
 const panel=document.querySelector("halo-panel");
 const send=()=>callback?.(structuredClone(snapshot));
-const hass={locale:{language:"fr-BE"},themes:{darkMode:false},states:Object.fromEntries([...entities,...lights].map(({entity_id,state,attributes})=>[entity_id,{state,attributes:structuredClone(attributes)}])),connection:{async subscribeMessage(cb){callback=cb;return()=>callback=undefined;}},async callApi(method,path){
+const hass={locale:{language:previewLocale==="en"?"en":"fr-BE"},themes:{darkMode:false},states:Object.fromEntries([...entities,...lights].map(({entity_id,state,attributes})=>[entity_id,{state,attributes:structuredClone(attributes)}])),connection:{async subscribeMessage(cb){callback=cb;return()=>callback=undefined;}},async callApi(method,path){
   window.haloCalls.push({type:"api",method,path});
   if(method==="GET"&&path==="config/scene/config/reading")return structuredClone(sourceScene);
   throw {status_code:404};
@@ -280,7 +491,7 @@ const hass={locale:{language:"fr-BE"},themes:{darkMode:false},states:Object.from
     }
     if(message.command==="scene"){
       const scene=room.scenes.find(item=>item.id===message.scene_id);if(scene){
-        const targets=scene.type==="home_assistant"?(scene.scene_entity_id==="scene.reading"?sourceScene.entities:{"light.sofa":{state:"on",brightness:180,effect:"Candle"}}):scene.lights;
+        const targets=scene.type==="home_assistant"?(scene.scene_entity_id==="scene.reading"?sourceScene.entities:{"light.sofa":{state:"on",brightness:180,effect:previewLocale==="fr"?"Bougie":"Candle"}}):scene.lights;
         applyTargets(Object.fromEntries(Object.entries(targets).map(([id,target])=>[id,typeof target==="string"?{state:target}:target])));
         status.scene_id=scene.id;status.reason="scene";status.is_on=room.lights.some(id=>hass.states[id]?.state==="on");}
     }
@@ -297,20 +508,57 @@ function applyTargets(targets){
   }
   panel.hass={...hass};
 }
+const themes=["light","dark","contrast"];
+let themeIndex=0;
+let lastNativeEntity;
+function localizeDemoNames(){
+  // Only known fixture names change language. Names edited in the demo stay intact.
+  const rename=(entry,catalog,key)=>{const names=catalog[key];if(names&&Object.values(names).includes(entry.name))entry.name=names[previewLocale];};
+  for(const profile of Object.values(snapshot.config.profiles))rename(profile,demoNames.profiles,profile.id);
+  for(const area of snapshot.areas)rename(area,demoNames.areas,area.id);
+  for(const room of Object.values(snapshot.config.rooms))for(const scene of room.scenes)rename(scene,demoNames.scenes,scene.id);
+  for(const entry of [...lights,...entities,...snapshot.lights,...snapshot.entities])rename(entry,demoNames.entities,entry.entity_id);
+  rename(sourceScene,demoNames.scenes,sourceScene.id);
+  const localizeEffect=value=>{
+    if(!value||typeof value!=="object")return;
+    if(["Candle","Bougie"].includes(value.effect))value.effect=previewLocale==="fr"?"Bougie":"Candle";
+    for(const child of Object.values(value))localizeEffect(child);
+  };
+  for(const data of [snapshot,sourceScene,hass.states,initialStates])localizeEffect(data);
+}
+function renderHarness(){
+  const copy=previewCopy[previewLocale];
+  const separator=previewLocale==="fr"?" : ":": ";
+  document.documentElement.lang=previewLocale;
+  document.title=copy.title;
+  document.querySelector(".harness").setAttribute("aria-label",copy.tools);
+  document.querySelector("#simulation-label").textContent=copy.simulation;
+  document.querySelector("#language").textContent=copy.language;
+  document.querySelector("#theme").textContent=copy.theme+separator+copy.themes[themes[themeIndex]];
+  document.querySelector("#admin").textContent=copy.role+separator+copy[snapshot.is_admin?"administrator":"user"];
+  document.querySelector("#text-size").textContent=copy.text+separator+(document.body.classList.contains("large-text")?"125":"100")+" %";
+  document.querySelector("#preview-about").textContent=copy.about;
+  document.querySelector("#preview-description").textContent=copy.description;
+  document.querySelector("#native-action").textContent=lastNativeEntity?copy.nativeRequested.replace("{entity}",lastNativeEntity):copy.nativeDefault;
+}
+localizeDemoNames();
+renderHarness();
 panel.hass=hass;
 // Only record the documented action; a simulated preview never supplies a native light dialog.
-panel.addEventListener("hass-action",event=>{window.haloCalls.push({type:"hass-action",...structuredClone(event.detail)});document.querySelector("#native-action").textContent=`Contrôles natifs demandés pour ${event.detail.config.entity}. Ouvre Halo dans Home Assistant pour les utiliser.`;document.querySelector(".harness details").open=true;});
+panel.addEventListener("hass-action",event=>{
+  window.haloCalls.push({type:"hass-action",...structuredClone(event.detail)});
+  lastNativeEntity=event.detail.config.entity;renderHarness();document.querySelector(".harness details").open=true;
+});
 document.querySelector("#language").onclick=()=>{
-  const english=hass.locale.language.startsWith("fr");hass.locale={language:english?"en":"fr-BE"};document.documentElement.lang=english?"en":"fr";
-  document.querySelector("#language").textContent=`Langue : ${english?"EN":"FR"}`;panel.hass={...hass};
+  previewLocale=previewLocale==="fr"?"en":"fr";
+  hass.locale={language:previewLocale==="en"?"en":"fr-BE"};
+  localizeDemoNames();renderHarness();panel.hass={...hass};send();
 };
-const themes=[{id:"light",label:"clair"},{id:"dark",label:"sombre"},{id:"contrast",label:"personnalisé contrasté"}];
-let themeIndex=0;
 document.querySelector("#theme").onclick=()=>{
-  const theme=themes[themeIndex=(themeIndex+1)%themes.length];document.body.dataset.theme=theme.id;
-  hass.themes={darkMode:theme.id==="dark"};panel.hass={...hass};document.querySelector("#theme").textContent=`Thème : ${theme.label}`;
+  const theme=themes[themeIndex=(themeIndex+1)%themes.length];document.body.dataset.theme=theme;
+  hass.themes={darkMode:theme==="dark"};panel.hass={...hass};renderHarness();
 };
-document.querySelector("#admin").onclick=()=>{snapshot.is_admin=!snapshot.is_admin;document.querySelector("#admin").textContent=`Rôle : ${snapshot.is_admin?"administrateur":"utilisateur"}`;send();};
-document.querySelector("#text-size").onclick=()=>{const large=document.body.classList.toggle("large-text");const button=document.querySelector("#text-size");button.textContent=`Texte : ${large?"125":"100"} %`;button.setAttribute("aria-pressed",String(large));};
+document.querySelector("#admin").onclick=()=>{snapshot.is_admin=!snapshot.is_admin;renderHarness();send();};
+document.querySelector("#text-size").onclick=()=>{const large=document.body.classList.toggle("large-text");document.querySelector("#text-size").setAttribute("aria-pressed",String(large));renderHarness();};
 </script>
 </html>

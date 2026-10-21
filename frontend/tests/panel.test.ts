@@ -218,7 +218,7 @@ test("value sliders preview brightness and white temperature independently and o
   assert.deepEqual([...panel.shadowRoot!.querySelectorAll<HTMLSelectElement>('.profile select[aria-describedby]')].map((select) => select.value), ["ease_in_out", "ease_in_out"]);
   await solarStage(panel, "morning", "low");
   const brightness = solarValue(panel, "brightness");
-  assert.deepEqual([brightness.min, brightness.max, brightness.step], ["0", "100", "any"]);
+  assert.deepEqual([brightness.min, brightness.max, brightness.step], ["0", "100", "1"]);
   const temperature = solarValue(panel, "temperature");
   assert.deepEqual([temperature.min, temperature.max], ["0", "1"]);
   assert.match(brightness.closest("label")!.querySelector(".solar-value-elevation")!.textContent!, /-20/);
@@ -227,21 +227,83 @@ test("value sliders preview brightness and white temperature independently and o
   const temperatureFill = () => panel.shadowRoot!.querySelector(".solar-temperature-gradient")!.innerHTML;
   const before = brightnessPath();
   const initialFill = temperatureFill();
-  await changeSolarValue(panel, "brightness", 24.5);
+  await changeSolarValue(panel, "brightness", 24);
   assert.notEqual(brightnessPath(), before);
   assert.equal(temperatureFill(), initialFill, "Brightness leaves the white temperature unchanged");
   const updatedPath = brightnessPath();
-  await changeSolarValue(panel, "temperature", Math.log(3000 / 1000) / Math.log(40000 / 1000));
+  await changeSolarValue(panel, "temperature", Math.log(3000.6 / 1000) / Math.log(40000 / 1000));
   assert.equal(brightnessPath(), updatedPath, "White temperature leaves brightness unchanged");
   assert.notEqual(temperatureFill(), initialFill);
+  assert.ok(Math.abs(Number(solarValue(panel, "temperature").value) - Math.log(3001 / 1000) / Math.log(40000 / 1000)) < 1e-12, "The logarithmic position follows the selected integer kelvin value");
+  assert.equal(solarValue(panel, "temperature").closest("label")!.querySelector("output")!.textContent!.replace(/\s/g, ""), "3001K");
   assert.equal(calls.some((call) => ["halo/save", "halo/command", "halo/edit/begin", "halo/edit/preview"].includes(String(call.type))), false);
   button(panel, "Enregistrer les modifications").click(); await settle(panel);
   const saved = (calls.find((call) => call.type === "halo/save")!.config as Snapshot["config"]).profiles.solar;
-  assert.equal(saved.morning.brightness.low, 24.5);
-  assert.ok(Math.abs(saved.morning.temperature.low - 3000) < 1);
+  assert.equal(saved.morning.brightness.low, 24);
+  assert.equal(saved.morning.temperature.low, 3001);
   assert.equal(saved.morning.brightness.low_elevation, -20);
   assert.equal(saved.morning.temperature.low_elevation, 0);
   assert.equal(calls.some((call) => ["halo/command", "halo/edit/begin", "halo/edit/preview"].includes(String(call.type))), false);
+});
+
+test("integer brightness sliders preserve untouched legacy decimals and exact advanced values until moved", async () => {
+  const snapshot = fixture();
+  const profile = newProfile("solar", "Natural");
+  profile.morning.brightness.low = 24.5;
+  profile.morning.brightness.high = 95.25;
+  profile.morning.brightness.interpolation = "linear";
+  delete profile.morning.temperature.interpolation;
+  snapshot.config.profiles.solar = profile;
+  const { panel, calls } = await mount(true, snapshot);
+  button(panel, "Profils de lumière naturelle").click(); await settle(panel);
+  assert.equal(solarValue(panel, "brightness").step, "1");
+  assert.equal(solarValue(panel, "brightness").checkValidity(), true, "The integer slider must not block saving an untouched fractional value");
+  const name = inputByLabel(panel, "Nom");
+  name.value = "Renamed"; name.dispatchEvent(new Event("input", { bubbles: true })); await settle(panel);
+  button(panel, "Enregistrer les modifications").click(); await settle(panel);
+  const saved = () => (calls.filter((call) => call.type === "halo/save").at(-1)!.config as Snapshot["config"]).profiles.solar;
+  assert.equal(saved().morning.brightness.low, 24.5);
+  assert.equal(saved().morning.brightness.high, 95.25);
+  assert.equal(saved().morning.brightness.interpolation, "linear");
+  assert.equal(saved().morning.temperature.interpolation, undefined);
+  const advancedLow = panel.shadowRoot!.querySelector(".curve-editor")!.querySelectorAll<HTMLInputElement>('input[type="number"]')[2];
+  advancedLow.value = "24.25"; advancedLow.dispatchEvent(new Event("input", { bubbles: true })); await settle(panel);
+  button(panel, "Enregistrer les modifications").click(); await settle(panel);
+  assert.equal(saved().morning.brightness.low, 24.25, "Advanced fields retain their exact numerical precision");
+  await changeSolarValue(panel, "brightness", 25);
+  button(panel, "Enregistrer les modifications").click(); await settle(panel);
+  assert.equal(saved().morning.brightness.low, 25);
+  assert.equal(saved().morning.brightness.high, 95.25, "Moving one endpoint never quantizes the other endpoint");
+});
+
+test("integer kelvin edits retain logarithmic controls and preserve untouched legacy and advanced decimals", async () => {
+  const snapshot = fixture();
+  const profile = newProfile("solar", "Natural");
+  profile.morning.temperature.low = 2000.25;
+  profile.morning.temperature.high = 5500.5;
+  snapshot.config.profiles.solar = profile;
+  const { panel, calls } = await mount(true, snapshot);
+  button(panel, "Profils de lumière naturelle").click(); await settle(panel);
+  const slider = solarValue(panel, "temperature");
+  assert.deepEqual([slider.min, slider.max, slider.step], ["0", "1", "any"]);
+  const name = inputByLabel(panel, "Nom");
+  name.value = "Renamed"; name.dispatchEvent(new Event("input", { bubbles: true })); await settle(panel);
+  button(panel, "Enregistrer les modifications").click(); await settle(panel);
+  const saved = () => (calls.filter((call) => call.type === "halo/save").at(-1)!.config as Snapshot["config"]).profiles.solar;
+  assert.equal(saved().morning.temperature.low, 2000.25);
+  assert.equal(saved().morning.temperature.high, 5500.5);
+  const advancedLow = panel.shadowRoot!.querySelectorAll(".curve-editor")[1].querySelectorAll<HTMLInputElement>('input[type="number"]')[2];
+  advancedLow.value = "2200.75"; advancedLow.dispatchEvent(new Event("input", { bubbles: true })); await settle(panel);
+  button(panel, "Enregistrer les modifications").click(); await settle(panel);
+  assert.equal(saved().morning.temperature.low, 2200.75);
+  await changeSolarValue(panel, "temperature", Math.log(2700.4 / 1000) / Math.log(40000 / 1000));
+  button(panel, "Enregistrer les modifications").click(); await settle(panel);
+  assert.equal(saved().morning.temperature.low, 2700);
+  assert.equal(saved().morning.temperature.high, 5500.5);
+  assert.equal(solarValue(panel, "temperature").getAttribute("aria-valuetext")!.replace(/\s/g, ""), "2700K");
+  await changeSolarValue(panel, "temperature", Math.log(2700.2 / 1000) / Math.log(40000 / 1000));
+  assert.equal(panel.shadowRoot!.querySelector(".savebar"), null, "A movement rounding to the same kelvin does not create an unsaved change");
+  assert.ok(Math.abs(Number(solarValue(panel, "temperature").value) - Math.log(2700 / 1000) / Math.log(40000 / 1000)) < 1e-12);
 });
 
 test("stage selection raises both handles above an overlapping opposite-period handle after temperature was selected", async () => {
@@ -335,17 +397,17 @@ test("keyboard threshold movement follows each solar direction and never crosses
   };
   assert.equal(await key("morning", "brightness", "low", "ArrowRight"), -19);
   assert.equal(await key("evening", "brightness", "high", "ArrowRight"), 19);
-  assert.ok(Math.abs(await key("evening", "brightness", "high", "ArrowLeft", true) - 19.1) < 1e-8);
+  assert.equal(await key("evening", "brightness", "high", "ArrowLeft", true), 19.01);
   assert.equal(Number(solarHandle(panel, "morning", "temperature", "low").getAttribute("aria-valuenow")), -6.125, "Existing decimals remain exact before manipulation");
   const closeLow = await key("morning", "temperature", "low", "ArrowRight");
-  assert.ok(closeLow > -6.125 && closeLow < -6.12, "A large move stops immediately before the neighbouring bound");
-  assert.equal(closeLow, Number(solarHandle(panel, "morning", "temperature", "low").getAttribute("aria-valuemax")));
+  assert.equal(closeLow, -6.125, "Without a legal centesimal step toward the neighbouring bound, the existing decimal remains untouched");
   assert.equal(Number(solarHandle(panel, "morning", "temperature", "high").getAttribute("aria-valuenow")), -6.12);
+  assert.equal(await key("morning", "temperature", "low", "ArrowLeft", true), -6.13, "Moving away from a close bound reaches the next centesimal value");
   assert.equal(await key("morning", "brightness", "low", "Home"), -90);
   const end = await key("morning", "brightness", "low", "End");
   assert.equal(end, Number(solarHandle(panel, "morning", "brightness", "low").getAttribute("aria-valuemax")), "End reaches the maximum announced to assistive technology");
   assert.ok(end < Number(solarHandle(panel, "morning", "brightness", "high").getAttribute("aria-valuenow")));
-  assert.ok(end > -90);
+  assert.equal(end, 19.99, "The last selectable centesimal elevation remains strictly below the high bound");
   const highStart = await key("morning", "brightness", "high", "Home");
   assert.equal(highStart, Number(solarHandle(panel, "morning", "brightness", "high").getAttribute("aria-valuemin")), "Home reaches the minimum announced to assistive technology");
   assert.ok(highStart > end);
@@ -382,9 +444,11 @@ test("mouse and touch dragging update only the selected threshold and stop after
     assert.notEqual(panel.shadowRoot!.querySelector(".solar-brightness-path")!.getAttribute("d"), before);
     assert.equal(Number(solarHandle(panel, "morning", "temperature", "low").getAttribute("aria-valuenow")), 0);
     assert.equal(Number(solarHandle(panel, "evening", "brightness", "low").getAttribute("aria-valuenow")), -20);
+    await pointer("pointermove", 301);
+    assert.equal(Number(handle.getAttribute("aria-valuenow")), 0.71, "Pointer motion selects hundredths of a degree instead of long cosine decimals");
     await pointer("pointermove", 500);
     const bounded = Number(handle.getAttribute("aria-valuenow"));
-    assert.ok(bounded > 0 && bounded < 20, "Dragging beyond the next threshold reaches its strict lower limit without crossing");
+    assert.equal(bounded, 19.99, "Dragging beyond the next threshold reaches its last legal hundredth without crossing");
     assert.equal(bounded, Number(handle.getAttribute("aria-valuemax")));
     await pointer(pointerType === "mouse" ? "pointerup" : "pointercancel", 500);
     assert.equal(captured, undefined);
@@ -393,6 +457,30 @@ test("mouse and touch dragging update only the selected threshold and stop after
     assert.equal(calls.some((call) => ["halo/save", "halo/command", "halo/edit/preview"].includes(String(call.type))), false);
     panel.remove();
   }
+});
+
+test("dragging toward a very close decimal threshold preserves it when no centesimal movement is legal", async () => {
+  const snapshot = fixture();
+  const profile = newProfile("solar", "Natural");
+  profile.morning.temperature.low_elevation = -6.125;
+  profile.morning.temperature.high_elevation = -6.12;
+  snapshot.config.profiles.solar = profile;
+  const { panel, calls } = await mount(true, snapshot);
+  button(panel, "Profils de lumière naturelle").click(); await settle(panel);
+  const handle = solarHandle(panel, "morning", "temperature", "low");
+  let captured = false;
+  handle.setPointerCapture = () => { captured = true; };
+  handle.hasPointerCapture = () => captured;
+  handle.releasePointerCapture = () => { captured = false; };
+  handle.parentElement!.getBoundingClientRect = () => ({ left: 100, right: 900, top: 0, bottom: 44, x: 100, y: 0, width: 800, height: 44, toJSON() {} });
+  for (const [type, clientX] of [["pointerdown", 280], ["pointermove", 500], ["pointerup", 500]] as const) {
+    handle.dispatchEvent(new PointerEvent(type, { pointerId: 1, pointerType: "mouse", button: 0, clientX, bubbles: true }));
+    await settle(panel);
+  }
+  assert.equal(Number(handle.getAttribute("aria-valuenow")), -6.125);
+  assert.equal(Number(solarHandle(panel, "morning", "temperature", "high").getAttribute("aria-valuenow")), -6.12);
+  assert.equal(panel.shadowRoot!.querySelector(".savebar"), null);
+  assert.equal(calls.some((call) => call.type === "halo/save"), false);
 });
 
 test("visual profile drafts survive a remote conflict and discard restores the latest server curve", async () => {

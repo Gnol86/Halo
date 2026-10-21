@@ -34,12 +34,29 @@ test("curve preview preserves fractional elevation, interpolates and clamps", ()
   assert.equal(interpolate(curve, -20), 2000);
   assert.equal(interpolate(curve, 2.5), 3000);
   assert.equal(interpolate(curve, 50), 4000);
+});
+
+test("new profiles use progressive curves for both values and independent morning and evening settings", () => {
   const profile = newProfile("a", "My profile");
-  profile.evening.brightness.low = 80;
-  assert.equal(profile.morning.brightness.low, 40);
+  assert.equal(profile.linked, true);
   for (const period of [profile.morning, profile.evening]) {
-    assert.equal(period.brightness.interpolation, "linear");
-    assert.equal(period.temperature.interpolation, "linear");
+    assert.equal(period.brightness.interpolation, "ease_in_out");
+    assert.equal(period.temperature.interpolation, "ease_in_out");
+  }
+  profile.evening.brightness.low = 80;
+  profile.evening.temperature.high = 6000;
+  assert.equal(profile.morning.brightness.low, 40);
+  assert.equal(profile.morning.temperature.high, 5500);
+});
+
+test("existing implicit and explicit linear curves retain their stored values and interpolation", () => {
+  for (const interpolation of [undefined, "linear"] as const) {
+    const curve: Curve = { low_elevation: -6.125, high_elevation: 9.875, low: 24.25, high: 95.5 };
+    if (interpolation) curve.interpolation = interpolation;
+    const stored = structuredClone(curve);
+    assert.equal(curveInterpolation(curve), "linear");
+    assert.equal(interpolate(curve, -2.125), 42.0625);
+    assert.deepEqual(curve, stored);
   }
 });
 

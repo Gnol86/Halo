@@ -33,6 +33,7 @@ from .natural import (
     supports_brightness,
 )
 from .nightlight import nightlight_conflicts
+from .solar import actual_solar_cycle
 
 _LOGGER = logging.getLogger(__name__)
 _EDIT_TTL = 120
@@ -887,14 +888,21 @@ class HaloRoomEngine:
         if not self.room.get("natural_enabled", True) or not (solar := self._solar()):
             return {}
         result = {}
+        cycle = None
+        cycle_checked = False
         for association in self.room.get("associations", []):
             profile = self.manager.config.get("profiles", {}).get(
                 association["profile_id"]
             )
             if profile is None:
                 continue
+            if not profile.get("linked", True) and not cycle_checked:
+                sun = self._available_state(self.manager.config.get("sun_entity_id"))
+                if sun is not None:
+                    cycle = actual_solar_cycle(self.hass, sun, dt_util.utcnow())
+                cycle_checked = True
             values = natural_values(
-                profile, *solar, association.get("brightness_offset", 0)
+                profile, *solar, association.get("brightness_offset", 0), cycle=cycle
             )
             for entity_id in association["lights"]:
                 state = self._available_state(entity_id)

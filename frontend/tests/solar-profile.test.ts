@@ -134,22 +134,163 @@ test("close decimal transitions retain exact thresholds and internal progression
   assert.ok(samples.length < 500, "sampling stays bounded during pointer movements");
 });
 
-test("unlinked periods retain both sides of the summit and different night settings", () => {
+test("unlinked day and night bridges are continuous at the summit and across midnight", () => {
   const profile = newProfile("split", "Split");
   profile.linked = false;
   profile.evening.brightness.low = 12;
   profile.evening.brightness.high = 75;
   profile.evening.temperature.low = 1500;
   profile.evening.temperature.high = 9000;
+  const original = structuredClone(profile);
   const samples = profileSamples(profile);
-  assert.deepEqual(samples.filter((sample) => sample.position === .5).map((sample) => [sample.period, sample.brightness, sample.temperature]), [
-    ["morning", 100, 5500], ["evening", 75, 9000],
-  ]);
-  assert.equal(samples[0].brightness, 40);
-  assert.equal(samples[0].temperature, 2000);
-  assert.equal(samples.at(-1)!.brightness, 12);
-  assert.equal(samples.at(-1)!.temperature, 1500);
+  const summit = samples.filter((sample) => sample.position === .5);
+  assert.ok(summit.length >= 1);
+  for (const sample of summit) {
+    close(sample.brightness, 87.5);
+    close(sample.temperature, 7250);
+  }
+  close(samples[0].brightness, 26);
+  close(samples[0].temperature, 1750);
+  close(samples.at(-1)!.brightness, samples[0].brightness);
+  close(samples.at(-1)!.temperature, samples[0].temperature);
+  const dayStart = solarPosition(profile.morning.brightness.high_elevation, "morning");
+  const dayEnd = solarPosition(profile.evening.brightness.high_elevation, "evening");
+  const dayQuarter = samples.find((sample) => Math.abs(sample.position - (dayStart + (dayEnd - dayStart) / 4)) < 1e-12)!;
+  close(dayQuarter.brightness, 96.09375, 1e-9);
+  const nightStart = solarPosition(profile.evening.brightness.low_elevation, "evening");
+  const nightEnd = solarPosition(profile.morning.brightness.low_elevation, "morning") + 1;
+  const nightQuarter = samples.find((sample) => Math.abs(sample.position - (nightStart + (nightEnd - nightStart) / 4)) < 1e-12)!;
+  close(nightQuarter.brightness, 16.375, 1e-9);
+  for (const period of ["morning", "evening"] as const) {
+    for (const kind of ["brightness", "temperature"] as const) {
+      const curve = profile[period][kind];
+      const branch = samples.filter((sample) => sample.period === period);
+      close(branch.find((sample) => sample.elevation === curve.low_elevation)![kind], curve.low);
+      close(branch.find((sample) => sample.elevation === curve.high_elevation)![kind], curve.high);
+    }
+  }
   for (let index = 1; index < samples.length; index++) assert.ok(samples[index].position >= samples[index - 1].position);
+  assert.deepEqual(profile, original);
+});
+
+test("unlinked brightness and temperature join their own thresholds while retaining each ramp interpolation", () => {
+  const profile = newProfile("independent-split", "Independent split");
+  profile.linked = false;
+  profile.morning.brightness = { low_elevation: -30, high_elevation: 10, low: 10, high: 90, interpolation: "linear" };
+  profile.evening.brightness = { low_elevation: -15, high_elevation: 40, low: 20, high: 70, interpolation: "ease_in_out" };
+  profile.morning.temperature = { low_elevation: -5, high_elevation: 50, low: 2000, high: 6500, interpolation: "ease_in" };
+  profile.evening.temperature = { low_elevation: -35, high_elevation: 5, low: 3200, high: 9000 };
+  const samples = profileSamples(profile);
+  for (const period of ["morning", "evening"] as const) {
+    for (const kind of ["brightness", "temperature"] as const) {
+      const curve = profile[period][kind];
+      const ramp = samples.filter((sample) => sample.period === period && sample.elevation >= curve.low_elevation && sample.elevation <= curve.high_elevation);
+      assert.ok(ramp.length >= 33);
+      for (const sample of ramp) close(sample[kind], interpolate(curve, sample.elevation), 1e-8);
+    }
+  }
+  const midpoint = (kind: "brightness" | "temperature") => (solarPosition(profile.morning[kind].high_elevation, "morning") + solarPosition(profile.evening[kind].high_elevation, "evening")) / 2;
+  const at = (position: number) => samples.find((sample) => Math.abs(sample.position - position) < 1e-12)!;
+  assert.ok(at(midpoint("brightness")), "The brightness bridge retains its midpoint in the preview");
+  assert.ok(at(midpoint("temperature")), "The temperature bridge retains its independent midpoint");
+  close(at(midpoint("brightness")).brightness, 80);
+  close(at(midpoint("temperature")).temperature, 7750);
+  assert.ok(Math.abs(at(midpoint("brightness")).temperature - 7750) > 1, "Different thresholds do not share one bridge timeline");
+});
+
+test("unlinked bridges preserve constant values and remain bounded for inverted ramps", () => {
+  const profile = newProfile("constant-split", "Constant split");
+  profile.linked = false;
+  for (const period of [profile.morning, profile.evening]) {
+    period.brightness.low = period.brightness.high = 42.5;
+    period.temperature.low = period.temperature.high = 4200;
+  }
+  assert.ok(profileSamples(profile).every((sample) => sample.brightness === 42.5 && sample.temperature === 4200));
+  profile.morning.brightness.low = 100;
+  profile.morning.brightness.high = 0;
+  profile.evening.brightness.low = 20;
+  profile.evening.brightness.high = 80;
+  profile.morning.temperature.low = 6500;
+  profile.morning.temperature.high = 2200;
+  profile.evening.temperature.low = 1800;
+  profile.evening.temperature.high = 6000;
+  const samples = profileSamples(profile);
+  const summit = samples.find((sample) => sample.position === .5)!;
+  close(summit.brightness, 40);
+  close(summit.temperature, 4100);
+  close(samples[0].brightness, 60);
+  close(samples[0].temperature, 4150);
+  assert.ok(samples.every((sample) => sample.brightness >= 0 && sample.brightness <= 100 && sample.temperature >= 1800 && sample.temperature <= 6500));
+});
+
+test("coincident extreme anchors average both values and adapt adjacent ramps continuously", () => {
+  const profile = newProfile("coincident", "Coincident");
+  profile.linked = false;
+  profile.morning.brightness = { low_elevation: -90, high_elevation: 90, low: 20, high: 100, interpolation: "linear" };
+  profile.evening.brightness = { low_elevation: -90, high_elevation: 90, low: 40, high: 60, interpolation: "ease_in_out" };
+  profile.morning.temperature = { low_elevation: -90, high_elevation: 90, low: 2000, high: 6500, interpolation: "ease_in_out" };
+  profile.evening.temperature = { low_elevation: -90, high_elevation: 90, low: 3000, high: 4500, interpolation: "linear" };
+  const original = structuredClone(profile);
+  const samples = profileSamples(profile);
+  for (const sample of samples.filter((point) => [0, .5, 1].includes(point.position))) {
+    close(sample.brightness, sample.position === .5 ? 80 : 30);
+    close(sample.temperature, sample.position === .5 ? 5500 : 2500);
+  }
+  const morningQuarter = samples.find((sample) => sample.period === "morning" && sample.elevation === -45)!;
+  const eveningQuarter = samples.find((sample) => sample.period === "evening" && sample.elevation === -45)!;
+  close(morningQuarter.brightness, 42.5);
+  close(eveningQuarter.brightness, 37.8125);
+  close(morningQuarter.temperature, 2968.75);
+  close(eveningQuarter.temperature, 3250);
+  assert.ok(samples.every((sample) => Number.isFinite(sample.brightness) && Number.isFinite(sample.temperature)));
+  assert.deepEqual(profile, original, "Averaging coincident preview anchors never rewrites either profile endpoint");
+});
+
+test("very short day and night bridges keep interior samples and join without jumps", () => {
+  const profile = newProfile("short-bridges", "Short bridges");
+  profile.linked = false;
+  profile.morning.brightness.high_elevation = 89.999999;
+  profile.evening.brightness.high_elevation = 89.999998;
+  profile.morning.brightness.high = 100;
+  profile.evening.brightness.high = 20;
+  profile.morning.temperature.low_elevation = -89.999999;
+  profile.evening.temperature.low_elevation = -89.999998;
+  profile.morning.temperature.low = 2000;
+  profile.evening.temperature.low = 6000;
+  const samples = profileSamples(profile);
+  const dayStart = solarPosition(profile.morning.brightness.high_elevation, "morning");
+  const dayEnd = solarPosition(profile.evening.brightness.high_elevation, "evening");
+  const dayInterior = samples.filter((sample) => sample.position > dayStart && sample.position < dayEnd);
+  assert.ok(new Set(dayInterior.map((sample) => sample.position)).size >= 31, "A narrow day bridge must remain curved instead of collapsing to one line segment");
+  assert.ok(dayInterior.every((sample) => sample.brightness > 20 && sample.brightness < 100));
+  const nightStart = solarPosition(profile.evening.temperature.low_elevation, "evening");
+  const nightEnd = solarPosition(profile.morning.temperature.low_elevation, "morning") + 1;
+  const nightInterior = samples.map((sample) => ({ ...sample, position: sample.position < .5 ? sample.position + 1 : sample.position }))
+    .filter((sample) => sample.position > nightStart && sample.position < nightEnd);
+  assert.ok(new Set(nightInterior.map((sample) => sample.position)).size >= 31, "The short night bridge remains sampled across the cycle boundary");
+  assert.ok(nightInterior.every((sample) => sample.temperature > 2000 && sample.temperature < 6000));
+  close(samples[0].temperature, samples.at(-1)!.temperature, 1e-8);
+  assert.ok(samples.length < 1000, "Narrow bridges retain a bounded rendering cost");
+});
+
+test("unlinked close decimal ramps retain exact endpoints and their progression beside the bridges", () => {
+  const profile = newProfile("split-close", "Split close");
+  profile.linked = false;
+  profile.morning.brightness = { low_elevation: 12.345678, high_elevation: 12.345679, low: 20, high: 80, interpolation: "ease_in_out" };
+  profile.evening.brightness = { low_elevation: 12.3456781, high_elevation: 12.3456782, low: 35, high: 65, interpolation: "linear" };
+  profile.morning.temperature = { low_elevation: -6.125, high_elevation: -6.12, low: 6500, high: 2200, interpolation: "linear" };
+  profile.evening.temperature = { low_elevation: -6.125, high_elevation: -6.12, low: 1000, high: 40000, interpolation: "ease_in_out" };
+  const samples = profileSamples(profile);
+  for (const period of ["morning", "evening"] as const) {
+    for (const kind of ["brightness", "temperature"] as const) {
+      const curve = profile[period][kind];
+      const ramp = samples.filter((sample) => sample.period === period && sample.elevation >= curve.low_elevation && sample.elevation <= curve.high_elevation);
+      assert.ok(ramp.length >= 33);
+      close(ramp.find((sample) => sample.elevation === curve.low_elevation)![kind], curve.low);
+      close(ramp.find((sample) => sample.elevation === curve.high_elevation)![kind], curve.high);
+      for (const sample of ramp) close(sample[kind], interpolate(curve, sample.elevation), 1e-7);
+    }
+  }
 });
 
 test("constant and inverted values, legacy interpolation and extreme elevations remain accurate", () => {

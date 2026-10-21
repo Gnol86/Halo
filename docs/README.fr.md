@@ -4,11 +4,19 @@
 
 # Halo - Home Assistant Light Orchestrator
 
+[![Dernière version](https://img.shields.io/github/v/release/Gnol86/Halo?label=version&style=flat-square)](https://github.com/Gnol86/Halo/releases/latest)
+[![Catalogue HACS par défaut](https://img.shields.io/badge/HACS-Par%20d%C3%A9faut-41BDF5?logo=homeassistant&logoColor=white&style=flat-square)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Gnol86&repository=Halo&category=integration)
+[![Messages du sujet communautaire](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fcommunity.home-assistant.io%2Ft%2F1028198.json&query=%24.posts_count&label=messages&logo=discourse&color=41BDF5&style=flat-square)](https://community.home-assistant.io/t/halo-home-assistant-light-orchestrator-presence-natural-light-and-scenes/1028198)
+[![Total des téléchargements des fichiers joints aux releases GitHub](https://img.shields.io/github/downloads/Gnol86/Halo/total?label=t%C3%A9l%C3%A9chargements&style=flat-square)](https://github.com/Gnol86/Halo/releases)
+[![Étoiles GitHub](https://img.shields.io/github/stars/Gnol86/Halo?style=flat-square&logo=github&label=%C3%A9toiles)](https://github.com/Gnol86/Halo)
+
+<sub>Le badge de téléchargements compte uniquement les fichiers joints aux releases GitHub. Il ne mesure ni les téléchargements d’archives sources ni les installations HACS.</sub>
+
 **Un éclairage qui suit la vie de ta maison, pièce par pièce.**
 
 Halo est une intégration personnalisée Home Assistant qui réunit présence, luminosité ambiante, profils de lumière naturelle et scènes dans un seul outil. Configure tes pièces depuis un panneau dédié dans la barre latérale, laisse Halo gérer l'éclairage quotidien et reprends la main quand tu le souhaites.
 
-[English](../README.md) · **Français** · [Versions](https://github.com/Gnol86/Halo/releases) · [Signaler un problème](https://github.com/Gnol86/Halo/issues)
+[English](../README.md) · **Français** · [Versions](https://github.com/Gnol86/Halo/releases) · [Discussion communautaire](https://community.home-assistant.io/t/halo-home-assistant-light-orchestrator-presence-natural-light-and-scenes/1028198) · [Signaler un problème](https://github.com/Gnol86/Halo/issues)
 
 Une seule intégration couvre ton logement. Le panneau est inclus, suit le thème Home Assistant et s'adapte aux ordinateurs comme aux mobiles. La configuration de Halo ne nécessite ni YAML ni carte de dashboard séparée. Son moteur d'éclairage fonctionne dans Home Assistant et reste actif lorsque le panneau est fermé.
 
@@ -17,10 +25,6 @@ Une seule intégration couvre ton logement. Le panneau est inclus, suit le thèm
 </a>
 
 *Pilote toutes tes pièces depuis un seul panneau. Repère celles qui suivent une scène, la lumière naturelle, une commande directe ou une veilleuse, puis lance une ambiance en un clic.*
-
-Les captures montrent l’aperçu local du panneau Halo, avec des pièces fictives et des appareils simulés. Aucune instance du logement n’est connectée. Clique sur une capture pour l’afficher en pleine taille.
-
-> **État du projet :** Halo est en début de développement et a été [accepté dans le catalogue HACS par défaut](https://github.com/hacs/default/pull/11771) le 21 octobre 2026. Recherche directement **Halo** dans HACS pour installer une version publiée. Les tests automatisés et les essais ciblés dans une instance Home Assistant isolée utilisent des lampes simulées ; la validation sur les équipements réels du logement reste à compléter.
 
 ## Ce que Halo peut faire
 
@@ -93,7 +97,7 @@ Mets Halo à jour avec HACS ou remplace le dossier `custom_components/halo` par 
 
 ## Configurer ta première pièce
 
-**À partir de la version 0.2.1 :** une nouvelle installation crée automatiquement un profil réutilisable **Natural light**. Ses courbes sont linéaires : luminosité de **40 % à −20°** à **100 % à 20°**, température du blanc de **2 000 K à 0°** à **5 500 K à 20°**, avec matin et soir liés. Tu peux le renommer, le régler ou le supprimer dans **Profils de lumière naturelle**, puis l'associer aux lampes dans l'onglet **Ambiances** de chaque pièce. Les installations existantes conservent leurs profils, y compris une liste vide ; un profil supprimé ne revient pas au redémarrage.
+**À partir de la version 0.2.1 :** une nouvelle installation crée automatiquement un profil réutilisable **Natural light**. Dans 0.4.0b2, les nouveaux profils utilisent des courbes progressives (linéaires dans les versions précédentes) : luminosité de **40 % à −20°** à **100 % à 20°**, température du blanc de **2 000 K à 0°** à **5 500 K à 20°**, avec matin et soir liés. Tu peux le renommer, le régler ou le supprimer dans **Profils de lumière naturelle**, puis l'associer aux lampes dans l'onglet **Ambiances** de chaque pièce. Les installations existantes conservent leurs profils, y compris une liste vide ; un profil supprimé ne revient pas au redémarrage.
 
 1. Ouvre **Halo → Pièces** et sélectionne une pièce Home Assistant.
 2. Dans **Lumières**, choisis les lampes que Halo peut piloter. Une lampe appartient à une seule pièce Halo ; les nouvelles lampes découvertes ne sont jamais ajoutées automatiquement.
@@ -118,17 +122,19 @@ Choisis une source de présence, laisse un délai avant d'éteindre une pièce v
 
 ### Profils de lumière naturelle
 
-**[Bêta 0.4.0b1 — éditeur visuel de profils](https://github.com/Gnol86/Halo/releases/tag/v0.4.0b1) :** l’éditeur réunit désormais une journée schématique, le parcours du soleil, une courbe de luminosité et un remplissage représentant la température du blanc. L’aperçu utilise la hauteur solaire, sans horaires ni calcul géographique, et ne commande aucune lampe. Les profils existants et leur fonctionnement selon le soleil restent compatibles.
+**[Bêta 0.4.0b2 — éditeur visuel de profils](https://github.com/Gnol86/Halo/releases/tag/v0.4.0b2) :** règle une journée entière sur un graphique, avec trajet solaire en pointillés, courbe de luminosité et remplissage opaque représentant la température du blanc. Les réglages séparés du matin et du soir se raccordent progressivement pendant le jour et la nuit, dans l’aperçu comme dans le moteur.
+
+Les curseurs utilisent des pourcentages et des kelvins entiers, avec dégradés indicatifs et échelle logarithmique de température. Les poignées solaires se règlent au centième de degré. Les nouveaux profils utilisent des courbes progressives ; les valeurs existantes et les réglages avancés exacts sont conservés sans migration. L’aperçu schématique n’affiche pas d’horaires et ne commande aucune lampe.
 
 **0.3.1 reste la dernière version stable.** L’essai de la bêta est facultatif : pour inclure les préversions dans les recherches de mises à jour HACS de Halo, active son entité interrupteur HACS de préversions si elle est désactivée, puis allume cet interrupteur. La [documentation des interrupteurs HACS](https://www.hacs.dev/docs/use/entities/switch/) explique ce réglage.
 
 Déplace indépendamment les repères de luminosité et de température, sélectionne le début ou la fin du matin ou du soir, puis règle les deux curseurs de valeur. Matin et soir restent visibles ensemble : délie-les pour les régler séparément, ou relie-les pour appliquer les réglages du matin aux deux périodes. Les valeurs exactes et les progressions linéaires ou douces restent accessibles dans **Réglages avancés**. Les modifications utilisent le brouillon commun et les actions habituelles d’enregistrement et d’abandon.
 
 <a href="https://raw.githubusercontent.com/Gnol86/Halo/main/docs/images/natural-profiles-fr.png">
-  <img src="https://raw.githubusercontent.com/Gnol86/Halo/main/docs/images/natural-profiles-fr.png" alt="Aperçu simulé de l’éditeur de profils naturels avec une journée schématique unique, un soleil en pointillés, une courbe de luminosité remplie selon la température du blanc, des poignées de hauteur indépendantes et des curseurs de valeur, matin et soir liés" width="1000">
+  <img src="https://raw.githubusercontent.com/Gnol86/Halo/main/docs/images/natural-profiles-fr.png" alt="Aperçu simulé de l’éditeur de profils naturels avec une journée schématique unique, un soleil en pointillés, une courbe de luminosité remplie selon la température du blanc, des poignées de hauteur indépendantes et des curseurs de valeur accompagnés de dégradés pour le profil simulé Réveil et soirée, matin et soir déliés avec raccords progressifs de jour et de nuit" width="1000">
 </a>
 
-*Aperçu simulé de l’éditeur bêta. Le remplissage aide à comparer le blanc chaud et froid ; il ne reproduit pas l’apparence d’une lampe particulière.*
+*Aperçu simulé de l’éditeur bêta. Le remplissage et les dégradés des curseurs aident à comparer les valeurs de lumière ; ils ne reproduisent pas l’apparence d’une lampe particulière.*
 
 ## Comprendre les règles d'éclairage
 
@@ -151,6 +157,8 @@ Activité et Recorder doivent être activés et leurs filtres restent applicable
 **Données indisponibles.** Une mesure manquante n'est jamais interprétée comme zéro ou comme une absence confirmée. Un capteur lumineux configuré reste prioritaire même lorsqu'il est indisponible ; Halo ne bascule pas silencieusement sur les règles horaires ou solaires. Les ajustements naturels sont également suspendus lorsque les données solaires nécessaires sont indisponibles.
 
 ## Contribuer
+
+Rejoins la [discussion sur le forum Home Assistant](https://community.home-assistant.io/t/halo-home-assistant-light-orchestrator-presence-natural-light-and-scenes/1028198) pour poser tes questions, partager ton installation et donner ton avis. Le badge communautaire compte tous les messages de ce sujet, y compris le message initial.
 
 Les signalements de problèmes et les contributions sont les bienvenus. Pour [ouvrir un ticket](https://github.com/Gnol86/Halo/issues), indique tes versions de Halo et de Home Assistant, l'intégration des lampes concernées, les étapes de reproduction et le comportement attendu puis observé.
 

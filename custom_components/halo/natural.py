@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
-from math import isfinite
+from bisect import bisect_right
+from dataclasses import dataclass
+from math import fsum, isfinite
 from typing import Any
 
 from homeassistant.components.light import LightEntityFeature
 from homeassistant.core import State
 from homeassistant.util import color
+
+from .solar import SolarCycle, schematic_cycle, solar_anchor
 
 
 def interpolate(curve: dict[str, Any], elevation: float) -> float:
@@ -36,17 +40,116 @@ def natural_values(
     elevation: float,
     rising: bool,
     brightness_offset: float = 0,
+    *,
+    cycle: SolarCycle | None = None,
 ) -> dict[str, float]:
-    """Calculate independent brightness and white-temperature curves."""
-    branch = "morning" if profile.get("linked", True) or rising else "evening"
-    curves = profile[branch]
-    brightness = interpolate(curves["brightness"], elevation)
+    """Calculate independent curves with continuous day and night connectors."""
+    if profile.get("linked", True):
+        brightness = interpolate(profile["morning"]["brightness"], elevation)
+        temperature = interpolate(profile["morning"]["temperature"], elevation)
+    else:
+        if cycle is None:
+            cycle = schematic_cycle(elevation, rising)
+        brightness = continuous_curve(
+            profile["morning"]["brightness"],
+            profile["evening"]["brightness"],
+            elevation,
+            cycle,
+        )
+        temperature = continuous_curve(
+            profile["morning"]["temperature"],
+            profile["evening"]["temperature"],
+            elevation,
+            cycle,
+        )
     return {
         "brightness_pct": max(
             0.0, min(100.0, brightness * (1 + brightness_offset / 100))
         ),
-        "color_temp_kelvin": round(interpolate(curves["temperature"], elevation)),
+        "color_temp_kelvin": round(temperature),
     }
+
+
+@dataclass(frozen=True, slots=True)
+class _CurveNode:
+    position: float
+    elevation: float
+    value: float
+    outgoing: str
+
+
+def continuous_curve(
+    morning: dict[str, Any],
+    evening: dict[str, Any],
+    elevation: float,
+    cycle: SolarCycle,
+) -> float:
+    """Join four solar anchors, preserving elevation-based reachable ramps.
+
+    Unreachable thresholds meet at the real solar extremum. Co-located anchors
+    share their mean attainable value; the adjacent ramp adapts to that endpoint.
+    Only exactly equal positions merge, never nearby fractional thresholds.
+    """
+    # Native sun states round elevation to 0.01 degrees and may be minutes old.
+    # Use the same precise instant as the astronomical anchors, especially when
+    # an attainable threshold is very close to the solar turning elevation.
+    if cycle.elevation is not None:
+        elevation = cycle.elevation
+    if not isfinite(elevation):
+        raise ValueError("Solar elevation must be finite")
+    nodes = []
+    for arc in cycle.arcs:
+        curve = morning if arc.rising else evening
+        period = "morning" if arc.rising else "evening"
+        bounds = ("low", "high") if arc.rising else ("high", "low")
+        for index, bound in enumerate(bounds):
+            position, attained = solar_anchor(arc, float(curve[f"{bound}_elevation"]))
+            nodes.append(
+                _CurveNode(
+                    position,
+                    attained,
+                    interpolate(curve, attained),
+                    period if index == 0 else "bridge",
+                )
+            )
+    merged = []
+    start = 0
+    while start < len(nodes):
+        end = start + 1
+        while end < len(nodes) and nodes[end].position == nodes[start].position:
+            end += 1
+        last = nodes[end - 1]
+        merged.append(
+            _CurveNode(
+                last.position,
+                last.elevation,
+                fsum(node.value for node in nodes[start:end]) / (end - start),
+                last.outgoing,
+            )
+        )
+        start = end
+    index = bisect_right([node.position for node in merged], cycle.position) - 1
+    if index < 0:
+        return merged[0].value
+    if index >= len(merged) - 1:
+        return merged[-1].value
+    before, after = merged[index : index + 2]
+    if cycle.position == before.position:
+        return before.value
+    if before.outgoing == "bridge" or before.elevation == after.elevation:
+        progress = (cycle.position - before.position) / (
+            after.position - before.position
+        )
+    else:
+        progress = (elevation - before.elevation) / (after.elevation - before.elevation)
+    progress = max(0.0, min(1.0, progress))
+    curve = morning if before.outgoing == "morning" else evening
+    if before.outgoing == "bridge" or curve.get("interpolation", "linear") in (
+        "ease_in",
+        "ease_in_out",
+    ):
+        progress = progress * progress * (3 - 2 * progress)
+    return before.value + (after.value - before.value) * progress
 
 
 def supports_brightness(state: State) -> bool:

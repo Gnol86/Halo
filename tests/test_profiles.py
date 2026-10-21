@@ -17,6 +17,12 @@ async def test_initial_profile_is_saved_once_and_stays_editable(hass, hass_stora
     assert await hass.config_entries.async_setup(entry.entry_id)
     original = deepcopy(entry.runtime_data.config)
     assert set(original["profiles"]) == {"default"}
+    for period in ("morning", "evening"):
+        for kind in ("brightness", "temperature"):
+            assert (
+                original["profiles"]["default"][period][kind]["interpolation"]
+                == "ease_in_out"
+            )
     assert await hass.config_entries.async_reload(entry.entry_id)
     assert entry.runtime_data.config == original
 

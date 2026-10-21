@@ -4,11 +4,19 @@
 
 # Halo - Home Assistant Light Orchestrator
 
+[![Latest release](https://img.shields.io/github/v/release/Gnol86/Halo?label=release&style=flat-square)](https://github.com/Gnol86/Halo/releases/latest)
+[![HACS default catalog](https://img.shields.io/badge/HACS-Default-41BDF5?logo=homeassistant&logoColor=white&style=flat-square)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Gnol86&repository=Halo&category=integration)
+[![Community topic posts](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fcommunity.home-assistant.io%2Ft%2F1028198.json&query=%24.posts_count&label=community%20posts&logo=discourse&color=41BDF5&style=flat-square)](https://community.home-assistant.io/t/halo-home-assistant-light-orchestrator-presence-natural-light-and-scenes/1028198)
+[![Total GitHub release asset downloads](https://img.shields.io/github/downloads/Gnol86/Halo/total?label=downloads&style=flat-square)](https://github.com/Gnol86/Halo/releases)
+[![GitHub stars](https://img.shields.io/github/stars/Gnol86/Halo?style=flat-square&logo=github)](https://github.com/Gnol86/Halo)
+
+<sub>The download badge counts GitHub release assets only. It does not measure source archive downloads or HACS installations.</sub>
+
 **Lighting that follows your home, room by room.**
 
 Halo is a custom Home Assistant integration that brings presence, ambient light, natural lighting profiles and scenes together in one place. Configure your rooms from a dedicated sidebar panel, let Halo handle everyday lighting, and take control whenever you need to.
 
-**English** · [Français](docs/README.fr.md) · [Releases](https://github.com/Gnol86/Halo/releases) · [Report an issue](https://github.com/Gnol86/Halo/issues)
+**English** · [Français](docs/README.fr.md) · [Releases](https://github.com/Gnol86/Halo/releases) · [Community discussion](https://community.home-assistant.io/t/halo-home-assistant-light-orchestrator-presence-natural-light-and-scenes/1028198) · [Report an issue](https://github.com/Gnol86/Halo/issues)
 
 One integration covers your home. The panel is included, follows your Home Assistant theme and works on desktop and mobile. No YAML or separate dashboard card is required to configure Halo. Its lighting engine runs inside Home Assistant and keeps working when the panel is closed.
 
@@ -17,10 +25,6 @@ One integration covers your home. The panel is included, follows your Home Assis
 </a>
 
 *Control every room from one panel. See which rooms use a scene, natural light, direct control or a nightlight, and launch an ambience with one click.*
-
-Screenshots show the local Halo panel preview with fictional rooms and simulated devices. No household instance is connected. Select a screenshot to view it at full size.
-
-> **Project status:** Halo is in early development and was [accepted into the default HACS catalog](https://github.com/hacs/default/pull/11771) on October 21, 2026. Search for **Halo** directly in HACS to install a published release. Automated tests and targeted checks in an isolated Home Assistant instance use simulated lights; validation across real household hardware remains to be completed.
 
 ## What Halo can do
 
@@ -93,7 +97,7 @@ Update Halo through HACS, or replace the `custom_components/halo` folder with th
 
 ## Set up your first room
 
-**Starting with 0.2.1:** a fresh installation creates a reusable **Natural light** profile automatically. It starts with linear curves: brightness from **40% at −20°** to **100% at 20°**, and white temperature from **2,000 K at 0°** to **5,500 K at 20°**, with morning and evening linked. You can rename, adjust or delete it in **Natural light profiles**, then assign it to lights in each room's **Ambiences** tab. Existing installations keep their profiles, including an empty list; a deleted profile does not return after a restart.
+**Starting with 0.2.1:** a fresh installation creates a reusable **Natural light** profile automatically. In 0.4.0b2, new profiles use gradual curves (earlier releases used linear curves): brightness from **40% at −20°** to **100% at 20°**, and white temperature from **2,000 K at 0°** to **5,500 K at 20°**, with morning and evening linked. You can rename, adjust or delete it in **Natural light profiles**, then assign it to lights in each room's **Ambiences** tab. Existing installations keep their profiles, including an empty list; a deleted profile does not return after a restart.
 
 1. Open **Halo → Rooms** and select a Home Assistant area.
 2. In **Lights**, choose the lights Halo may control. Each light belongs to one Halo room; newly discovered lights are never added automatically.
@@ -118,17 +122,19 @@ Choose a presence source, allow time before switching off an empty room, and set
 
 ### Natural light profiles
 
-**[Beta 0.4.0b1 — visual profile editor](https://github.com/Gnol86/Halo/releases/tag/v0.4.0b1):** the profile editor now combines a schematic day, the sun's path, a brightness curve and a fill showing white temperature. The preview uses sun elevation rather than clock times or geographic calculations and does not control any lights. Existing profiles and their sun-based behavior remain compatible.
+**[Beta 0.4.0b2 — visual profile editor](https://github.com/Gnol86/Halo/releases/tag/v0.4.0b2):** adjust a whole day on one chart, with a dashed sun path, a brightness curve and an opaque fill showing white temperature. Separate morning and evening settings connect smoothly through daytime and nighttime in both the preview and lighting engine.
+
+Brightness and temperature sliders use whole percentages and kelvins, with color guides and a logarithmic temperature scale. Sun handles adjust to hundredths of a degree. New profiles use gradual curves; existing values and exact advanced settings are preserved without migration. The schematic preview has no clock times and sends no light commands.
 
 **0.3.1 remains the latest stable release.** Beta testing is optional: to include prereleases in HACS update checks for Halo, enable its HACS prerelease switch entity if disabled, then turn it on. The [HACS switch documentation](https://www.hacs.dev/docs/use/entities/switch/) explains this setting.
 
 Drag the brightness and temperature markers independently, select the start or end of morning or evening, then adjust the two value sliders. Morning and evening remain visible together: unlink them for separate settings, or link them again to use the morning settings for both. Exact values and linear or gradual progression remain available in **Advanced settings**. Changes use the usual shared draft, save and discard actions.
 
 <a href="https://raw.githubusercontent.com/Gnol86/Halo/main/docs/images/natural-profiles-en.png">
-  <img src="https://raw.githubusercontent.com/Gnol86/Halo/main/docs/images/natural-profiles-en.png" alt="Simulated natural profile editor showing one schematic day, a dashed sun path, a brightness curve filled with white-temperature colors, separate elevation handles and value sliders, with morning and evening linked" width="1000">
+  <img src="https://raw.githubusercontent.com/Gnol86/Halo/main/docs/images/natural-profiles-en.png" alt="Simulated natural profile editor showing one schematic day, a dashed sun path, a brightness curve filled with white-temperature colors, separate elevation handles and gradient-guided value sliders for the simulated Wake-up and evening profile, with morning and evening unlinked and smooth daytime and nighttime joins" width="1000">
 </a>
 
-*A simulated preview of the beta editor. The fill helps compare warm and cool white; it does not reproduce the appearance of a particular lamp.*
+*A simulated preview of the beta editor. The fill and slider gradients help compare light values; they do not reproduce the appearance of a particular lamp.*
 
 ## How the lighting rules work
 
@@ -151,6 +157,8 @@ Activity and Recorder must be enabled and their filters still apply. Messages us
 **Unavailable data.** Missing sensor readings are never treated as zero or as confirmed absence. A configured illuminance sensor remains authoritative even when unavailable; Halo does not silently switch to time or sun rules. Natural adjustments also wait when the required sun data is unavailable.
 
 ## Contributing
+
+Join the [Home Assistant community discussion](https://community.home-assistant.io/t/halo-home-assistant-light-orchestrator-presence-natural-light-and-scenes/1028198) to ask questions, share your setup and give feedback. The community badge counts all posts in that topic, including the opening post.
 
 Bug reports and contributions are welcome. When [opening an issue](https://github.com/Gnol86/Halo/issues), include your Halo and Home Assistant versions, the relevant light integration, steps to reproduce, and expected versus observed behavior.
 

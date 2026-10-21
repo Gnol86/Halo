@@ -39,14 +39,14 @@ async def test_user_setup(hass: HomeAssistant, hass_storage) -> None:
             "high_elevation": 20,
             "low": 40,
             "high": 100,
-            "interpolation": "linear",
+            "interpolation": "ease_in_out",
         },
         "temperature": {
             "low_elevation": 0,
             "high_elevation": 20,
             "low": 2000,
             "high": 5500,
-            "interpolation": "linear",
+            "interpolation": "ease_in_out",
         },
     }
     assert profile["evening"] == profile["morning"]

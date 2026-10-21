@@ -205,13 +205,13 @@ export const styles = css`
   .solar-graph { margin: 28px 42px 0; }
   .solar-plot { position: relative; border-bottom: 1px solid var(--halo-line); }
   .profile .solar-chart { height: 210px; max-height: none; width: 100%; margin: 0; overflow: visible; }
-  .solar-chart path,.solar-chart line,.solar-chart circle { vector-effect: non-scaling-stroke; }
-  .solar-fill { opacity: .52; }
+  .solar-chart path,.solar-chart line { vector-effect: non-scaling-stroke; }
   .solar-sun-path { stroke: var(--halo-secondary); stroke-width: 2; stroke-dasharray: 6 6; fill: none; }
   .solar-brightness-path { stroke: var(--halo-accent); stroke-width: 3; fill: none; stroke-linejoin: round; }
   .solar-horizon { stroke: var(--halo-line); stroke-width: 1; stroke-dasharray: 3 5; }
   .solar-guide { stroke: var(--halo-accent); stroke-width: 1; opacity: .65; }
-  .solar-guide-sun { fill: var(--halo-bg); stroke: var(--halo-accent); stroke-width: 2; }
+  /* Fixed CSS dimensions keep the marker round when the SVG stretches to fit. */
+  .solar-guide-sun { position: absolute; width: 10px; height: 10px; border: 2px solid var(--halo-accent); border-radius: 50%; background: var(--halo-bg); transform: translate(-50%,-50%); pointer-events: none; }
   .solar-guide-label { position: absolute; top: -25px; transform: translateX(-50%); color: var(--halo-accent); font-weight: 700; font-size: var(--ha-font-size-s,12px); font-variant-numeric: tabular-nums; white-space: nowrap; }
   .solar-axis { position: absolute; font-size: var(--ha-font-size-s,12px); color: var(--halo-secondary); font-variant-numeric: tabular-nums; white-space: nowrap; transform: translateY(-50%); }
   .solar-axis-left { right: calc(100% + 8px); }
@@ -238,6 +238,8 @@ export const styles = css`
   .solar-value-heading { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; }
   .solar-value output { color: var(--halo-text); font-size: var(--ha-font-size-l,16px); font-variant-numeric: tabular-nums; font-weight: 700; }
   .solar-value-elevation { color: var(--halo-secondary); font-size: var(--ha-font-size-s,12px); font-variant-numeric: tabular-nums; }
+  /* Semantic previews of lamp intensity and Kelvin, independent of the HA accent. */
+  .solar-value-gradient { display: block; height: 10px; margin-top: 6px; border: 1px solid var(--halo-line); border-radius: 2px; }
   .solar-value input[type="range"] { accent-color: var(--halo-accent); padding: 0; border: 0; background: transparent; height: 44px; margin: 0; cursor: pointer; }
   .solar-value input[data-kind="temperature"] { accent-color: var(--halo-accent); }
   .solar-range-labels { display: flex; justify-content: space-between; margin-top: -8px; color: var(--halo-secondary); font-size: var(--ha-font-size-s,12px); }

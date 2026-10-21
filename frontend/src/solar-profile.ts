@@ -1,4 +1,4 @@
-import { interpolate } from "./model";
+import { curveInterpolation, interpolate } from "./model";
 import type { Curve, Curves, Profile } from "./types";
 
 export type SolarPeriod = "morning" | "evening";
@@ -64,6 +64,46 @@ function validateCurve(curve: Curve, kind: CurveKind): void {
   }
 }
 
+interface SolarNode { position: number; elevation: number; value: number; outgoing: "bridge" | SolarPeriod; }
+
+function smoothstep(value: number): number {
+  const fraction = Math.min(1, Math.max(0, value));
+  return fraction * fraction * (3 - 2 * fraction);
+}
+
+/** Four anchors repeated across midnight, with coincident extrema averaged. */
+function cycleNodes(morning: Curve, evening: Curve): SolarNode[] {
+  const anchors: SolarNode[] = [
+    { position: solarPosition(morning.low_elevation, "morning"), elevation: morning.low_elevation, value: morning.low, outgoing: "morning" },
+    { position: solarPosition(morning.high_elevation, "morning"), elevation: morning.high_elevation, value: morning.high, outgoing: "bridge" },
+    { position: solarPosition(evening.high_elevation, "evening"), elevation: evening.high_elevation, value: evening.high, outgoing: "evening" },
+    { position: solarPosition(evening.low_elevation, "evening"), elevation: evening.low_elevation, value: evening.low, outgoing: "bridge" },
+  ];
+  const repeated = [-1, 0, 1].flatMap((day) => anchors.map((node) => ({ ...node, position: node.position + day })));
+  const nodes: SolarNode[] = [];
+  for (let index = 0; index < repeated.length;) {
+    const first = repeated[index];
+    let end = index + 1, total = first.value;
+    while (end < repeated.length && repeated[end].position === first.position) total += repeated[end++].value;
+    nodes.push({ ...repeated[end - 1], value: total / (end - index) });
+    index = end;
+  }
+  return nodes;
+}
+
+function cycleValue(nodes: SolarNode[], morning: Curve, evening: Curve, position: number, elevation: number): number {
+  const next = nodes.findIndex((node) => node.position > position);
+  const start = nodes[next - 1], end = nodes[next];
+  if (position === start.position) return start.value;
+  const bridge = start.outgoing === "bridge";
+  const fraction = Math.min(1, Math.max(0, bridge
+    ? (position - start.position) / (end.position - start.position)
+    : (elevation - start.elevation) / (end.elevation - start.elevation)));
+  const progress = bridge || curveInterpolation(start.outgoing === "morning" ? morning : evening) === "ease_in_out"
+    ? smoothstep(fraction) : fraction;
+  return start.value + (end.value - start.value) * progress;
+}
+
 function branchSamples(curves: Curves, period: SolarPeriod): ProfileSample[] {
   validateCurve(curves.brightness, "brightness");
   validateCurve(curves.temperature, "temperature");
@@ -89,9 +129,30 @@ function branchSamples(curves: Curves, period: SolarPeriod): ProfileSample[] {
 export function profileSamples(profile: Profile): ProfileSample[] {
   const morning = branchSamples(profile.morning, "morning");
   const evening = branchSamples(profile.linked ? profile.morning : profile.evening, "evening");
-  // Both sides of the summit remain present: different unlinked values form a
-  // vertical boundary, rather than an artificial ramp across the afternoon.
-  return [...morning, ...evening];
+  const samples = [...morning, ...evening];
+  if (profile.linked) return samples;
+  const cycles = { brightness: cycleNodes(profile.morning.brightness, profile.evening.brightness),
+    temperature: cycleNodes(profile.morning.temperature, profile.evening.temperature) };
+  const positions = new Set(samples.map((sample) => sample.position));
+  for (const nodes of Object.values(cycles)) {
+    for (let index = 0; index < nodes.length - 1; index++) {
+      const start = nodes[index], end = nodes[index + 1];
+      if (start.outgoing !== "bridge" || end.position < 0 || start.position > 1) continue;
+      for (let step = 1; step < 32; step++) {
+        const position = start.position + (end.position - start.position) * step / 32;
+        if (position < 0 || position > 1 || positions.has(position)) continue;
+        positions.add(position);
+        samples.push({ position, elevation: solarElevation(position), period: position < .5 ? "morning" : "evening", brightness: 0, temperature: 0 });
+      }
+    }
+  }
+  samples.sort((left, right) => left.position - right.position);
+  for (const kind of ["brightness", "temperature"] as const) {
+    for (const sample of samples) {
+      sample[kind] = cycleValue(cycles[kind], profile.morning[kind], profile.evening[kind], sample.position, sample.elevation);
+    }
+  }
+  return samples;
 }
 
 export function temperaturePosition(kelvin: number): number {
