@@ -41,7 +41,7 @@ One integration covers your home. The panel is included, follows your Home Assis
 
 The panel includes searchable room and entity lists, live status, and scene editing through Home Assistant's native light controls. It follows each user's Home Assistant interface language, including regional variants, with English as the fallback. Custom room, profile and scene names stay unchanged.
 
-English and French are included. **[Beta 0.4.0b3 adds Spanish](https://github.com/Gnol86/Halo/releases/tag/v0.4.0b3)** for the panel (`es` and its regional variants), setup, entity names, fixed states and Activity messages.
+English, French and Spanish are included. **[0.4.0 adds Spanish](https://github.com/Gnol86/Halo/releases/tag/v0.4.0)** for the panel (`es` and its regional variants), setup, entity names, fixed states and Activity messages.
 
 ## Requirements
 
@@ -99,7 +99,7 @@ Update Halo through HACS, or replace the `custom_components/halo` folder with th
 
 ## Set up your first room
 
-**Starting with 0.2.1:** a fresh installation creates a reusable **Natural light** profile automatically. In 0.4.0b2, new profiles use gradual curves (earlier releases used linear curves): brightness from **40% at −20°** to **100% at 20°**, and white temperature from **2,000 K at 0°** to **5,500 K at 20°**, with morning and evening linked. You can rename, adjust or delete it in **Natural light profiles**, then assign it to lights in each room's **Ambiences** tab. Existing installations keep their profiles, including an empty list; a deleted profile does not return after a restart.
+**Starting with 0.2.1:** a fresh installation creates a reusable **Natural light** profile automatically. In 0.4.0, new profiles use gradual curves (earlier stable releases used linear curves): brightness from **40% at −20°** to **100% at 20°**, and white temperature from **2,000 K at 0°** to **5,500 K at 20°**, with morning and evening linked. You can rename, adjust or delete it in **Natural light profiles**, then assign it to lights in each room's **Ambiences** tab. Existing installations keep their profiles, including an empty list; a deleted profile does not return after a restart.
 
 1. Open **Halo → Rooms** and select a Home Assistant area.
 2. In **Lights**, choose the lights Halo may control. Each light belongs to one Halo room; newly discovered lights are never added automatically.
@@ -124,11 +124,11 @@ Choose a presence source, allow time before switching off an empty room, and set
 
 ### Natural light profiles
 
-**[Beta 0.4.0b3 — visual profile editor](https://github.com/Gnol86/Halo/releases/tag/v0.4.0b3):** adjust a whole day on one chart, with a dashed sun path, a brightness curve and an opaque fill showing white temperature. Separate morning and evening settings connect smoothly through daytime and nighttime in both the preview and lighting engine.
+**[0.4.0 — visual profile editor](https://github.com/Gnol86/Halo/releases/tag/v0.4.0):** adjust a whole day on one chart, with a dashed sun path, a brightness curve and an opaque fill showing white temperature. Separate morning and evening settings connect smoothly through daytime and nighttime in both the preview and lighting engine.
 
 Brightness and temperature sliders use whole percentages and kelvins, with color guides and a logarithmic temperature scale. Sun handles adjust to hundredths of a degree. New profiles use gradual curves; existing values and exact advanced settings are preserved without migration. The schematic preview has no clock times and sends no light commands.
 
-**0.3.1 remains the latest stable release.** Beta testing is optional: to include prereleases in HACS update checks for Halo, enable its HACS prerelease switch entity if disabled, then turn it on. The [HACS switch documentation](https://www.hacs.dev/docs/use/entities/switch/) explains this setting.
+**0.4.0 is a stable release.** The visual editor, smooth natural lighting and Spanish translations are included in the standard release.
 
 Drag the brightness and temperature markers independently, select the start or end of morning or evening, then adjust the two value sliders. Morning and evening remain visible together: unlink them for separate settings, or link them again to use the morning settings for both. Exact values and linear or gradual progression remain available in **Advanced settings**. Changes use the usual shared draft, save and discard actions.
 
@@ -150,7 +150,7 @@ Custom dashboards or automations using Halo's removed resume buttons must be upd
 
 **Activity attribution in 0.2.2.** Light activity records commands from **Halo** and their reason: presence, the scene's custom name, nightlight, natural light, manual control or automatic shutoff. Commands are recorded as requests, separately from the light's reported state. When the light provider preserves context, the native activity detail also identifies Halo and the reason as the origin. Adjustments and commands whose feedback loses context still have a request entry. Linked Home Assistant scenes record their activation on the scene and its known light targets; Halo does not invent the contents of opaque scenes.
 
-Activity and Recorder must be enabled and their filters still apply. Messages use Home Assistant's configured server language, preserving custom scene names: English, French, and Spanish starting with 0.4.0b3. French and Spanish regional variants use their respective catalogs; unsupported languages fall back to English. This does not change each user's panel language or enrich older history. The global feed can show both the Halo origin event and the target's request entry. Attribution is tested with Home Assistant's native activity processor and recorder using simulated lights. A read-only MCP inspection on October 12, 2026 confirmed 0.2.2 loaded and Halo command entries in the household activity log; it did not include visual verification or full hardware validation.
+Activity and Recorder must be enabled and their filters still apply. Messages use Home Assistant's configured server language, preserving custom scene names: English, French, and Spanish starting with 0.4.0. French and Spanish regional variants use their respective catalogs; unsupported languages fall back to English. This does not change each user's panel language or enrich older history. The global feed can show both the Halo origin event and the target's request entry. Attribution is tested with Home Assistant's native activity processor and recorder using simulated lights. A read-only MCP inspection on October 12, 2026 confirmed 0.2.2 loaded and Halo command entries in the household activity log; it did not include visual verification or full hardware validation.
 
 **Nightlights.** After confirmed absence, enabled nightlights replace normal lighting when permitted. They turn off when the room's lighting permission closes, even if automatic shutoff for normal lighting is disabled.
 
