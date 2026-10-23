@@ -20,7 +20,7 @@ Halo is a custom Home Assistant integration that brings presence, ambient light,
 
 One integration covers your home. The panel is included, follows your Home Assistant theme and works on desktop and mobile. No YAML or separate dashboard card is required to configure Halo. Its lighting engine runs inside Home Assistant and keeps working when the panel is closed.
 
-**[0.5.0b3 — Reliable presence lighting (beta)](https://github.com/Gnol86/Halo/releases/tag/v0.5.0b3):** after a confirmed absence, an allowed return restores the applicable lighting with the room’s normal turn-on transition, even if a light still reports on. Failed extinction feedback is rechecked after the fade instead of leaving the light indefinitely on. The latest stable release remains 0.4.0.
+**[0.5.0 — Reliable presence lighting and optional manual control](https://github.com/Gnol86/Halo/releases/tag/v0.5.0)** is the latest stable release. After a confirmed absence, an allowed return restores the applicable lighting with the room’s normal turn-on transition, even if a light still reports on. Lights that still report on after an off command are rechecked after the fade. Optional identified manual control and the Home Assistant sidebar button are also included.
 
 <a href="https://raw.githubusercontent.com/Gnol86/Halo/main/docs/images/room-control-en.png">
   <img src="https://raw.githubusercontent.com/Gnol86/Halo/main/docs/images/room-control-en.png" alt="Simulated Halo room controls: eight areas, six configured rooms, natural lighting in the living room, and three Halo scenes" width="1000">
@@ -130,7 +130,7 @@ Choose a presence source, allow time before switching off an empty room, and set
 
 Brightness and temperature sliders use whole percentages and kelvins, with color guides and a logarithmic temperature scale. Sun handles adjust to hundredths of a degree. New profiles use gradual curves; existing values and exact advanced settings are preserved without migration. The schematic preview has no clock times and sends no light commands.
 
-**0.4.0 is a stable release.** The visual editor, smooth natural lighting and Spanish translations are included in the standard release.
+The visual editor, smooth natural lighting and Spanish translations have been included in stable releases since **0.4.0**.
 
 Drag the brightness and temperature markers independently, select the start or end of morning or evening, then adjust the two value sliders. Morning and evening remain visible together: unlink them for separate settings, or link them again to use the morning settings for both. Exact values and linear or gradual progression remain available in **Advanced settings**. Changes use the usual shared draft, save and discard actions.
 
@@ -146,7 +146,7 @@ Drag the brightness and temperature markers independently, select the start or e
 
 **Your manual choices.** Manual detection is disabled by default, including for existing rooms. In that mode, manual changes and explicitly launched scenes remain one-shot commands: the next normal automatic action may replace them. Turn **Automation** off to keep control indefinitely. Live scene editing retains its separate temporary suspension.
 
-**[0.5.0b1 — identified manual control (beta)](https://github.com/Gnol86/Halo/releases/tag/v0.5.0b1).** This prerelease adds an optional **Manual command detection → Identified commands** setting in each room’s **Automation** tab. The latest stable release remains 0.4.0; this feature is only included in the 0.5.0 beta. Existing explicitly configured durations are preserved. When enabled, a direct Halo command, an authenticated Home Assistant/API light command, or an explicitly associated button can pause the whole room. The default duration is **120 minutes**, adjustable from one second to seven days. The panel shows the source, triggering light or command, deadline and **Resume**. Resume is available to users with room control permission and preserves unsaved settings.
+**[0.5.0 — identified manual control](https://github.com/Gnol86/Halo/releases/tag/v0.5.0).** The optional **Manual command detection → Identified commands** setting is available in each room’s **Automation** tab and remains **disabled by default**. Existing explicitly configured durations are preserved. When enabled, a direct Halo command, an authenticated Home Assistant/API light command, or an explicitly associated button can pause the whole room. The default duration is **120 minutes**, adjustable from one second to seven days. The panel shows the source, triggering light or command, deadline and **Resume**. Resume is available to users with room control permission and preserves unsaved settings.
 
 Light state reports alone never start or extend a pause, including delayed transitions, Hue group updates and reused user contexts. An authenticated API request is attributed to a user/API, not asserted to be a human action. Ordinary automation calls and automation chains do not create a pause; an automation can explicitly use the new `halo.manual_hold` and `halo.manual_resume` actions with a `room_id`. These actions require manual detection and automation to be enabled to start a hold; they do not enable either setting.
 
