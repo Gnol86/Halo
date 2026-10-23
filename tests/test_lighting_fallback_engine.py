@@ -652,14 +652,12 @@ async def test_inactive_lux_off_does_not_prevent_return_during_fade(
     calls.clear()
     hass.states.async_set("binary_sensor.presence", "on")
     await hass.async_block_till_done()
-    if sensor:
-        # A configured lux sensor retains its existing lux_off=true contract.
-        assert not calls
-    else:
-        assert len(calls) == 2
-        assert all(
-            call.service == "turn_on" and call.data["transition"] == 1 for call in calls
-        )
+    # Lighting is permitted in every case, including with a configured sensor.
+    # Restoring after confirmed absence does not need the stale-lux bypass.
+    assert len(calls) == 2
+    assert all(
+        call.service == "turn_on" and call.data["transition"] == 1 for call in calls
+    )
 
 
 async def test_inactive_lux_off_does_not_leave_pending_absence_commands(

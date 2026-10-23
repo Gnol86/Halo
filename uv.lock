@@ -998,7 +998,7 @@ wheels = [
 
 [[package]]
 name = "halo-homeassistant"
-version = "0.5.0b2"
+version = "0.5.0b3"
 source = { virtual = "." }
 
 [package.dev-dependencies]

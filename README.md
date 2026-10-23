@@ -20,7 +20,7 @@ Halo is a custom Home Assistant integration that brings presence, ambient light,
 
 One integration covers your home. The panel is included, follows your Home Assistant theme and works on desktop and mobile. No YAML or separate dashboard card is required to configure Halo. Its lighting engine runs inside Home Assistant and keeps working when the panel is closed.
 
-**[0.5.0b2 — Home Assistant menu (beta)](https://github.com/Gnol86/Halo/releases/tag/v0.5.0b2):** a menu button in Halo’s header opens the Home Assistant sidebar on narrow screens or when the sidebar is hidden in your preferences. It preserves your current Halo view and unsaved settings. The latest stable release remains 0.4.0.
+**[0.5.0b3 — Reliable presence lighting (beta)](https://github.com/Gnol86/Halo/releases/tag/v0.5.0b3):** after a confirmed absence, an allowed return restores the applicable lighting with the room’s normal turn-on transition, even if a light still reports on. Failed extinction feedback is rechecked after the fade instead of leaving the light indefinitely on. The latest stable release remains 0.4.0.
 
 <a href="https://raw.githubusercontent.com/Gnol86/Halo/main/docs/images/room-control-en.png">
   <img src="https://raw.githubusercontent.com/Gnol86/Halo/main/docs/images/room-control-en.png" alt="Simulated Halo room controls: eight areas, six configured rooms, natural lighting in the living room, and three Halo scenes" width="1000">

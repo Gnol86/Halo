@@ -44,6 +44,7 @@ from .solar import actual_solar_cycle
 _LOGGER = logging.getLogger(__name__)
 _EDIT_TTL = 120
 _SCENE_TRANSITION_LIMIT = 6553
+_OFF_FEEDBACK_GRACE = 5
 
 
 class HaloRoomEngine:
@@ -82,6 +83,7 @@ class HaloRoomEngine:
         self._scene_errors: dict[str, str] = {}
         self._automation_suspensions: set[object] = set()
         self._last_commands: dict[str, dict[str, Any]] = {}
+        self._off_retry_after: dict[str, float] = {}
         self._command_contexts: dict[str, str] = {}
         self._active_service_targets: set[str] = set()
         self._edit: dict[str, Any] | None = None
@@ -89,6 +91,7 @@ class HaloRoomEngine:
         self._absence_off_started_at: float | None = None
         self._absence_off_handled = False
         self._pending_presence_return: int | None = None
+        self._pending_presence_on: int | None = None
         # Keep the absence ambience separate from normal lighting, including
         # while waiting for sufficient darkness after presence returns.
         self._nightlight_mode = False
@@ -392,6 +395,7 @@ class HaloRoomEngine:
         """Cancel every listener and deadline; no light commands during unload."""
         self._stopped = True
         self._command_contexts.clear()
+        self._off_retry_after.clear()
         self._generation += 1
         self._cancel_presence_return()
         self._pending_lighting_open = None
@@ -420,6 +424,7 @@ class HaloRoomEngine:
         self._unsubscribers.clear()
         self._subscribe()
         self._last_commands.clear()
+        self._off_retry_after.clear()
         self._lamp_errors = {
             entity_id: error
             for entity_id, error in self._lamp_errors.items()
@@ -521,13 +526,35 @@ class HaloRoomEngine:
                     self._runtime["absent_since"] = new.last_changed.timestamp()
                     self._cancel_presence_return()
                     self._absence_off_handled = False
-                elif before is False and after is True and self._can_return():
+                elif before is False and after is True:
+                    recent_return = self._can_return()
+                    since = self._runtime.get("absent_since")
+                    confirmed_return = (
+                        since is not None
+                        and dt_util.utcnow().timestamp()
+                        >= since
+                        + self.room.get("absence_delay", ROOM_DEFAULTS["absence_delay"])
+                        and not self._edit
+                        and not self._manual_hold
+                        and not self._automation_suspensions
+                        and self.room.get("automation_enabled", False)
+                        and not any(
+                            scene["id"] == self._scene_id
+                            and scene.get("can_turn_on", False)
+                            for scene in self.room.get("scenes", [])
+                        )
+                    )
+                    self._cancel_presence_return()
                     # Cancel the rest of an off sequence before waiting for its
-                    # service call/lock. Other queued evaluations can consume
-                    # this same one-shot intent, always using turn_on.
-                    self._generation += 1
-                    self._pending_presence_return = self._generation
-                    self._absence_off_started_at = None
+                    # service call/lock. A normal return after confirmed absence
+                    # restores the ambience even if a lamp still reports 'on'.
+                    # Only a recent return may bypass a stale lux reading.
+                    if recent_return or confirmed_return:
+                        self._generation += 1
+                        if recent_return:
+                            self._pending_presence_return = self._generation
+                        if confirmed_return:
+                            self._pending_presence_on = self._generation
                 else:
                     self._cancel_presence_return()
         elif entity_id == self.room.get("lux_entity_id"):
@@ -556,7 +583,11 @@ class HaloRoomEngine:
                 trigger = "scene_availability"
         else:
             trigger = "condition"
-        self.hass.async_create_task(self._async_wakeup(trigger))
+        self.hass.async_create_task(
+            self._async_wakeup(
+                trigger, explicit_generation=self._explicit_command_generation
+            )
+        )
 
     def _presence_value(self, state: State | None) -> bool | None:
         if state is None or state.state in UNAVAILABLE:
@@ -567,6 +598,7 @@ class HaloRoomEngine:
         """Discard eligibility without reopening it in the same absence cycle."""
         self._absence_off_started_at = None
         self._pending_presence_return = None
+        self._pending_presence_on = None
         self._absence_off_handled = True
 
     def _can_return(self) -> bool:
@@ -595,11 +627,20 @@ class HaloRoomEngine:
             < duration
         )
 
-    async def _async_wakeup(self, trigger: str) -> None:
+    async def _async_wakeup(
+        self, trigger: str, *, explicit_generation: int | None = None
+    ) -> None:
         if self._stopped:
             return
+        if explicit_generation is None:
+            explicit_generation = self._explicit_command_generation
         async with self._lock:
-            if self._stopped:
+            if (
+                self._stopped
+                or explicit_generation != self._explicit_command_generation
+            ):
+                # A queued input must not flash the lights before a newer
+                # explicit command waiting for the same in-flight service.
                 return
             await self._evaluate(trigger)
 
@@ -785,7 +826,14 @@ class HaloRoomEngine:
             and not self._lux_off_enabled()
             and (self._lighting_source == "lux" or self._lighting_allowed is True)
         )
+        presence_on = (
+            self._pending_presence_on is not None
+            and self._pending_presence_on == self._generation
+            and self._presence is True
+            and self._lighting_allowed is True
+        )
         self._pending_presence_return = None
+        self._pending_presence_on = None
         lighting_open = trigger == "lighting" and self._lighting_allowed is True
         self._pending_lighting_open = None
         if self._edit:
@@ -829,6 +877,7 @@ class HaloRoomEngine:
         changed_scene = self._scene_id != self._applied_scene
         force = (
             presence_return
+            or (presence_on and not autonomous_scene)
             or (lighting_open and not autonomous_scene)
             or leaving_nightlight
             or trigger
@@ -840,20 +889,24 @@ class HaloRoomEngine:
                 "availability",
             }
         )
-        can_start = presence_return or (
-            self._presence is True
-            and self._lighting_allowed is True
-            and trigger
-            in {
-                "start",
-                "presence",
-                "lux",
-                "lighting",
-                "refresh",
-                "reconfigure",
-                "mode",
-                "availability",
-            }
+        can_start = (
+            presence_return
+            or presence_on
+            or (
+                self._presence is True
+                and self._lighting_allowed is True
+                and trigger
+                in {
+                    "start",
+                    "presence",
+                    "lux",
+                    "lighting",
+                    "refresh",
+                    "reconfigure",
+                    "mode",
+                    "availability",
+                }
+            )
         )
         was_on = self.is_on
         if scene and (autonomous_scene or was_on or can_start):
@@ -864,7 +917,9 @@ class HaloRoomEngine:
                     if (lighting_open and not autonomous_scene)
                     or (leaving_nightlight and trigger in {"lux", "lighting"})
                     else "turn_on"
-                    if presence_return or leaving_nightlight
+                    if presence_return
+                    or (presence_on and not autonomous_scene)
+                    or leaving_nightlight
                     else "scene"
                 )
                 if (
@@ -888,6 +943,8 @@ class HaloRoomEngine:
                         return None
                     if presence_return:
                         self._pending_presence_return = self._generation
+                    if presence_on:
+                        self._pending_presence_on = self._generation
                     return True
                 if not applied:
                     return
@@ -901,6 +958,7 @@ class HaloRoomEngine:
                 transition = (
                     "turn_on"
                     if presence_return
+                    or presence_on
                     or (leaving_nightlight and trigger not in {"lux", "lighting"})
                     else "lux_on"
                     if leaving_nightlight or lighting_open
@@ -916,6 +974,7 @@ class HaloRoomEngine:
                     and not changed_scene
                     and trigger not in {"refresh", "mode"}
                     and not presence_return
+                    and not presence_on
                     and not lighting_open
                     and not leaving_nightlight
                 ):
@@ -928,7 +987,12 @@ class HaloRoomEngine:
                         and state.state == "on"
                     }
                     transition = "natural"
-                if presence_return or trigger == "presence" and self._presence is True:
+                if (
+                    presence_return
+                    or presence_on
+                    or trigger == "presence"
+                    and self._presence is True
+                ):
                     reason = "presence"
                 elif trigger == "refresh":
                     reason = "refresh"
@@ -1100,7 +1164,12 @@ class HaloRoomEngine:
         )
 
     async def _all_off(
-        self, context: Context | None = None, *, reason: str, absence: bool = False
+        self,
+        context: Context | None = None,
+        *,
+        reason: str,
+        absence: bool = False,
+        force: bool = False,
     ) -> None:
         await self._apply(
             {entity_id: {"state": "off"} for entity_id in self.room["lights"]},
@@ -1108,6 +1177,7 @@ class HaloRoomEngine:
             context=context,
             reason=reason,
             absence=absence,
+            force=force,
         )
 
     async def _apply_scene(
@@ -1142,6 +1212,7 @@ class HaloRoomEngine:
         self._manual_origins.add(own_context)
         for entity_id in self.room["lights"]:
             self._command_contexts[entity_id] = own_context.id
+            self._off_retry_after.pop(entity_id, None)
         affected_lights = composition(self.hass, [scene["scene_entity_id"]]).lights
         for entity_id in affected_lights:
             self._last_commands.pop(entity_id, None)
@@ -1200,7 +1271,24 @@ class HaloRoomEngine:
             turn_on = desired.get("state", "on") == "on"
             params = lamp_parameters(state, desired) if turn_on else {}
             target = {"state": "on" if turn_on else "off", **params}
-            if not force and self._last_commands.get(entity_id) == target:
+            # Keep the fade grace independent of target deduplication: providers
+            # without a command context can invalidate the target cache mid-fade.
+            if (
+                not force
+                and not turn_on
+                and state.state == "on"
+                and dt_util.utcnow().timestamp()
+                < self._off_retry_after.get(entity_id, 0)
+            ):
+                continue
+            # A successful service call is not proof of physical extinction.
+            # Retry an off target on normal policy evaluations after the grace;
+            # lamp reports themselves never send commands.
+            if (
+                not force
+                and self._last_commands.get(entity_id) == target
+                and (turn_on or state.state != "on")
+            ):
                 continue
             if not force and not turn_on and state.state == "off":
                 self._lamp_errors.pop(entity_id, None)
@@ -1209,6 +1297,11 @@ class HaloRoomEngine:
             supported = state.attributes.get("supported_features", 0)
             if transition is not None and supported & LightEntityFeature.TRANSITION:
                 data["transition"] = transition
+            retry_after = (
+                dt_util.utcnow().timestamp()
+                + (data.get("transition") or 0)
+                + _OFF_FEEDBACK_GRACE
+            )
             own_context = Context(
                 parent_id=context.id if context else None,
                 user_id=context.user_id if context else None,
@@ -1251,10 +1344,15 @@ class HaloRoomEngine:
             except HomeAssistantError as error:
                 self._lamp_errors[entity_id] = str(error)
                 self._last_commands.pop(entity_id, None)
+                self._off_retry_after.pop(entity_id, None)
                 self._command_contexts.pop(entity_id, None)
                 _LOGGER.warning("Halo could not command %s: %s", entity_id, error)
             else:
                 self._last_commands[entity_id] = target
+                if turn_on:
+                    self._off_retry_after.pop(entity_id, None)
+                else:
+                    self._off_retry_after[entity_id] = retry_after
                 self._lamp_errors.pop(entity_id, None)
                 self._last_error = None
             finally:
@@ -1341,7 +1439,7 @@ class HaloRoomEngine:
             self._hold_direct_command(context, "turn_off")
             self._applied_scene = None
             self._nightlight_mode = False
-            await self._all_off(context, reason="manual")
+            await self._all_off(context, reason="manual", force=True)
             await self._finish_explicit()
 
     async def async_activate_scene(
